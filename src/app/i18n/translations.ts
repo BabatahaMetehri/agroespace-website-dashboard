@@ -1,0 +1,556 @@
+// Lightweight i18n dictionary. Keys are dot-paths.
+// FR is canonical; AR and EN provide overrides. Missing keys fall back to FR.
+
+export type Lang = 'fr' | 'ar' | 'en';
+
+export const LANGS: { code: Lang; label: string; native: string; dir: 'ltr' | 'rtl' }[] = [
+  { code: 'fr', label: 'Français', native: 'FR', dir: 'ltr' },
+  { code: 'ar', label: 'العربية', native: 'AR', dir: 'rtl' },
+  { code: 'en', label: 'English', native: 'EN', dir: 'ltr' },
+];
+
+type Dict = Record<string, string>;
+
+export const dictionaries: Record<Lang, Dict> = {
+  fr: {
+    'nav.expertise': 'Expertise',
+    'nav.products': 'Produits',
+    'nav.activities': 'Nos Activités',
+    'nav.about': 'À propos',
+    'nav.blog': 'Blog',
+    'nav.contact': 'Nous Contacter',
+    'nav.admin': 'Espace Admin',
+    'nav.activities.irrigation': 'Irrigation',
+    'nav.activities.fertilization': 'Fertilisation',
+    'nav.activities.retail': 'Vente au détail',
+
+    'hero.eyebrow': 'Leader en irrigation',
+    'hero.title.line1': "L'Avenir de",
+    'hero.title.line2': "l'Agriculture",
+    'hero.title.line3': 'en Algérie.',
+    'hero.subtitle':
+      "Pivots centraux WESTERN, fertilisation de précision et vente de pièces. Transport et montage inclus, garantie 1 an, service après-vente assuré par nos ingénieurs.",
+    'hero.scroll': 'Défilez pour découvrir',
+    'hero.cta': 'Découvrir nos services',
+    'hero.cta.quote': 'Demander un devis',
+
+    'usp.installed': 'Pivots installés',
+    'usp.installed.desc': "Aucun pivot installé n'est tombé en panne.",
+    'usp.delivery': 'Transport & Montage',
+    'usp.delivery.desc': "Inclus jusqu'au démarrage et la rotation.",
+    'usp.warranty': 'Garantie 1 an',
+    'usp.warranty.desc': 'Service après-vente complet, ingénieurs dédiés.',
+    'usp.exclusivity': 'Pivots Centraux uniquement',
+    'usp.exclusivity.desc': 'Une seule expertise, maîtrisée à la perfection.',
+    'usp.aftersale': 'Service après-vente',
+    'usp.aftersale.desc': 'Ingénieurs dédiés, aucun pivot laissé sans suivi.',
+
+    'services.eyebrow': 'Notre Expertise',
+    'services.title.1': "L'alliance de la",
+    'services.title.italic': 'tradition',
+    'services.title.2': 'et de la technologie.',
+    'services.subtitle':
+      "De l'étude des sols à l'installation d'équipements de pointe, nous accompagnons les agriculteurs vers une rentabilité durable.",
+    'services.irrigation.title': 'Irrigation par Pivot Central',
+    'services.irrigation.desc':
+      "Spécialistes des pivots centraux WESTERN. Étude, transport, installation et démarrage clé-en-main pour les exploitations algériennes.",
+    'services.fertilization.title': 'Fertilisation de précision',
+    'services.fertilization.desc':
+      "Optimisation des apports en eau et engrais grâce à des systèmes intégrés et un suivi terrain par nos ingénieurs.",
+    'services.retail.title': 'Vente au détail',
+    'services.retail.desc':
+      "Pièces détachées, asperseurs, motoréducteurs, panneaux et accessoires : un stock de marques de référence disponible dans nos agences.",
+    'services.cta': 'En savoir plus',
+
+    'products.eyebrow': 'Nos Solutions',
+    'products.title.1': 'Équipements',
+    'products.title.italic': 'de classe',
+    'products.title.2': 'mondiale.',
+    'products.subtitle':
+      "Chaque goutte compte. Nos systèmes sont sélectionnés pour leur durabilité, leur précision et leur adéquation aux exigences des terres agricoles algériennes.",
+
+    'partners.eyebrow': 'Nos Partenaires',
+    'partners.title.1': 'Une alliance avec les',
+    'partners.title.italic': 'meilleures',
+    'partners.title.2': 'marques mondiales.',
+
+    'agencies.eyebrow': 'Nos Agences',
+    'agencies.title.1': 'Au plus proche',
+    'agencies.title.italic': 'de vos terres',
+    'agencies.subtitle':
+      "Quatre agences à travers le sud algérien pour un service réactif, des conseils sur place et une logistique maîtrisée.",
+    'agencies.itinerary': 'Itinéraire',
+    'agencies.call': 'Appeler',
+
+    'manager.eyebrow': 'Mot du Gérant',
+    'manager.commitment.title': 'Notre Engagement',
+    'manager.commitment.body':
+      "Depuis notre création, nous nous sommes engagés à accompagner le développement de l'agriculture en Algérie, en apportant des solutions innovantes, adaptées aux réalités du terrain et aux ambitions des agriculteurs.",
+    'manager.body2':
+      "Grâce à une équipe passionnée et expérimentée, AGROESPACE a su se positionner comme un acteur de référence dans les domaines de l'irrigation de précision, de la fertilisation, et de la fourniture d'équipements agricoles performants.",
+    'manager.mission.title': 'Notre Mission',
+    'manager.mission.body':
+      "Notre mission est claire : offrir à nos clients des solutions techniques fiables, un service de proximité et un accompagnement sur mesure, de la conception à l'exploitation.",
+    'manager.signoff': '« Merci pour votre confiance. »',
+    'manager.role': 'Directeur Général',
+
+    'testimonials.eyebrow': 'Témoignages',
+    'testimonials.title.1': 'Ils nous font',
+    'testimonials.title.italic': 'confiance',
+
+    'blog.preview.eyebrow': 'Le Journal',
+    'blog.preview.title.1': 'Dernières publications',
+    'blog.preview.title.italic': 'du terrain',
+    'blog.preview.cta': 'Voir tout le journal',
+    'blog.read': "Lire l'article",
+
+    'cta.ready.eyebrow': 'Prêts à démarrer ?',
+    'cta.ready.title.1': 'Êtes-vous',
+    'cta.ready.italic': 'prêt',
+    'cta.ready.title.2': 'à transformer votre exploitation ?',
+    'cta.ready.subtitle':
+      'Nos ingénieurs préparent une étude personnalisée gratuite. Parlons-en sur WhatsApp ou par téléphone, sans engagement.',
+    'cta.ready.whatsapp': 'Discuter sur WhatsApp',
+    'cta.ready.call': 'Appelez-nous',
+
+    'footer.tagline':
+      "L'innovation au service de la terre. Nous façonnons l'avenir de l'agriculture en Algérie grâce à des technologies d'irrigation durables.",
+    'footer.nav': 'Navigation',
+    'footer.legal': 'Légal',
+    'footer.legal.terms': 'Conditions générales',
+    'footer.legal.privacy': 'Politique de confidentialité',
+    'footer.legal.notice': 'Mentions légales',
+    'footer.follow': 'Suivez-nous',
+    'footer.rights': 'Tous droits réservés.',
+    'footer.designed': "Conçu avec précision pour l'Algérie.",
+
+    'lang.label': 'Langue',
+
+    'about.eyebrow': 'À propos',
+    'about.title.1': 'Une équipe.',
+    'about.title.italic': 'Une mission.',
+    'about.title.2': "Une terre.",
+    'about.intro':
+      "AGROESPACE accompagne les agriculteurs algériens depuis ses débuts avec une obsession : faire tourner durablement le moindre pivot, à la moindre goutte près.",
+
+    'activities.eyebrow': 'Nos Activités',
+    'activities.title.1': "Trois piliers,",
+    'activities.italic': 'un seul standard',
+    'activities.title.2': "d'excellence.",
+
+    'contact.eyebrow': 'Consultation',
+    'contact.title.1': "Discutons de",
+    'contact.title.italic': 'votre projet.',
+    'contact.consent':
+      "J'accepte les conditions générales et la politique de confidentialité d'AGROESPACE.",
+    'contact.terms': 'Lire les conditions',
+    'contact.send.whatsapp': 'Continuer vers WhatsApp',
+    'contact.send.email': 'Envoyer un message',
+    'contact.form.title': 'Envoyez-nous un message',
+    'contact.name.label': 'Nom complet',
+    'contact.phone.label': 'Téléphone',
+    'contact.company.label': 'Entreprise / Ferme',
+    'contact.email.label': 'Adresse email',
+    'contact.message.label': 'Votre projet',
+    'contact.address.label': 'Adresse / Localité',
+    'contact.name.placeholder': 'Votre nom',
+    'contact.phone.placeholder': '+213 ...',
+    'contact.company.placeholder': 'Nom de la structure',
+    'contact.email.placeholder': 'vous@exemple.com',
+    'contact.message.placeholder': "Décrivez brièvement vos besoins en irrigation ou matériel...",
+    'contact.address.placeholder': 'Wilaya, Commune...',
+
+    'faq.title.1': 'Questions',
+    'faq.title.italic': 'fréquentes',
+
+    'newsletter.title': 'Restons en contact',
+    'newsletter.subtitle': "Innovations, calendriers d'installation, dates de salons : recevez l'essentiel.",
+    'newsletter.placeholder': 'Votre email',
+    'newsletter.submit': "Je m'abonne",
+
+    'technical.eyebrow': 'Ingénierie de précision',
+    'technical.subtitle': "Découvrez l'anatomie d'un système d'irrigation conçu pour défier les environnements les plus hostiles tout en optimisant chaque goutte d'eau.",
+    'technical.spec1.title': 'Structure Galvanisée',
+    'technical.spec1.body': "Acier haute résistance trempé à chaud. Conçu pour résister à la corrosion extrême, aux vents violents et aux terrains accidentés typiques des hauts plateaux.",
+    'technical.spec2.title': 'Moteurs UMC',
+    'technical.spec2.body': "Motoréducteurs de classe mondiale offrant un couple maximal. Efficacité énergétique supérieure garantissant un mouvement fluide et continu du pivot.",
+    'technical.spec3.title': 'Expert en arrosage',
+    'technical.spec3.body': "Les meilleurs systèmes : Komet, Senninger et Nelson. Distribution d'eau ultra-uniforme à basse pression. Réduit drastiquement l'évaporation et le ruissellement.",
+    'technical.cta.title': 'Prêt à transformer votre exploitation ?',
+    'technical.cta.body': "Nos ingénieurs agronomes sont disponibles pour réaliser une étude technique personnalisée de vos parcelles.",
+    'technical.cta.btn': 'Contacter un Ingénieur',
+
+    'catalog.search': 'Rechercher un produit...',
+    'catalog.instock': 'En Stock',
+    'catalog.outofstock': 'Rupture',
+    'catalog.quote': 'Demander un devis',
+    'catalog.all': 'Tous',
+
+    'error.404.eyebrow': 'Erreur 404',
+    'error.404.title': 'Page introuvable',
+    'error.404.subtitle': "La page que vous cherchez n'existe pas ou a été déplacée.",
+    'error.404.home': "Retour à l'accueil",
+    'error.404.contact': 'Nous contacter',
+  },
+
+  ar: {
+    'nav.expertise': 'الخبرة',
+    'nav.products': 'المنتجات',
+    'nav.activities': 'نشاطاتنا',
+    'nav.about': 'من نحن',
+    'nav.blog': 'المدونة',
+    'nav.contact': 'تواصل معنا',
+    'nav.admin': 'الإدارة',
+    'nav.activities.irrigation': 'الري',
+    'nav.activities.fertilization': 'التسميد',
+    'nav.activities.retail': 'البيع بالتجزئة',
+
+    'hero.eyebrow': 'رائدون في الري',
+    'hero.title.line1': 'مستقبل',
+    'hero.title.line2': 'الفلاحة',
+    'hero.title.line3': 'في الجزائر.',
+    'hero.subtitle':
+      'محاور رش مركزية WESTERN، تسميد دقيق وبيع قطع غيار. النقل والتركيب مشمولان، ضمان سنة وخدمة ما بعد البيع بإشراف مهندسينا.',
+    'hero.scroll': 'انزل لاكتشاف المزيد',
+    'hero.cta': 'اكتشف خدماتنا',
+    'hero.cta.quote': 'اطلب عرض سعر',
+
+    'usp.installed': 'محاور مركّبة',
+    'usp.installed.desc': 'لم يتعطل أي محور مركّب منذ انطلاقنا.',
+    'usp.delivery': 'النقل والتركيب',
+    'usp.delivery.desc': 'مشمولة حتى التشغيل والدوران الكامل.',
+    'usp.warranty': 'ضمان سنة',
+    'usp.warranty.desc': 'خدمة ما بعد البيع مع مهندسين مختصين.',
+    'usp.exclusivity': 'محاور مركزية فقط',
+    'usp.exclusivity.desc': 'تخصص واحد متقن إلى أقصى حد.',
+    'usp.aftersale': 'خدمة ما بعد البيع',
+    'usp.aftersale.desc': 'مهندسون متخصصون، لا محور يُترك بلا متابعة.',
+
+    'services.eyebrow': 'خبرتنا',
+    'services.title.1': 'تحالف بين',
+    'services.title.italic': 'الأصالة',
+    'services.title.2': 'والتكنولوجيا.',
+    'services.subtitle':
+      'من دراسة التربة إلى تركيب أحدث المعدات، نرافق الفلاحين نحو مردودية مستدامة.',
+    'services.irrigation.title': 'الري بالمحور المركزي',
+    'services.irrigation.desc':
+      'متخصصون في محاور WESTERN المركزية. دراسة ونقل وتركيب وتشغيل جاهز للاستعمال.',
+    'services.fertilization.title': 'التسميد الدقيق',
+    'services.fertilization.desc':
+      'تحسين كميات الماء والأسمدة بفضل أنظمة مدمجة ومتابعة ميدانية من قِبَل مهندسينا.',
+    'services.retail.title': 'البيع بالتجزئة',
+    'services.retail.desc':
+      'قطع غيار، رشاشات، محركات، لوحات وإكسسوارات: مخزون من علامات مرجعية متوفر في وكالاتنا.',
+    'services.cta': 'اقرأ المزيد',
+
+    'products.eyebrow': 'حلولنا',
+    'products.title.1': 'معدات',
+    'products.title.italic': 'بمستوى',
+    'products.title.2': 'عالمي.',
+    'products.subtitle':
+      'كل قطرة مهمة. أنظمتنا مُختارة بعناية لمتانتها ودقتها وملاءمتها للأراضي الجزائرية.',
+
+    'partners.eyebrow': 'شركاؤنا',
+    'partners.title.1': 'تحالف مع',
+    'partners.title.italic': 'أفضل',
+    'partners.title.2': 'العلامات العالمية.',
+
+    'agencies.eyebrow': 'وكالاتنا',
+    'agencies.title.1': 'الأقرب',
+    'agencies.title.italic': 'إلى أراضيكم',
+    'agencies.subtitle':
+      'أربع وكالات عبر الجنوب الجزائري لخدمة سريعة ومتابعة ميدانية ولوجستية متقنة.',
+    'agencies.itinerary': 'الاتجاهات',
+    'agencies.call': 'اتصال',
+
+    'manager.eyebrow': 'كلمة المدير',
+    'manager.commitment.title': 'إلتزامنا',
+    'manager.commitment.body':
+      'منذ إنشائنا، التزمنا بدعم تطوير الزراعة في الجزائر، من خلال تقديم حلول مبتكرة تتكيف مع الحقائق على الأرض وطموحات المزارعين.',
+    'manager.body2':
+      'بفضل فريق عمل متحمس وذو خبرة، تمكنت شركة أغروسبيس من ترسيخ مكانتها كلاعب رئيسي في مجالات الري الدقيق والتسميد وتوريد المعدات الزراعية عالية الأداء.',
+    'manager.mission.title': 'مهمتنا',
+    'manager.mission.body':
+      'مهمتنا واضحة: تقديم حلول تقنية موثوقة لعملائنا، وخدمة محلية ودعم مصمم خصيصًا، من التصميم إلى التشغيل.',
+    'manager.signoff': '« شكراً لثقتكم. »',
+    'manager.role': 'المدير العام',
+
+    'testimonials.eyebrow': 'شهادات',
+    'testimonials.title.1': 'يثقون',
+    'testimonials.title.italic': 'بنا',
+
+    'blog.preview.eyebrow': 'المدونة',
+    'blog.preview.title.1': 'أحدث المنشورات',
+    'blog.preview.title.italic': 'من الميدان',
+    'blog.preview.cta': 'كل المقالات',
+    'blog.read': 'اقرأ المقال',
+
+    'cta.ready.eyebrow': 'جاهزون للانطلاق؟',
+    'cta.ready.title.1': 'هل أنتم',
+    'cta.ready.italic': 'مستعدون',
+    'cta.ready.title.2': 'لتحويل مزرعتكم؟',
+    'cta.ready.subtitle':
+      'يُعدّ مهندسونا دراسة مخصصة مجانية. لنتحدث على واتساب أو هاتفياً، دون أي التزام.',
+    'cta.ready.whatsapp': 'تحدث عبر واتساب',
+    'cta.ready.call': 'اتصل بنا',
+
+    'footer.tagline':
+      'الابتكار في خدمة الأرض. نشكّل مستقبل الفلاحة في الجزائر بفضل تقنيات ري مستدامة.',
+    'footer.nav': 'التصفّح',
+    'footer.legal': 'قانوني',
+    'footer.legal.terms': 'الشروط العامة',
+    'footer.legal.privacy': 'سياسة الخصوصية',
+    'footer.legal.notice': 'الإشعارات القانونية',
+    'footer.follow': 'تابعونا',
+    'footer.rights': 'جميع الحقوق محفوظة.',
+    'footer.designed': 'مصمم بدقة للجزائر.',
+
+    'lang.label': 'اللغة',
+
+    'about.eyebrow': 'من نحن',
+    'about.title.1': 'فريق.',
+    'about.title.italic': 'مهمة.',
+    'about.title.2': 'أرض.',
+    'about.intro':
+      'ترافق أغروسبيس الفلاح الجزائري منذ بداياتها بهاجس واحد: تشغيل كل محور بشكل مستدام، وأحسن استعمال لكل قطرة ماء.',
+
+    'activities.eyebrow': 'نشاطاتنا',
+    'activities.title.1': 'ثلاثة أعمدة،',
+    'activities.italic': 'معيار واحد',
+    'activities.title.2': 'للتميّز.',
+
+    'contact.eyebrow': 'استشارة',
+    'contact.title.1': 'لنتحدث عن',
+    'contact.title.italic': 'مشروعكم.',
+    'contact.consent': 'أوافق على الشروط العامة وسياسة الخصوصية لأغروسبيس.',
+    'contact.terms': 'قراءة الشروط',
+    'contact.send.whatsapp': 'متابعة عبر واتساب',
+    'contact.send.email': 'إرسال رسالة',
+    'contact.form.title': 'أرسلوا لنا رسالة',
+    'contact.name.label': 'الاسم الكامل',
+    'contact.phone.label': 'الهاتف',
+    'contact.company.label': 'المؤسسة / المزرعة',
+    'contact.email.label': 'البريد الإلكتروني',
+    'contact.message.label': 'مشروعكم',
+    'contact.address.label': 'العنوان / الموقع',
+    'contact.name.placeholder': 'اسمكم',
+    'contact.phone.placeholder': '+213 ...',
+    'contact.company.placeholder': 'اسم الهيكل',
+    'contact.email.placeholder': 'vous@exemple.com',
+    'contact.message.placeholder': 'صفوا باختصار احتياجاتكم في مجال الري أو المعدات...',
+    'contact.address.placeholder': 'الولاية، البلدية...',
+
+    'faq.title.1': 'الأسئلة',
+    'faq.title.italic': 'الشائعة',
+
+    'newsletter.title': 'لنبقَ على تواصل',
+    'newsletter.subtitle': 'الابتكارات، رزنامات التركيب، تواريخ الصالونات: استلم الأهم.',
+    'newsletter.placeholder': 'بريدك الإلكتروني',
+    'newsletter.submit': 'اشتراك',
+
+    'technical.eyebrow': 'هندسة دقيقة',
+    'technical.subtitle': 'اكتشف تشريح نظام ري مصمَّم لتحدي أقسى البيئات مع تحسين كل قطرة ماء.',
+    'technical.spec1.title': 'هيكل مغلفن',
+    'technical.spec1.body': 'فولاذ عالي المقاومة مغمور بالزنك الساخن. مصمَّم لمقاومة التآكل الشديد والرياح العاتية والتضاريس الوعرة.',
+    'technical.spec2.title': 'محركات UMC',
+    'technical.spec2.body': 'موتورات تخفيض عالمية المستوى توفر أقصى عزم. كفاءة طاقوية عالية تضمن حركة سلسة ومستمرة للمحور.',
+    'technical.spec3.title': 'خبراء الرش',
+    'technical.spec3.body': 'أفضل الأنظمة: Komet وSenninger وNelson. توزيع موحَّد للماء بضغط منخفض يقلّص التبخر والجريان السطحي.',
+    'technical.cta.title': 'هل أنتم مستعدون لتحويل مزرعتكم؟',
+    'technical.cta.body': 'مهندسونا الزراعيون متاحون لإعداد دراسة تقنية مخصصة لأراضيكم.',
+    'technical.cta.btn': 'تواصل مع مهندس',
+
+    'catalog.search': 'البحث عن منتج...',
+    'catalog.instock': 'متوفر',
+    'catalog.outofstock': 'نفد المخزون',
+    'catalog.quote': 'اطلب عرض سعر',
+    'catalog.all': 'الكل',
+
+    'error.404.eyebrow': 'خطأ 404',
+    'error.404.title': 'الصفحة غير موجودة',
+    'error.404.subtitle': 'الصفحة التي تبحث عنها غير موجودة أو تم نقلها.',
+    'error.404.home': 'العودة إلى الرئيسية',
+    'error.404.contact': 'تواصل معنا',
+  },
+
+  en: {
+    'nav.expertise': 'Expertise',
+    'nav.products': 'Products',
+    'nav.activities': 'Our Activities',
+    'nav.about': 'About',
+    'nav.blog': 'Blog',
+    'nav.contact': 'Contact Us',
+    'nav.admin': 'Admin',
+    'nav.activities.irrigation': 'Irrigation',
+    'nav.activities.fertilization': 'Fertilization',
+    'nav.activities.retail': 'Retail Sales',
+
+    'hero.eyebrow': 'Leaders in Irrigation',
+    'hero.title.line1': 'The Future of',
+    'hero.title.line2': 'Agriculture',
+    'hero.title.line3': 'in Algeria.',
+    'hero.subtitle':
+      'WESTERN central pivots, precision fertilization and parts retail. Transport and assembly included, 1-year warranty, after-sales handled by our engineers.',
+    'hero.scroll': 'Scroll to discover',
+    'hero.cta': 'Discover our services',
+    'hero.cta.quote': 'Request a quote',
+
+    'usp.installed': 'Pivots installed',
+    'usp.installed.desc': 'Not a single installed pivot has gone out of service.',
+    'usp.delivery': 'Transport & assembly',
+    'usp.delivery.desc': 'Included until the pivot turns on and spins.',
+    'usp.warranty': '1-year warranty',
+    'usp.warranty.desc': 'Full after-sales service from our engineers.',
+    'usp.exclusivity': 'Central pivots only',
+    'usp.exclusivity.desc': 'One specialty, mastered to perfection.',
+    'usp.aftersale': 'After-sales service',
+    'usp.aftersale.desc': 'Dedicated engineers, no pivot ever left without follow-up.',
+
+    'services.eyebrow': 'Our Expertise',
+    'services.title.1': 'The alliance of',
+    'services.title.italic': 'tradition',
+    'services.title.2': 'and technology.',
+    'services.subtitle':
+      'From soil studies to high-end equipment installs, we walk farmers all the way to durable returns.',
+    'services.irrigation.title': 'Central pivot irrigation',
+    'services.irrigation.desc':
+      'Specialists of WESTERN central pivots. Survey, transport, installation and turn-key startup for Algerian farms.',
+    'services.fertilization.title': 'Precision fertilization',
+    'services.fertilization.desc':
+      'Optimized water and fertilizer dosing through integrated systems and on-site engineer follow-up.',
+    'services.retail.title': 'Retail sales',
+    'services.retail.desc':
+      'Spare parts, sprinklers, gearmotors, panels and accessories: a stock of reference brands available in our agencies.',
+    'services.cta': 'Learn more',
+
+    'products.eyebrow': 'Our Solutions',
+    'products.title.1': 'World-class',
+    'products.title.italic': 'precision',
+    'products.title.2': 'equipment.',
+    'products.subtitle':
+      'Every drop counts. Our systems are selected for durability, precision and fitness to Algerian farming conditions.',
+
+    'partners.eyebrow': 'Our Partners',
+    'partners.title.1': 'Allied with the',
+    'partners.title.italic': 'best',
+    'partners.title.2': 'global brands.',
+
+    'agencies.eyebrow': 'Our Agencies',
+    'agencies.title.1': 'Right next',
+    'agencies.title.italic': 'to your fields',
+    'agencies.subtitle':
+      'Four agencies across southern Algeria for fast service, on-site advice and tight logistics.',
+    'agencies.itinerary': 'Get directions',
+    'agencies.call': 'Call',
+
+    'manager.eyebrow': "Manager's Word",
+    'manager.commitment.title': 'Our Commitment',
+    'manager.commitment.body':
+      'Since our creation, we have been committed to supporting the development of agriculture in Algeria, by providing innovative solutions, adapted to the realities on the ground and the ambitions of farmers.',
+    'manager.body2':
+      'Thanks to a passionate and experienced team, AGROESPACE has positioned itself as a key player in the fields of precision irrigation, fertilization, and the supply of high-performance agricultural equipment.',
+    'manager.mission.title': 'Our Mission',
+    'manager.mission.body':
+      'Our mission is clear: to offer our customers reliable technical solutions, local service and tailor-made support, from design to operation.',
+    'manager.signoff': '"Thank you for your trust."',
+    'manager.role': 'General Manager',
+
+    'testimonials.eyebrow': 'Testimonials',
+    'testimonials.title.1': 'They',
+    'testimonials.title.italic': 'trust us',
+
+    'blog.preview.eyebrow': 'Journal',
+    'blog.preview.title.1': 'Latest articles',
+    'blog.preview.title.italic': 'from the field',
+    'blog.preview.cta': 'See the full journal',
+    'blog.read': 'Read the article',
+
+    'cta.ready.eyebrow': 'Ready to start?',
+    'cta.ready.title.1': 'Are you',
+    'cta.ready.italic': 'ready',
+    'cta.ready.title.2': 'to transform your farm?',
+    'cta.ready.subtitle':
+      "Our engineers prepare a free, custom study. Let's talk on WhatsApp or by phone, no strings attached.",
+    'cta.ready.whatsapp': 'Chat on WhatsApp',
+    'cta.ready.call': 'Call us',
+
+    'footer.tagline':
+      'Innovation serving the land. We are shaping the future of farming in Algeria with sustainable irrigation technologies.',
+    'footer.nav': 'Navigation',
+    'footer.legal': 'Legal',
+    'footer.legal.terms': 'Terms & conditions',
+    'footer.legal.privacy': 'Privacy policy',
+    'footer.legal.notice': 'Legal notice',
+    'footer.follow': 'Follow us',
+    'footer.rights': 'All rights reserved.',
+    'footer.designed': 'Crafted with precision for Algeria.',
+
+    'lang.label': 'Language',
+
+    'about.eyebrow': 'About',
+    'about.title.1': 'A team.',
+    'about.title.italic': 'A mission.',
+    'about.title.2': 'A land.',
+    'about.intro':
+      'From day one, AGROESPACE has helped Algerian farmers with one obsession: keeping every pivot running, drop after drop.',
+
+    'activities.eyebrow': 'Our Activities',
+    'activities.title.1': 'Three pillars,',
+    'activities.italic': 'one standard',
+    'activities.title.2': 'of excellence.',
+
+    'contact.eyebrow': 'Consultation',
+    'contact.title.1': "Let's discuss",
+    'contact.title.italic': 'your project.',
+    'contact.consent':
+      "I accept AGROESPACE's terms and privacy policy.",
+    'contact.terms': 'Read the terms',
+    'contact.send.whatsapp': 'Continue on WhatsApp',
+    'contact.send.email': 'Send a message',
+    'contact.form.title': 'Send us a message',
+    'contact.name.label': 'Full name',
+    'contact.phone.label': 'Phone',
+    'contact.company.label': 'Company / Farm',
+    'contact.email.label': 'Email address',
+    'contact.message.label': 'Your project',
+    'contact.address.label': 'Address / Location',
+    'contact.name.placeholder': 'Your name',
+    'contact.phone.placeholder': '+213 ...',
+    'contact.company.placeholder': 'Company name',
+    'contact.email.placeholder': 'you@example.com',
+    'contact.message.placeholder': 'Briefly describe your irrigation or equipment needs...',
+    'contact.address.placeholder': 'Province, Municipality...',
+
+    'faq.title.1': 'Frequently asked',
+    'faq.title.italic': 'questions',
+
+    'newsletter.title': "Let's stay in touch",
+    'newsletter.subtitle': 'Innovations, install schedules, fair dates — only the essentials.',
+    'newsletter.placeholder': 'Your email',
+    'newsletter.submit': 'Subscribe',
+
+    'technical.eyebrow': 'Precision engineering',
+    'technical.subtitle': 'Discover the anatomy of an irrigation system built to challenge the harshest environments while optimising every drop of water.',
+    'technical.spec1.title': 'Galvanised structure',
+    'technical.spec1.body': 'Hot-dip galvanised high-tensile steel. Built to resist extreme corrosion, violent winds and the uneven terrain of the high plateaus.',
+    'technical.spec2.title': 'UMC motors',
+    'technical.spec2.body': 'World-class gearmotors delivering maximum torque. Superior energy efficiency ensuring a smooth, continuous pivot movement.',
+    'technical.spec3.title': 'Sprinkler experts',
+    'technical.spec3.body': 'The best systems: Komet, Senninger and Nelson. Ultra-uniform low-pressure water distribution drastically reduces evaporation and run-off.',
+    'technical.cta.title': 'Ready to transform your farm?',
+    'technical.cta.body': 'Our agronomic engineers are available to carry out a personalised technical study of your plots.',
+    'technical.cta.btn': 'Contact an Engineer',
+
+    'catalog.search': 'Search for a product...',
+    'catalog.instock': 'In stock',
+    'catalog.outofstock': 'Out of stock',
+    'catalog.quote': 'Request a quote',
+    'catalog.all': 'All',
+
+    'error.404.eyebrow': '404 Error',
+    'error.404.title': 'Page not found',
+    'error.404.subtitle': "The page you're looking for doesn't exist or has been moved.",
+    'error.404.home': 'Back to homepage',
+    'error.404.contact': 'Contact us',
+  },
+};

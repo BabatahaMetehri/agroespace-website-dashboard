@@ -1,0 +1,185 @@
+### AGROESPACE — API smoke tests
+### Open this file in VS Code with the "REST Client" extension (humao.rest-client)
+### and click "Send Request" above any block.
+
+@base = https://jvmddidfxabdbtiscdop.supabase.co/functions/v1/make-server-0c561120
+@key  = REPLACE_WITH_AGROESPACE_API_KEY
+
+
+### 1. Health (no auth required)
+GET {{base}}/health
+
+
+### 2. Auth check — should return 401
+GET {{base}}/wp-json/wc/v3/products
+
+
+### 3. Auth check — Basic auth (WooCommerce / Logicom style)
+GET {{base}}/wp-json/wc/v3/products?per_page=5
+Authorization: Basic {{ "logicom:" + key | btoa }}
+
+
+### 4. Auth check — query-string (WooCommerce convention)
+GET {{base}}/wp-json/wc/v3/products?consumer_key=logicom&consumer_secret={{key}}&per_page=5
+
+
+### 5. List products (paginated)
+GET {{base}}/wp-json/wc/v3/products?page=1&per_page=20
+X-API-KEY: {{key}}
+
+
+### 6. Look up by SKU (only images, like Routs.txt)
+GET {{base}}/wp-json/wc/v3/products?sku=SKU-PVT-500&_fields=images,id,sku
+X-API-KEY: {{key}}
+
+
+### 7. Create a product
+# @name createProduct
+POST {{base}}/wp-json/wc/v3/products
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{
+  "name": "Pivot Central Western 500m",
+  "sku": "SKU-PVT-500",
+  "description": "Pivot central WESTERN, transport et montage inclus, garantie 1 an.",
+  "regular_price": "",
+  "manage_stock": true,
+  "stock_quantity": 3,
+  "stock_status": "instock",
+  "categories": [{ "name": "Pivots" }],
+  "images": [
+    { "src": "https://images.unsplash.com/photo-1611040549344-f71005756038?q=80&w=1080" }
+  ]
+}
+
+
+### 8. Granular update — stock_quantity only (uses createProduct's response)
+PUT {{base}}/wp-json/wc/v3/products/{{createProduct.response.body.id}}
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{
+  "stock_quantity": 7
+}
+
+
+### 9. Granular update — regular_price only
+PUT {{base}}/wp-json/wc/v3/products/{{createProduct.response.body.id}}
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{
+  "regular_price": "275000"
+}
+
+
+### 10. Delete the test product
+DELETE {{base}}/wp-json/wc/v3/products/{{createProduct.response.body.id}}
+X-API-KEY: {{key}}
+
+
+### 11. Create a category
+# @name createCategory
+POST {{base}}/wp-json/wc/v3/products/categories
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Pivots", "slug": "pivots" }
+
+
+### 12. Update the category
+PUT {{base}}/wp-json/wc/v3/products/categories/{{createCategory.response.body.id}}
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Pivots Centraux" }
+
+
+### 13. Create an attribute
+# @name createAttribute
+POST {{base}}/wp-json/wc/v3/products/attributes
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Marque", "slug": "marque", "type": "select" }
+
+
+### 14. Update the attribute
+PUT {{base}}/wp-json/wc/v3/products/attributes/{{createAttribute.response.body.id}}
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Marque (FR)" }
+
+
+### 15. Add a term to the attribute
+# @name createTerm
+POST {{base}}/wp-json/wc/v3/products/attributes/{{createAttribute.response.body.id}}/terms
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Western", "slug": "western" }
+
+
+### 16. Update the term
+PUT {{base}}/wp-json/wc/v3/products/attributes/{{createAttribute.response.body.id}}/terms/{{createTerm.response.body.id}}
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{ "name": "Western Irrigation" }
+
+
+### 17. List orders
+GET {{base}}/wp-json/wc/v3/orders?per_page=20
+X-API-KEY: {{key}}
+
+
+### 18. Create a customer
+POST {{base}}/wp-json/wc/v3/customers
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{
+  "email": "client@example.dz",
+  "first_name": "Mohammed",
+  "last_name": "Benali",
+  "billing": {
+    "phone": "+213661391012",
+    "city": "Adrar",
+    "country": "DZ"
+  }
+}
+
+
+### 19. Register a media URL
+POST {{base}}/wp-json/wp/v2/media
+X-API-KEY: {{key}}
+Content-Type: application/json
+
+{
+  "source_url": "https://images.unsplash.com/photo-1611040549344-f71005756038?q=80&w=1080",
+  "title": "Pivot Western",
+  "alt_text": "Pivot central installé en Adrar"
+}
+
+
+### 20. Public — submit a quote (no auth)
+POST {{base}}/quotes
+Content-Type: application/json
+
+{
+  "name": "Test REST Client",
+  "phone": "+213661000000",
+  "email": "test@example.com",
+  "product_title": "Pivot Central 500m",
+  "message": "Demande de test"
+}
+
+
+### 21. Public — list blog posts (no auth)
+GET {{base}}/public/blog
+
+
+### 22. Public — bump view count on a seed post
+POST {{base}}/public/blog/optimiser-irrigation-cereales-sud-algerien/view

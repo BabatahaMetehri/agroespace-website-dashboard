@@ -1,0 +1,458 @@
+{
+  "info": {
+    "name": "AGROESPACE — WooCommerce Mirror API",
+    "description": "Tests every endpoint exposed by the make-server-0c561120 edge function. Set the `base_url` and `api_key` collection variables before running. The same key is accepted as X-API-KEY, Authorization: Bearer, Authorization: Basic (key as the password), or ?consumer_secret query parameter.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-KEY", "type": "string" },
+      { "key": "value", "value": "{{api_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://jvmddidfxabdbtiscdop.supabase.co/functions/v1/make-server-0c561120",
+      "type": "string"
+    },
+    { "key": "api_key", "value": "REPLACE_WITH_AGROESPACE_API_KEY", "type": "string" },
+    { "key": "product_id", "value": "1", "type": "string" },
+    { "key": "category_id", "value": "1", "type": "string" },
+    { "key": "attribute_id", "value": "1", "type": "string" },
+    { "key": "term_id", "value": "1", "type": "string" },
+    { "key": "order_id", "value": "1", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Smoke tests",
+      "item": [
+        {
+          "name": "Health (no auth)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": { "raw": "{{base_url}}/health", "host": ["{{base_url}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Auth check — missing key (expects 401)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"]
+            }
+          }
+        },
+        {
+          "name": "Auth check — Basic auth (Logicom-style)",
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "logicom", "type": "string" },
+                { "key": "password", "value": "{{api_key}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products?per_page=5",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"],
+              "query": [{ "key": "per_page", "value": "5" }]
+            }
+          }
+        },
+        {
+          "name": "Auth check — query-string consumer_secret",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products?consumer_key=logicom&consumer_secret={{api_key}}&per_page=5",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"],
+              "query": [
+                { "key": "consumer_key", "value": "logicom" },
+                { "key": "consumer_secret", "value": "{{api_key}}" },
+                { "key": "per_page", "value": "5" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "List products (paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products?page=1&per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "per_page", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Look up by SKU (only images)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products?sku=SKU-PVT-500&_fields=images,id,sku",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"],
+              "query": [
+                { "key": "sku", "value": "SKU-PVT-500" },
+                { "key": "_fields", "value": "images,id,sku" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create product",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.id) pm.collectionVariables.set('product_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Pivot Central Western 500m\",\n  \"sku\": \"SKU-PVT-500\",\n  \"description\": \"Pivot central WESTERN, transport et montage inclus, garantie 1 an.\",\n  \"regular_price\": \"\",\n  \"manage_stock\": true,\n  \"stock_quantity\": 3,\n  \"stock_status\": \"instock\",\n  \"categories\": [{\"name\": \"Pivots\"}],\n  \"images\": [{\"src\": \"https://images.unsplash.com/photo-1611040549344-f71005756038?q=80&w=1080\"}]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products"]
+            }
+          }
+        },
+        {
+          "name": "Update product (granular — stock_quantity only)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"stock_quantity\": 7\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "{{product_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update product (granular — regular_price only)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"regular_price\": \"275000\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "{{product_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete product",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/{{product_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "{{product_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Create category",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.id) pm.collectionVariables.set('category_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Pivots\",\n  \"slug\": \"pivots\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/categories",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "categories"]
+            }
+          }
+        },
+        {
+          "name": "Update category",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Pivots Centraux\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/categories/{{category_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "categories", "{{category_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Attributes & Terms",
+      "item": [
+        {
+          "name": "Create attribute",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.id) pm.collectionVariables.set('attribute_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Marque\",\n  \"slug\": \"marque\",\n  \"type\": \"select\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/attributes",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "attributes"]
+            }
+          }
+        },
+        {
+          "name": "Update attribute",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Marque (FR)\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/attributes/{{attribute_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "attributes", "{{attribute_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Create attribute term",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  if (body && body.id) pm.collectionVariables.set('term_id', String(body.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Western\",\n  \"slug\": \"western\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/attributes/{{attribute_id}}/terms",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "products", "attributes", "{{attribute_id}}", "terms"]
+            }
+          }
+        },
+        {
+          "name": "Update attribute term",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Western Irrigation\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/products/attributes/{{attribute_id}}/terms/{{term_id}}",
+              "host": ["{{base_url}}"],
+              "path": [
+                "wp-json",
+                "wc",
+                "v3",
+                "products",
+                "attributes",
+                "{{attribute_id}}",
+                "terms",
+                "{{term_id}}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orders",
+      "item": [
+        {
+          "name": "List orders",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/orders?per_page=20",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "orders"],
+              "query": [{ "key": "per_page", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "Update order status",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"processing\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/orders/{{order_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "orders", "{{order_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create customer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"client@example.dz\",\n  \"first_name\": \"Mohammed\",\n  \"last_name\": \"Benali\",\n  \"billing\": {\n    \"phone\": \"+213661391012\",\n    \"city\": \"Adrar\",\n    \"country\": \"DZ\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wc/v3/customers",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wc", "v3", "customers"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Media",
+      "item": [
+        {
+          "name": "Register media (URL)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"source_url\": \"https://images.unsplash.com/photo-1611040549344-f71005756038?q=80&w=1080\",\n  \"title\": \"Pivot Western\",\n  \"alt_text\": \"Pivot central installé en Adrar\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/wp-json/wp/v2/media",
+              "host": ["{{base_url}}"],
+              "path": ["wp-json", "wp", "v2", "media"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public (no auth)",
+      "item": [
+        {
+          "name": "Submit a quote",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Postman\",\n  \"phone\": \"+213661000000\",\n  \"email\": \"test@example.com\",\n  \"product_title\": \"Pivot Central 500m\",\n  \"message\": \"Demande de test envoyée depuis Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/quotes",
+              "host": ["{{base_url}}"],
+              "path": ["quotes"]
+            }
+          }
+        },
+        {
+          "name": "List blog posts (CMS)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/public/blog",
+              "host": ["{{base_url}}"],
+              "path": ["public", "blog"]
+            }
+          }
+        },
+        {
+          "name": "Bump view count",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/public/blog/optimiser-irrigation-cereales-sud-algerien/view",
+              "host": ["{{base_url}}"],
+              "path": [
+                "public",
+                "blog",
+                "optimiser-irrigation-cereales-sud-algerien",
+                "view"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

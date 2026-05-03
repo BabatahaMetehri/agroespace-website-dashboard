@@ -1,0 +1,21 @@
+/wp-json/wc/v3/products  -  type = Post
+/wp-json/wc/v3/products/<id>  - type = Put
+
+/wp-json/wc/v3/products?_fields=images&sku=<sku> type = get
+
+/wp-json/wc/v3/products/categories  - type = Post
+/wp-json/wc/v3/products/categories/<id> -  type = Put
+
+/wp-json/wc/v3/products/attributes - type = Post
+/wp-json/wc/v3/products/attributes/<id>  - type = Put
+
+/wp-json/wc/v3/products/attributes/<attribute_id>/terms - type = Post 
+/wp-json/wc/v3/products/attributes/<attribute_id>/terms/<id>  -  type = Put
+
+/wp-json/wc/v3/orders  - type = Get
+/wp-json/wc/v3/orders/<id> -  type = Put
+
+/wp-json/wc/v3/customers - type = Post 
+
+/wp-json/wp/v2/media- type = Post 
+

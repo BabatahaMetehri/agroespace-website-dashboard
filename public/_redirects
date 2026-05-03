@@ -1,0 +1,9 @@
+# Netlify-style rewrites (also read by Cloudflare Pages and many static hosts)
+
+# Map app — serve the standalone HTML, never the React SPA
+/map        /map/index.html   200
+/map/       /map/index.html   200
+/map/*      /map/:splat       200
+
+# SPA fallback — every other path falls through to the React app
+/*          /index.html       200

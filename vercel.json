@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/map", "destination": "/map/index.html" },
+    { "source": "/map/", "destination": "/map/index.html" },
+    { "source": "/map/:path*", "destination": "/map/:path*" },
+    { "source": "/((?!map/).*)", "destination": "/index.html" }
+  ]
+}
