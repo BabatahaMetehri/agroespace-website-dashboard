@@ -6,16 +6,22 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#09100d">
 <title>AGROESPACE</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css"/>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.min.css" crossorigin="anonymous" referrerpolicy="no-referrer"/>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&family=Cairo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- AGROESPACE: hardcoded Supabase + imgBB config (skips setup screen) -->
+<!-- AGROESPACE: Supabase + imgBB config injected at build time from env vars
+     (VITE_MAP_SUPABASE_URL / VITE_MAP_SUPABASE_ANON_KEY / VITE_IMGBB_KEY).
+     If empty (dev / preview), the app falls back to its built-in setup screen. -->
 <script>
 (function () {
-  localStorage.setItem('sb_url', 'https://dizeodyknchhaaqifpji.supabase.co');
-  localStorage.setItem('sb_key', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRpemVvZHlrbmNoaGFhcWlmcGppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMzUzOTgsImV4cCI6MjA5MjgxMTM5OH0.Vo5nD0nEq3PZhGL36NsqTM3Ke6wxx29lc4bVCreVYP8');
-  localStorage.setItem('imgbb_key', '532fd551c5b06a6333c0e63bec0d122b');
+  var sbUrl = '__MAP_SUPABASE_URL__';
+  var sbKey = '__MAP_SUPABASE_ANON_KEY__';
+  var imgKey = '__IMGBB_KEY__';
+  // Only set when not still wrapped in placeholder markers
+  if (sbUrl && sbUrl.indexOf('__MAP_SUPABASE_URL') !== 0) localStorage.setItem('sb_url', sbUrl);
+  if (sbKey && sbKey.indexOf('__MAP_SUPABASE_ANON_KEY') !== 0) localStorage.setItem('sb_key', sbKey);
+  if (imgKey && imgKey.indexOf('__IMGBB_KEY') !== 0) localStorage.setItem('imgbb_key', imgKey);
 })();
 </script>
 <style>
@@ -896,9 +902,11 @@ UPDATE installations
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<!-- Pinned to a specific version so a future malicious release of @2 cannot
+     auto-propagate. Bump deliberately when needed. -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.8/dist/umd/supabase.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // ═══ STATE ═══
 let db=null, map=null, pickerMap=null, clusterGroup=null;
@@ -1149,7 +1157,7 @@ async function boot(){
     if(se) throw se;
     if(sd&&sd.session){
       const email=sd.session.user.email;
-      setUserRole(email);
+      await setUserRole(email);
       document.getElementById("u-email").textContent=email;
       show("app");
       await initMap();
@@ -1175,12 +1183,35 @@ function show(name){
 }
 
 // ═══ ROLES ═══
-function setUserRole(email){
-  if(email===ADMIN_EMAIL){ userRole="admin"; }
-  else {
-    // Check localStorage for role override (set by admin via Supabase user_metadata)
-    // Default: engineer can add/edit/delete, cannot access config
-    userRole="engineer";
+// Reads the role from the `profiles` table populated by the map RLS
+// migration (supabase/map-rls-hardening.sql). The hardcoded ADMIN_EMAIL
+// fallback is kept for the very first promotion only (before the table
+// exists / your account is promoted). Once you've run the migration and
+// set role='admin' on your profile, the email check is bypassed.
+async function setUserRole(email){
+  let role = null;
+  try {
+    if (db && db.auth) {
+      const { data: { user } } = await db.auth.getUser();
+      if (user) {
+        const { data, error } = await db
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!error && data && data.role) role = data.role;
+      }
+    }
+  } catch (_e) { /* profiles table may not exist yet */ }
+
+  if (role === 'admin' || role === 'engineer' || role === 'viewer') {
+    userRole = role;
+  } else if (email === ADMIN_EMAIL) {
+    // Bootstrap fallback — only used until the profiles row is set
+    userRole = 'admin';
+  } else {
+    // Strict default: viewer (read-only). Promote via SQL to engineer/admin.
+    userRole = 'viewer';
   }
   applyRole();
 }
@@ -1234,6 +1265,23 @@ async function doLogin(){
   const err=document.getElementById("l-err");
   err.classList.add("hidden");
   if(!email||!pass){ err.textContent=t("errLoginEmpty"); err.classList.remove("hidden"); return; }
+
+  // Client-side throttle: 5 failures / 15 minutes
+  const ATTEMPTS_KEY="agroespace.map.loginAttempts", MAX_ATTEMPTS=5, WIN=15*60*1000;
+  function readAttempts(){
+    try{ const raw=localStorage.getItem(ATTEMPTS_KEY); if(!raw) return [];
+      const arr=JSON.parse(raw); if(!Array.isArray(arr)) return [];
+      const cut=Date.now()-WIN; return arr.filter(t=>typeof t==="number"&&t>cut);
+    } catch(_){ return []; }
+  }
+  const attempts=readAttempts();
+  if(attempts.length>=MAX_ATTEMPTS){
+    const wait=Math.ceil((attempts[0]+WIN-Date.now())/60000);
+    err.textContent=`Trop de tentatives. Réessayez dans ~${wait} min.`;
+    err.classList.remove("hidden");
+    return;
+  }
+
   if(!db){
     const url=(localStorage.getItem("sb_url")||"").trim().replace(/\/+$/,"");
     const key=(localStorage.getItem("sb_key")||"").trim();
@@ -1245,18 +1293,24 @@ async function doLogin(){
   try{
     const {data:d,error:e}=await db.auth.signInWithPassword({email,password:pass});
     if(e) throw e;
-    setUserRole(email);
+    localStorage.removeItem(ATTEMPTS_KEY);
+    await setUserRole(email);
     document.getElementById("u-email").textContent=email;
     show("app");
     await initMap();
     await load();
   } catch(e){
     console.error("Login:",e);
+    // Record failure
+    const fresh=readAttempts(); fresh.push(Date.now());
+    localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(fresh));
     let m=e.message||"Erreur";
     const ml=m.toLowerCase();
     if(ml.includes("fetch")||ml.includes("network")||ml.includes("failed")) m=t("errFetch");
     else if(ml.includes("invalid")||ml.includes("credentials")) m=t("errCreds");
     else if(ml.includes("confirm")) m=t("errConfirm");
+    const left=Math.max(0, MAX_ATTEMPTS-fresh.length);
+    if(left>0 && left<MAX_ATTEMPTS) m=m+` (${left} tentative${left>1?"s":""} restante${left>1?"s":""})`;
     err.textContent=m; err.classList.remove("hidden");
   }
   btn.disabled=false; btn.textContent=t("signIn");

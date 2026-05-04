@@ -4,7 +4,9 @@ import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';
 
-const IMGBB_KEY = '532fd551c5b06a6333c0e63bec0d122b';
+const IMGBB_KEY = (import.meta as any).env?.VITE_IMGBB_KEY ?? '';
+const ALLOWED_IMG_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+const MAX_IMG_BYTES = 10 * 1024 * 1024;
 
 type PromoConfig = {
   id: string;
@@ -38,6 +40,13 @@ const PROMO_DEFAULTS: PromoConfig = {
 };
 
 async function uploadToImgBB(file: File): Promise<string> {
+  if (!IMGBB_KEY) throw new Error('Image upload key not configured');
+  if (!ALLOWED_IMG_TYPES.includes(file.type)) {
+    throw new Error('Format non supporté (JPEG, PNG, WEBP, GIF uniquement)');
+  }
+  if (file.size > MAX_IMG_BYTES) {
+    throw new Error('Image trop volumineuse (max 10 Mo)');
+  }
   const formData = new FormData();
   formData.append('image', file);
   const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_KEY}`, {

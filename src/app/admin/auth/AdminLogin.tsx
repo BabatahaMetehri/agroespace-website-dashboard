@@ -1,9 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Lock, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
 import logoImg from '../../../imports/logo-with-shadow.png';
 import { useAdminAuth } from './AuthProvider';
+
+// Client-side throttle: 5 failed attempts per 15-minute rolling window.
+// (Supabase Auth itself has server-side rate limits too — this is UX layer.)
+const ATTEMPTS_KEY = 'agroespace.admin.loginAttempts';
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 15 * 60 * 1000;
+
+function readAttempts(): number[] {
+  try {
+    const raw = localStorage.getItem(ATTEMPTS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    const cutoff = Date.now() - WINDOW_MS;
+    return arr.filter((t: any) => typeof t === 'number' && t > cutoff);
+  } catch {
+    return [];
+  }
+}
+function recordFailure() {
+  const next = [...readAttempts(), Date.now()];
+  localStorage.setItem(ATTEMPTS_KEY, JSON.stringify(next));
+}
+function clearAttempts() {
+  localStorage.removeItem(ATTEMPTS_KEY);
+}
 
 export const AdminLogin = ({ reason }: { reason?: 'forbidden' | 'signed-out' | null }) => {
   const { signIn } = useAdminAuth();
@@ -12,14 +38,52 @@ export const AdminLogin = ({ reason }: { reason?: 'forbidden' | 'signed-out' | n
   const [showPwd, setShowPwd] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [, force] = useState(0);
+
+  // Re-evaluate lock on mount + every second when locked (for countdown).
+  useEffect(() => {
+    const evaluate = () => {
+      const attempts = readAttempts();
+      if (attempts.length >= MAX_ATTEMPTS) {
+        setLockedUntil(attempts[0] + WINDOW_MS);
+      } else {
+        setLockedUntil(null);
+      }
+    };
+    evaluate();
+    const id = setInterval(() => {
+      evaluate();
+      force((n) => n + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const isLocked = lockedUntil !== null && lockedUntil > Date.now();
+  const remainingSec = isLocked
+    ? Math.ceil(((lockedUntil as number) - Date.now()) / 1000)
+    : 0;
+  const remainingAttempts = Math.max(0, MAX_ATTEMPTS - readAttempts().length);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLocked) return;
     setError(null);
     setSubmitting(true);
     const { error } = await signIn(email.trim(), password);
     setSubmitting(false);
-    if (error) setError(error);
+    if (error) {
+      recordFailure();
+      const attempts = readAttempts();
+      if (attempts.length >= MAX_ATTEMPTS) {
+        setLockedUntil(attempts[0] + WINDOW_MS);
+        setError('Trop de tentatives. Réessayez plus tard.');
+      } else {
+        setError(error);
+      }
+    } else {
+      clearAttempts();
+    }
   };
 
   return (
@@ -112,13 +176,25 @@ export const AdminLogin = ({ reason }: { reason?: 'forbidden' | 'signed-out' | n
             </div>
 
             {error && <p className="text-red-300 text-sm">{error}</p>}
+            {isLocked && (
+              <p className="text-amber-300 text-sm">
+                Compte verrouillé temporairement. Réessayez dans{' '}
+                {Math.floor(remainingSec / 60)}m {remainingSec % 60}s.
+              </p>
+            )}
+            {!isLocked && remainingAttempts < MAX_ATTEMPTS && remainingAttempts > 0 && (
+              <p className="text-white/40 text-xs">
+                {remainingAttempts} tentative{remainingAttempts > 1 ? 's' : ''} restante
+                {remainingAttempts > 1 ? 's' : ''}.
+              </p>
+            )}
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || isLocked}
               className="w-full bg-[#87A922] hover:bg-[#6c871b] text-white py-4 rounded-2xl font-bold uppercase tracking-[0.1em] text-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Connexion...' : 'Se connecter'}
+              {submitting ? 'Connexion...' : isLocked ? 'Verrouillé' : 'Se connecter'}
             </button>
           </form>
 

@@ -6,17 +6,166 @@ import * as kv from './kv_store.ts';
 
 const app = new Hono();
 
-app.use('*', logger(console.log));
+// ─── Redacted request logger (does not log bodies / auth headers) ─────────
+app.use('*', async (c, next) => {
+  const start = Date.now();
+  await next();
+  const ms = Date.now() - start;
+  console.log(`${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${ms}ms`);
+});
+
+// ─── CORS allowlist (origins) ─────────────────────────────────────────────
+// Set CORS_ORIGINS env var to a comma-separated list of allowed origins.
+// Defaults to production + localhost when unset to avoid breaking local dev.
+const CORS_ALLOWED = (Deno.env.get('CORS_ORIGINS') ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+const DEFAULT_CORS = [
+  'https://agroespace.com',
+  'https://www.agroespace.com',
+  'https://agroespace-website-dashboard.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:4173',
+];
+const corsAllow = CORS_ALLOWED.length > 0 ? CORS_ALLOWED : DEFAULT_CORS;
+
 app.use(
   '/*',
   cors({
-    origin: '*',
+    origin: (origin) => {
+      if (!origin) return ''; // server-to-server / curl
+      // Allow any *.vercel.app preview deploy in addition to allowlist
+      if (
+        corsAllow.includes(origin) ||
+        /^https:\/\/agroespace-website-dashboard(-[a-z0-9-]+)?\.vercel\.app$/.test(origin)
+      ) {
+        return origin;
+      }
+      return '';
+    },
     allowHeaders: ['Content-Type', 'Authorization', 'X-API-KEY'],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['Content-Length'],
     maxAge: 600,
   })
 );
+
+// ─── Body size cap (50 KB default; 10 MB on media upload routes) ──────────
+app.use('*', async (c, next) => {
+  const cl = Number(c.req.header('Content-Length') ?? 0);
+  const path = new URL(c.req.url).pathname;
+  const isMedia = path.includes('/wp-json/wp/v2/media');
+  const max = isMedia ? 10 * 1024 * 1024 : 50 * 1024;
+  if (cl > max) {
+    return c.json(
+      { code: 'payload_too_large', message: `Body exceeds ${max} bytes` },
+      413
+    );
+  }
+  await next();
+});
+
+// ─── Rate limiter (sliding-window, hybrid in-memory + KV) ─────────────────
+// In-memory map gives sub-ms checks for the common case. For sensitive
+// endpoints (`persist: true`) we additionally write the bucket to KV so
+// limits hold across Deno isolates and isolate restarts. KV-only mode adds
+// ~30-80 ms per call — only worth it on auth + quote endpoints.
+type Bucket = { hits: number[] };
+const rlState = new Map<string, Bucket>();
+
+function rateLimit(opts: {
+  key: string;
+  max: number;
+  windowMs: number;
+  persist?: boolean;
+}) {
+  return async (c: any, next: any) => {
+    const ip =
+      c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+      c.req.header('x-real-ip') ||
+      'anon';
+    const key = `${opts.key}:${ip}`;
+    const now = Date.now();
+    const cutoff = now - opts.windowMs;
+
+    // Layer 1: in-memory bucket (fast path)
+    let bucket = rlState.get(key) ?? { hits: [] };
+    bucket.hits = bucket.hits.filter((t) => t > cutoff);
+
+    // Layer 2: persistent KV bucket — merge with in-memory.
+    if (opts.persist) {
+      try {
+        const persisted = await kv.get(`rl:${key}`);
+        if (persisted && Array.isArray(persisted.hits)) {
+          const merged = Array.from(
+            new Set([...bucket.hits, ...persisted.hits])
+          )
+            .filter((t: number) => t > cutoff)
+            .sort();
+          bucket = { hits: merged };
+        }
+      } catch {
+        /* KV outage — fall back to in-memory */
+      }
+    }
+
+    if (bucket.hits.length >= opts.max) {
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((bucket.hits[0] + opts.windowMs - now) / 1000)
+      );
+      c.header('Retry-After', String(retryAfter));
+      // Save current state so concurrent isolates see the limit too
+      rlState.set(key, bucket);
+      if (opts.persist) {
+        try {
+          await kv.set(`rl:${key}`, { hits: bucket.hits, exp: now + opts.windowMs });
+        } catch {/* ignore */}
+      }
+      return c.json(
+        {
+          code: 'rate_limited',
+          message: `Too many requests, retry in ${retryAfter}s`,
+        },
+        429
+      );
+    }
+
+    bucket.hits.push(now);
+    rlState.set(key, bucket);
+    if (opts.persist) {
+      try {
+        await kv.set(`rl:${key}`, { hits: bucket.hits, exp: now + opts.windowMs });
+      } catch {/* ignore */}
+    }
+
+    // periodic cleanup so the in-mem map doesn't grow unbounded
+    if (rlState.size > 5000) {
+      for (const [k, b] of rlState) {
+        if (!b.hits.length || b.hits[b.hits.length - 1] < cutoff) rlState.delete(k);
+      }
+    }
+    await next();
+  };
+}
+
+// ─── Input sanitisation helpers ──────────────────────────────────────────
+function sanitiseStr(v: unknown, max = 500): string {
+  if (typeof v !== 'string') return '';
+  // strip control chars + tags + collapse whitespace, then cap length
+  return v
+    .replace(/<[^>]*>/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim()
+    .slice(0, max);
+}
+function isEmail(s: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(s) && s.length <= 254;
+}
+function isPhone(s: string): boolean {
+  return /^[+\d][\d\s().-]{5,24}$/.test(s);
+}
 
 const ROOT = '/make-server-0c561120';
 const WC = `${ROOT}/wp-json/wc/v3`;
@@ -28,24 +177,60 @@ const PUBLIC = `${ROOT}/public`;
 app.get(`${ROOT}/health`, (c) => c.json({ status: 'ok' }));
 
 // ─── Public quote intake ──────────────────────────────────────────────────
-// The site posts quote requests here without authentication so the public
-// QuoteModal can work. We tag them with status="pending".
-app.post(`${ROOT}/quotes`, async (c) => {
-  try {
-    const payload = await c.req.json();
-    const id = `quote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-    const record = {
-      id,
-      status: 'pending' as const,
-      created_at: payload.created_at ?? new Date().toISOString(),
-      ...payload,
-    };
-    await kv.set(`quote:${id}`, record);
-    return c.json({ id, status: 'queued' }, 201);
-  } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+// Rate-limited (10 / 15min per IP) + strictly validated.
+app.post(
+  `${ROOT}/quotes`,
+  rateLimit({ key: 'quotes', max: 10, windowMs: 15 * 60_000, persist: true }),
+  async (c) => {
+    try {
+      const raw = await c.req.json();
+      if (!raw || typeof raw !== 'object') {
+        return c.json({ code: 'rest_invalid_payload', message: 'Bad payload' }, 400);
+      }
+      // Whitelist fields, sanitise + length-cap
+      const name = sanitiseStr(raw.name, 100);
+      const phone = sanitiseStr(raw.phone, 30);
+      const email = sanitiseStr(raw.email, 254);
+      const company = sanitiseStr(raw.company, 150);
+      const address = sanitiseStr(raw.address, 200);
+      const message = sanitiseStr(raw.message, 2000);
+      const product_id = sanitiseStr(String(raw.product_id ?? ''), 80);
+      const product_sku = sanitiseStr(raw.product_sku, 80);
+      const product_title = sanitiseStr(raw.product_title, 200);
+
+      if (!name || name.length < 2) {
+        return c.json({ code: 'invalid_name', message: 'Name required' }, 400);
+      }
+      if (!phone || !isPhone(phone)) {
+        return c.json({ code: 'invalid_phone', message: 'Valid phone required' }, 400);
+      }
+      if (email && !isEmail(email)) {
+        return c.json({ code: 'invalid_email', message: 'Invalid email' }, 400);
+      }
+
+      const id = `quote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const record = {
+        id,
+        status: 'pending' as const,
+        created_at: new Date().toISOString(),
+        name,
+        phone,
+        email,
+        company,
+        address,
+        message,
+        product_id,
+        product_sku,
+        product_title,
+        ip: c.req.header('x-forwarded-for')?.split(',')[0].trim() || null,
+      };
+      await kv.set(`quote:${id}`, record);
+      return c.json({ id, status: 'queued' }, 201);
+    } catch (e) {
+      return c.json({ code: 'rest_invalid_payload', message: 'Bad request' }, 400);
+    }
   }
-});
+);
 
 // ─── Admin auth middleware ────────────────────────────────────────────────
 // Validates the Supabase JWT and checks the user's email against the
@@ -57,33 +242,58 @@ const adminAuthClient = () => {
   return createClient(url, anon);
 };
 
+// Per-IP rate limit on bearer-token verification (catches admin login probes
+// and broken-token spam): 5 failed attempts per 15 minutes.
+const requireAdminRateLimit = rateLimit({
+  key: 'admin-auth',
+  max: 5,
+  windowMs: 15 * 60_000,
+  persist: true,
+});
+
 async function requireAdmin(c: any, next: any) {
   const auth = c.req.header('Authorization') ?? '';
   if (!auth.toLowerCase().startsWith('bearer ')) {
-    return c.json({ code: 'unauthorized', message: 'Missing bearer token' }, 401);
+    // Apply rate limit only when the request is malformed/unauthenticated to
+    // avoid penalising legitimately authed admin browsing.
+    return await requireAdminRateLimit(c, () =>
+      c.json({ code: 'unauthorized', message: 'Missing bearer token' }, 401)
+    );
   }
   const token = auth.slice(7).trim();
   try {
     const supabase = adminAuthClient();
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
-      return c.json({ code: 'unauthorized', message: 'Invalid session' }, 401);
+      return await requireAdminRateLimit(c, () =>
+        c.json({ code: 'unauthorized', message: 'Invalid session' }, 401)
+      );
     }
     const allowed = (Deno.env.get('ADMIN_EMAILS') ?? '')
       .split(',')
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
-    const email = (data.user.email ?? '').toLowerCase();
-    if (allowed.length > 0 && !allowed.includes(email)) {
+    // Fail closed: if ADMIN_EMAILS is unset, no one is admin.
+    if (allowed.length === 0) {
+      console.error('SECURITY: ADMIN_EMAILS env var not set; denying all admin access');
       return c.json(
-        { code: 'forbidden', message: 'Account not in admin allowlist' },
+        { code: 'forbidden', message: 'Admin allowlist not configured' },
         403
+      );
+    }
+    const email = (data.user.email ?? '').toLowerCase();
+    if (!allowed.includes(email)) {
+      return await requireAdminRateLimit(c, () =>
+        c.json(
+          { code: 'forbidden', message: 'Account not in admin allowlist' },
+          403
+        )
       );
     }
     c.set('admin', { id: data.user.id, email });
     await next();
   } catch (e) {
-    return c.json({ code: 'unauthorized', message: String(e) }, 401);
+    return c.json({ code: 'unauthorized', message: 'Auth check failed' }, 401);
   }
 }
 
@@ -373,18 +583,63 @@ app.get(`${PUBLIC}/blog/:slug`, async (c) => {
   return c.json(await withCounter(item));
 });
 
-app.post(`${PUBLIC}/blog/:slug/view`, async (c) => {
-  const slug = c.req.param('slug');
-  const next = await bumpCounter(slug, { views: 1 });
-  return c.json({ views: next.views });
-});
+app.post(
+  `${PUBLIC}/blog/:slug/view`,
+  rateLimit({ key: 'blog-view', max: 30, windowMs: 60_000 }),
+  async (c) => {
+    const slug = c.req.param('slug');
+    const next = await bumpCounter(slug, { views: 1 });
+    return c.json({ views: next.views });
+  }
+);
 
-app.post(`${PUBLIC}/blog/:slug/like`, async (c) => {
-  const slug = c.req.param('slug');
-  const dir = c.req.query('dir') === 'down' ? -1 : 1;
-  const next = await bumpCounter(slug, { likes: dir });
-  return c.json({ likes: next.likes });
-});
+// Dedupe + persistence: a (slug, hashed-IP) pair can flip the like state once
+// per 24h. Stored in KV so it survives isolate restarts and works
+// cross-isolate (unlike the in-memory rate limiter).
+async function hashIP(ip: string): Promise<string> {
+  const data = new TextEncoder().encode(`agroespace-like-salt::${ip}`);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf))
+    .slice(0, 12)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+app.post(
+  `${PUBLIC}/blog/:slug/like`,
+  rateLimit({ key: 'blog-like', max: 10, windowMs: 60_000 }),
+  async (c) => {
+    const slug = c.req.param('slug');
+    const dir = c.req.query('dir') === 'down' ? -1 : 1;
+    const ip =
+      c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
+      c.req.header('x-real-ip') ||
+      'anon';
+    const ipHash = await hashIP(ip);
+    const dedupeKey = `like-vote:${slug}:${ipHash}`;
+    try {
+      const existing = await kv.get(dedupeKey);
+      const now = Date.now();
+      const TTL = 24 * 60 * 60 * 1000;
+      // existing = { state: 1 | -1, ts: number }
+      if (existing && existing.ts && now - existing.ts < TTL) {
+        if (existing.state === dir) {
+          // already in this state — no-op (return current count without changes)
+          const counters = (await kv.get(`blog:counters:${slug}`)) ?? {
+            views: 0,
+            likes: 0,
+          };
+          return c.json({ likes: counters.likes, deduped: true });
+        }
+      }
+      await kv.set(dedupeKey, { state: dir, ts: now });
+    } catch {
+      /* best effort — if KV fails we still rate-limit via in-mem */
+    }
+    const next = await bumpCounter(slug, { likes: dir });
+    return c.json({ likes: next.likes });
+  }
+);
 
 // ─── Public products (no auth) ────────────────────────────────────────────
 app.get(`${PUBLIC}/products`, async (c) => {
@@ -766,31 +1021,46 @@ async function uploadFileToStorage(
 // In every case the *secret* must equal AGROESPACE_API_KEY. The "key"
 // half can be any non-empty string — Logicom usually wants both fields
 // filled in, but only the secret is checked.
+// Constant-time comparison defeats timing attacks on the shared API secret.
+// Always processes the longer of the two strings so the runtime depends only
+// on the candidate length, not on which characters match.
+function timingSafeEqual(a: string, b: string): boolean {
+  const ea = new TextEncoder().encode(a);
+  const eb = new TextEncoder().encode(b);
+  const len = Math.max(ea.length, eb.length);
+  let diff = ea.length ^ eb.length;
+  for (let i = 0; i < len; i++) {
+    diff |= (ea[i] ?? 0) ^ (eb[i] ?? 0);
+  }
+  return diff === 0;
+}
+
 function checkApiKey(c: any): boolean {
   const expected = Deno.env.get('AGROESPACE_API_KEY') ?? '';
   if (!expected || expected === 'changeme-set-AGROESPACE_API_KEY') return false;
 
   const headerKey = c.req.header('X-API-KEY') ?? c.req.header('x-api-key') ?? '';
-  if (headerKey === expected) return true;
+  if (headerKey && timingSafeEqual(headerKey, expected)) return true;
 
   const auth = c.req.header('Authorization') ?? c.req.header('authorization') ?? '';
   if (auth) {
     const lower = auth.toLowerCase();
     if (lower.startsWith('bearer ')) {
-      if (auth.slice(7).trim() === expected) return true;
+      if (timingSafeEqual(auth.slice(7).trim(), expected)) return true;
     } else if (lower.startsWith('basic ')) {
       try {
         const decoded = atob(auth.slice(6).trim());
         const idx = decoded.indexOf(':');
         const secret = idx === -1 ? decoded : decoded.slice(idx + 1);
-        if (secret === expected) return true;
+        if (timingSafeEqual(secret, expected)) return true;
       } catch {
         /* malformed base64 — treat as auth failure */
       }
     }
   }
 
-  if (c.req.query('consumer_secret') === expected) return true;
+  const cs = c.req.query('consumer_secret');
+  if (cs && timingSafeEqual(cs, expected)) return true;
   return false;
 }
 
@@ -1051,6 +1321,14 @@ app.post(`${WC}/customers`, requireApiKey, async (c) => {
 // In all cases we upload the binary to Supabase Storage (bucket "media",
 // auto-created on first call) and return the full WP REST shape including
 // guid, media_details, _links, etc.
+// Allowed media MIME types (defence-in-depth — also applies to multipart files)
+const ALLOWED_MEDIA_MIME = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'application/pdf',
+]);
+const MAX_MEDIA_BYTES = 10 * 1024 * 1024; // 10 MB
+
 app.post(`${WP}/media`, requireApiKey, async (c) => {
   try {
     const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
@@ -1071,22 +1349,33 @@ app.post(`${WP}/media`, requireApiKey, async (c) => {
       }
       filename = filename || file.name || `upload-${Date.now()}.bin`;
       mimeType = file.type || 'application/octet-stream';
+      if (!ALLOWED_MEDIA_MIME.has(mimeType)) {
+        return wcError(c, 'rest_upload_invalid_type', `MIME ${mimeType} not allowed`, 415);
+      }
       const bytes = new Uint8Array(await file.arrayBuffer());
       filesize = bytes.byteLength;
+      if (filesize > MAX_MEDIA_BYTES) {
+        return wcError(c, 'rest_upload_too_large', 'File exceeds 10MB', 413);
+      }
       const up = await uploadFileToStorage(filename, bytes, mimeType);
       sourceUrl = up.url;
     } else if (
       contentType.startsWith('image/') ||
       contentType.startsWith('video/') ||
       contentType.startsWith('audio/') ||
-      contentType === 'application/octet-stream' ||
       contentType === 'application/pdf'
     ) {
       // Raw binary upload (the WordPress REST canonical way)
+      mimeType = contentType.split(';')[0].trim();
+      if (!ALLOWED_MEDIA_MIME.has(mimeType)) {
+        return wcError(c, 'rest_upload_invalid_type', `MIME ${mimeType} not allowed`, 415);
+      }
       const buf = await c.req.arrayBuffer();
       const bytes = new Uint8Array(buf);
       filesize = bytes.byteLength;
-      mimeType = contentType.split(';')[0].trim() || 'application/octet-stream';
+      if (filesize > MAX_MEDIA_BYTES) {
+        return wcError(c, 'rest_upload_too_large', 'File exceeds 10MB', 413);
+      }
       const ext = mimeType.split('/')[1] || 'bin';
       filename = filename || `upload-${Date.now()}.${ext}`;
       const up = await uploadFileToStorage(filename, bytes, mimeType);

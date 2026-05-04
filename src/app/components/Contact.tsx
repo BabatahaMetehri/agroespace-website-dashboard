@@ -113,6 +113,9 @@ export const Contact = () => {
                     id="name"
                     name="name"
                     required
+                    maxLength={100}
+                    minLength={2}
+                    autoComplete="name"
                     className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-[#87A922] transition-colors"
                     placeholder={t("contact.name.placeholder")}
                   />
@@ -129,6 +132,9 @@ export const Contact = () => {
                     id="phone"
                     name="phone"
                     required
+                    maxLength={30}
+                    pattern="[+\d][\d\s().\-]{5,24}"
+                    autoComplete="tel"
                     className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-[#87A922] transition-colors"
                     placeholder={t("contact.phone.placeholder")}
                   />
@@ -147,6 +153,8 @@ export const Contact = () => {
                     type="text"
                     id="company"
                     name="company"
+                    maxLength={150}
+                    autoComplete="organization"
                     className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-[#87A922] transition-colors"
                     placeholder={t("contact.company.placeholder")}
                   />
@@ -162,6 +170,8 @@ export const Contact = () => {
                     type="email"
                     id="email"
                     name="email"
+                    maxLength={254}
+                    autoComplete="email"
                     className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-[#87A922] transition-colors"
                     placeholder={t("contact.email.placeholder")}
                   />
@@ -180,6 +190,7 @@ export const Contact = () => {
                   name="message"
                   rows={4}
                   required
+                  maxLength={2000}
                   className="w-full bg-transparent border-b border-white/20 px-0 py-3 text-white focus:outline-none focus:border-[#87A922] transition-colors resize-none"
                   placeholder={t("contact.message.placeholder")}
                 />

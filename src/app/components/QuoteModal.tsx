@@ -96,6 +96,9 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                 <input
                   name="name"
                   required
+                  minLength={2}
+                  maxLength={100}
+                  autoComplete="name"
                   placeholder="Nom complet"
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
@@ -103,6 +106,9 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   name="phone"
                   type="tel"
                   required
+                  maxLength={30}
+                  pattern="[+\d][\d\s().\-]{5,24}"
+                  autoComplete="tel"
                   placeholder="Téléphone"
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
@@ -111,23 +117,29 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                 <input
                   name="email"
                   type="email"
+                  maxLength={254}
+                  autoComplete="email"
                   placeholder="Email"
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
                 <input
                   name="company"
+                  maxLength={150}
+                  autoComplete="organization"
                   placeholder="Entreprise / ferme"
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
               </div>
               <input
                 name="address"
+                maxLength={200}
                 placeholder="Adresse / Wilaya"
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
               />
               <textarea
                 name="message"
                 rows={3}
+                maxLength={2000}
                 placeholder="Surface, contraintes, calendrier..."
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] resize-none"
               />
