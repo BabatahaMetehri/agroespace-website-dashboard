@@ -199,9 +199,14 @@ export const Contact = () => {
                 </span>
                 <span className="text-white/60 text-sm leading-relaxed">
                   {t("contact.consent")}{" "}
-                  <Link to="/legal/terms" className="underline hover:text-white">
+                  <a
+                    href="/legal/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-white"
+                  >
                     {t("contact.terms")}
-                  </Link>
+                  </a>
                   .
                 </span>
               </label>

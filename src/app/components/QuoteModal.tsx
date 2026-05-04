@@ -145,13 +145,23 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                 </span>
                 <span className="text-white/60 text-sm leading-relaxed">
                   J'accepte les{' '}
-                  <Link to="/legal/terms" className="underline hover:text-white" onClick={onClose}>
+                  <a
+                    href="/legal/terms"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-white"
+                  >
                     conditions générales
-                  </Link>{' '}
+                  </a>{' '}
                   et la{' '}
-                  <Link to="/legal/privacy" className="underline hover:text-white" onClick={onClose}>
+                  <a
+                    href="/legal/privacy"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-white"
+                  >
                     politique de confidentialité
-                  </Link>{' '}
+                  </a>{' '}
                   d'AGROESPACE.
                 </span>
               </label>
