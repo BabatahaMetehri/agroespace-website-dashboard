@@ -19,7 +19,7 @@ export const Partners = () => {
             </h2>
           </div>
           <p className="text-gray-500 max-w-md">
-            Western, Alkhorayef, Komet, Nelson, Senninger, UMC – des partenaires sélectionnés pour leur fiabilité éprouvée sur le terrain algérien.
+            {t('partners.desc')}
           </p>
         </div>
       </div>

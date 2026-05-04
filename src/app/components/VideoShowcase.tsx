@@ -130,7 +130,7 @@ export const VideoShowcase = () => {
             doesn't cover YT/Vimeo's own UI. */}
         {(!isPlaying || embed?.kind === "video") && (
           <div
-            className={`absolute bottom-0 left-0 right-0 p-8 flex items-end justify-between z-30 transition-opacity duration-300 ${
+            className={`absolute bottom-0 left-0 right-0 p-8 hidden md:flex items-end justify-between z-30 transition-opacity duration-300 ${
               isPlaying ? "opacity-0 group-hover:opacity-100" : "opacity-100"
             }`}
           >

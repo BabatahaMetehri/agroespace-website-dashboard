@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState, useEffect } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { Link } from "react-router";
 import { Droplets, Sprout, Package, ArrowUpRight } from "lucide-react";
@@ -7,6 +7,13 @@ import { useI18n } from "../i18n/I18nProvider";
 export const Services = () => {
   const ref = useRef(null);
   const { t } = useI18n();
+  const [isMd, setIsMd] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMd(window.innerWidth >= 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
   const { scrollYProgress } = useScroll({
     target: ref,
     offset: ["start end", "end start"],
@@ -66,7 +73,7 @@ export const Services = () => {
           {cards.map(({ icon: Icon, key, to, img, featured }, idx) => (
             <motion.div
               key={key}
-              style={{ y: idx % 2 === 0 ? yA : yB }}
+              style={{ y: isMd ? (idx % 2 === 0 ? yA : yB) : 0 }}
               whileHover={{ y: -6 }}
               transition={{ duration: 0.4 }}
               className={`relative rounded-3xl overflow-hidden border ${

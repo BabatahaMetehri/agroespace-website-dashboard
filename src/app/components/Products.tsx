@@ -2,11 +2,11 @@ import { useRef } from "react";
 import { useScroll } from "motion/react";
 import { useI18n } from "../i18n/I18nProvider";
 
-const products = [
+const products = (pivotsDesc: string) => [
   {
     id: "01",
     title: "Pivots Centraux",
-    desc: "Solutions d'irrigation robustes pour les grandes parcelles, conçues pour résister aux climats difficiles.",
+    desc: pivotsDesc,
     img: "https://i.ibb.co/39W3DNJ3/DJI-0176-1.jpg",
   },
   {
@@ -26,6 +26,7 @@ const products = [
 export const Products = () => {
   const containerRef = useRef(null);
   const { t } = useI18n();
+  const productList = products(t("products.pivots.desc"));
   useScroll({
     target: containerRef,
     offset: ["start start", "end end"],
@@ -58,7 +59,7 @@ export const Products = () => {
         </div>
 
         <div className="w-1/2 flex flex-col pt-[50vh] pb-[50vh] gap-[30vh] z-10 px-12 relative">
-          {products.map((product, i) => (
+          {productList.map((product, i) => (
             <div
               key={product.id}
               className="relative w-full aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl"
@@ -97,7 +98,7 @@ export const Products = () => {
         </div>
 
         <div className="space-y-12">
-          {products.map((product) => (
+          {productList.map((product) => (
             <div
               key={product.id}
               className="relative w-full aspect-square rounded-2xl overflow-hidden"
