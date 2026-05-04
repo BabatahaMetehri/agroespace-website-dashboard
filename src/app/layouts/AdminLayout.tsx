@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate, Link } from 'react-router';
 import { Toaster, toast } from 'sonner';
 import {
@@ -10,6 +11,8 @@ import {
   ShieldCheck,
   Megaphone,
   MapPin,
+  Menu,
+  X,
 } from 'lucide-react';
 import logoImg from '../../imports/logo-with-shadow.png';
 import { AdminAuthProvider, useAdminAuth } from '../admin/auth/AuthProvider';
@@ -37,6 +40,12 @@ const AdminShell = () => {
   const { user, signOut } = useAdminAuth();
   const location = useLocation();
   const navigate = useNavigate();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const initials =
     (user?.email ?? '??')
@@ -52,7 +61,41 @@ const AdminShell = () => {
       className="flex h-screen bg-[#0a1c12] text-white overflow-hidden font-sans selection:bg-[#87A922] selection:text-white"
       style={{ position: 'relative' }}
     >
-      <aside className="w-72 border-r border-white/5 bg-[#0f2618] flex flex-col">
+      {/* Mobile top bar */}
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-[#0f2618] border-b border-white/5 flex items-center justify-between px-4">
+        <Link to="/admin" className="flex items-center gap-2">
+          <img src={logoImg} alt="AGROESPACE" className="h-7 w-auto object-contain" />
+          <span className="text-white font-bold font-serif tracking-tight text-sm">AGROESPACE</span>
+        </Link>
+        <button
+          onClick={() => setMobileOpen(true)}
+          aria-label="Ouvrir le menu"
+          className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-white/5 text-white"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+      </div>
+
+      {/* Mobile backdrop */}
+      {mobileOpen && (
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+        />
+      )}
+
+      <aside
+        className={`fixed lg:static top-0 left-0 z-50 h-full w-72 border-r border-white/5 bg-[#0f2618] flex flex-col transform transition-transform duration-300 lg:translate-x-0 ${
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <button
+          onClick={() => setMobileOpen(false)}
+          aria-label="Fermer le menu"
+          className="lg:hidden absolute top-4 right-4 w-9 h-9 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white"
+        >
+          <X className="w-5 h-5" />
+        </button>
         <Link to="/admin" className="p-6 flex items-center gap-3 border-b border-white/5">
           <img src={logoImg} alt="AGROESPACE" className="h-9 w-auto object-contain" />
           <div className="flex flex-col leading-tight">
@@ -127,7 +170,7 @@ const AdminShell = () => {
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-[#0a1c12]">
+      <main className="flex-1 overflow-y-auto bg-[#0a1c12] pt-14 lg:pt-0">
         <div key={location.pathname}>
           <Outlet />
         </div>
