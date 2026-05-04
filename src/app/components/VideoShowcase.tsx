@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { parseEmbed } from "../lib/embed";
+import { useI18n } from "../i18n/I18nProvider";
 
 // Drop a YouTube / Vimeo / .mp4 URL here once the real promo video is
 // uploaded. While `videoUrl` is null the component keeps its placeholder
@@ -11,6 +12,7 @@ const videoUrl: string | null = "https://www.youtube.com/watch?v=lVet82JVA3s";
 const cover = "https://i.ibb.co/9HTdBChj/montage-pivot-haute-resolution.jpg";
 
 export const VideoShowcase = () => {
+  const { t } = useI18n();
   const containerRef = useRef(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -47,11 +49,11 @@ export const VideoShowcase = () => {
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 mb-16 text-center">
         <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
-          Notre Méthode
+          {t("video.eyebrow")}
         </span>
         <h2 className="text-4xl md:text-5xl font-light text-white leading-tight">
-          L'excellence en{" "}
-          <span className="font-serif italic text-white/80">action</span>
+          {t("video.title.1")}{" "}
+          <span className="font-serif italic text-white/80">{t("video.title.italic")}</span>
         </h2>
       </div>
 
@@ -136,10 +138,10 @@ export const VideoShowcase = () => {
           >
             <div>
               <h3 className="text-2xl md:text-3xl font-medium text-white mb-2">
-                Pivots WESTERN
+                {t("video.caption.title")}
               </h3>
               <p className="text-white/70">
-                Vue aérienne par drone — Installation au Sud Algérien
+                {t("video.caption.desc")}
               </p>
             </div>
 

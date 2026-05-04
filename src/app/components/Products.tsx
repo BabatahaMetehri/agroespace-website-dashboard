@@ -2,23 +2,24 @@ import { useRef } from "react";
 import { useScroll } from "motion/react";
 import { useI18n } from "../i18n/I18nProvider";
 
-const products = (pivotsDesc: string) => [
+type Translator = (key: string) => string;
+const products = (t: Translator) => [
   {
     id: "01",
-    title: "Pivots Centraux",
-    desc: pivotsDesc,
+    title: t("products.pivots.title"),
+    desc: t("products.pivots.desc"),
     img: "https://i.ibb.co/39W3DNJ3/DJI-0176-1.jpg",
   },
   {
     id: "02",
-    title: "Arroseuses",
-    desc: "Arroseuses de précision pour une irrigation optimale. Qualité garantie avec Komet, Senninger et Nelson.",
+    title: t("products.sprinklers.title"),
+    desc: t("products.sprinklers.desc"),
     img: "https://i.ibb.co/5XWfzqXK/Gemini-Generated-Image-p7y4v4p7y4v4p7y4.jpg",
   },
   {
     id: "03",
-    title: "Pompes Immergées",
-    desc: "Pompes de qualité supérieure pour irrigation par pivot central. Puissances disponibles : de 7,5 HP à 125 HP.",
+    title: t("products.pumps.title"),
+    desc: t("products.pumps.desc"),
     img: "https://i.ibb.co/j9N2JGwR/nouveaute-pompe-immergee-by-shakti-pumps-i-ltd-15077-9884784.jpg",
   },
 ];
@@ -26,7 +27,7 @@ const products = (pivotsDesc: string) => [
 export const Products = () => {
   const containerRef = useRef(null);
   const { t } = useI18n();
-  const productList = products(t("products.pivots.desc"));
+  const productList = products(t);
   useScroll({
     target: containerRef,
     offset: ["start start", "end end"],

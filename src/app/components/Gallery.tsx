@@ -1,5 +1,6 @@
 import React from "react";
 import { motion } from "motion/react";
+import { useI18n } from "../i18n/I18nProvider";
 
 const images = [
   "https://i.ibb.co/4RzQwm3q/freepik-2820216691.jpg",
@@ -9,13 +10,14 @@ const images = [
 ];
 
 export const Gallery = () => {
+  const { t } = useI18n();
   return (
     <section id="galerie" className="py-32 bg-white">
       <div className="max-w-7xl mx-auto px-6 md:px-12">
         <div className="text-center mb-24">
           <h2 className="text-4xl md:text-5xl font-light text-[#0f2618]">
-            L'agriculture en{" "}
-            <span className="font-serif italic text-[#4a7856]">images</span>
+            {t("gallery.title.1")}{" "}
+            <span className="font-serif italic text-[#4a7856]">{t("gallery.title.italic")}</span>
           </h2>
         </div>
 

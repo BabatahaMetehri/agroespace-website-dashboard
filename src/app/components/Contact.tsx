@@ -28,8 +28,7 @@ export const Contact = () => {
               </span>
             </h2>
             <p className="text-white/60 text-lg mb-12 max-w-md">
-              Notre équipe d'experts est à votre disposition pour étudier vos
-              besoins et vous proposer des solutions sur-mesure.
+              {t("contact.description")}
             </p>
 
             <div className="space-y-8">
@@ -73,7 +72,7 @@ export const Contact = () => {
                 </div>
                 <div>
                   <div className="text-white/50 text-sm mb-1 uppercase tracking-wider">
-                    Siège
+                    {t("contact.headquarters.label")}
                   </div>
                   <div className="text-white text-xl font-light">
                     Bordj El Kifane, Alger

@@ -119,8 +119,8 @@ export const Catalog = () => {
               {t("nav.products")}
             </span>
             <h1 className="text-4xl md:text-6xl font-light text-white leading-tight">
-              Équipements{" "}
-              <span className="font-serif italic text-white/80">Premium</span>
+              {t("catalog.hero.title.1")}{" "}
+              <span className="font-serif italic text-white/80">{t("catalog.hero.title.italic")}</span>
             </h1>
           </div>
 
