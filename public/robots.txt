@@ -1,0 +1,12 @@
+# AGROESPACE — robots.txt
+# Allow all well-behaved crawlers, disallow the admin console & raw API.
+
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /map/
+Crawl-delay: 1
+
+# Sitemap
+Sitemap: https://agroespace.com/sitemap.xml

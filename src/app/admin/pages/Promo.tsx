@@ -20,6 +20,7 @@ type PromoConfig = {
   location: string;
   locationDetail: string;
   ctaText: string;
+  ctaUrl: string;
   image: string;
 };
 
@@ -36,6 +37,7 @@ const PROMO_DEFAULTS: PromoConfig = {
   location: 'SAFEX - Pins Maritimes, Alger',
   locationDetail: 'Pavillon Central, Stand A-15',
   ctaText: 'Planifier une visite',
+  ctaUrl: '',
   image: 'https://www.sipsa-filaha.com/wp-content/uploads/2025/05/sipsa-filaha-2025.jpg',
 };
 
@@ -233,6 +235,15 @@ export const Promo = () => {
                 onChange={(e) => updateField('ctaText', e.target.value)}
                 className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#87A922]"
                 placeholder="Planifier une visite"
+              />
+            </PromoField>
+
+            <PromoField label="Lien bouton CTA" hint="Optionnel — laisse vide pour fermer simplement le pop-up. https://… ouvre un nouvel onglet, /chemin reste sur le site.">
+              <input
+                value={promo.ctaUrl}
+                onChange={(e) => updateField('ctaUrl', e.target.value)}
+                className="w-full bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-[#87A922]"
+                placeholder="https://exemple.com  ou  /contact"
               />
             </PromoField>
 

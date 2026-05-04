@@ -668,6 +668,7 @@ type PromoConfig = {
   location?: string;
   locationDetail?: string;
   ctaText?: string;
+  ctaUrl?: string;
   image?: string;
   updatedAt?: string;
 };
@@ -698,6 +699,13 @@ app.put(`${ADMIN}/promo`, requireAdmin, async (c) => {
       location: String(body.location ?? ''),
       locationDetail: String(body.locationDetail ?? ''),
       ctaText: String(body.ctaText ?? ''),
+      // Whitelist URL schemes — only http(s), mailto:, tel:, or in-app paths.
+      // Blocks javascript:, data:, vbscript:, file:, etc. that could XSS.
+      ctaUrl: (() => {
+        const raw = String(body.ctaUrl ?? '').trim().slice(0, 500);
+        if (!raw) return '';
+        return /^(https?:\/\/|mailto:|tel:|\/)/i.test(raw) ? raw : '';
+      })(),
       image: String(body.image ?? ''),
       updatedAt: new Date().toISOString(),
     };

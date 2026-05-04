@@ -15,6 +15,7 @@ type PromoConfig = {
   location?: string;
   locationDetail?: string;
   ctaText?: string;
+  ctaUrl?: string;
   image?: string;
 };
 
@@ -157,13 +158,31 @@ export const PromoModal = () => {
                 )}
               </div>
 
-              <button
-                onClick={dismiss}
-                className="bg-white/10 hover:bg-[#87A922] text-white border border-white/20 hover:border-transparent rounded-full px-8 py-4 font-bold uppercase tracking-wider text-sm transition-all flex items-center justify-center gap-3 w-full group"
-              >
-                {promo.ctaText ?? 'Fermer'}
-                <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </button>
+              {(() => {
+                const rawUrl = (promo.ctaUrl ?? '').trim();
+                // Only honour http(s), mailto:, tel:, or in-app paths starting with /
+                const safeUrl = /^(https?:\/\/|mailto:|tel:|\/)/i.test(rawUrl) ? rawUrl : '';
+                const isExternal = /^https?:\/\//i.test(safeUrl);
+                const handleCta = () => {
+                  if (safeUrl) {
+                    if (isExternal) {
+                      window.open(safeUrl, '_blank', 'noopener,noreferrer');
+                    } else {
+                      window.location.href = safeUrl;
+                    }
+                  }
+                  dismiss();
+                };
+                return (
+                  <button
+                    onClick={handleCta}
+                    className="bg-white/10 hover:bg-[#87A922] text-white border border-white/20 hover:border-transparent rounded-full px-8 py-4 font-bold uppercase tracking-wider text-sm transition-all flex items-center justify-center gap-3 w-full group"
+                  >
+                    {promo.ctaText ?? 'Fermer'}
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
+                );
+              })()}
             </div>
           </motion.div>
         </motion.div>

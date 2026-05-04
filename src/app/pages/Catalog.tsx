@@ -41,10 +41,9 @@ function mapProduct(p: WcProduct): Product {
   const categoryName =
     p.categories?.[0]?.name ?? "Produits";
 
-  const rawPrice = p.sale_price || p.regular_price || "";
-  const price = rawPrice
-    ? `${Number(rawPrice).toLocaleString("fr-DZ")} DZD`
-    : null;
+  // Public-facing catalog hides prices on purpose — visitors always go through
+  // the quote flow. Admin still sees regular_price/sale_price in /admin/products.
+  const price: string | null = null;
 
   return {
     id: p.id,

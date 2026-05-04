@@ -1,0 +1,20 @@
+{
+  "name": "AGROESPACE",
+  "short_name": "AGROESPACE",
+  "description": "Pivots centraux Western, irrigation et équipements agricoles en Algérie.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a1c12",
+  "theme_color": "#0f2618",
+  "lang": "fr-DZ",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
