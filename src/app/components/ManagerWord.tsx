@@ -52,7 +52,7 @@ export const ManagerWord = () => {
             <div className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
               <div className="absolute inset-0 bg-[#87A922]/20 mix-blend-overlay z-10" />
               <img
-                src="https://pps.whatsapp.net/v/t61.24694-24/592002096_1960559117834683_484419231777831517_n.jpg?ccb=11-4&oh=01_Q5Aa4QFFJ8hSi1mdIVGphEMWdJP1I64R_vJn4aqjymSJOE0Zhw&oe=69F5391B&_nc_sid=5e03e0&_nc_cat=108"
+                src="https://i.ibb.co/DP04Gfx8/ai-yacine-fekhar-squoosh.jpg"
                 alt="Yacine Fekhar - Directeur Général"
                 className="w-full h-full object-cover"
               />
