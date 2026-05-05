@@ -15,9 +15,20 @@ type Product = {
   stock_quantity?: number;
   stock_status?: 'instock' | 'outofstock';
   categories?: { id?: number | string; name: string }[];
+  // WooCommerce/Logicom sends images as an array of objects; the plain
+  // `image` string is kept for manual admin edits.
+  images?: { src: string; alt?: string }[];
   image?: string;
   date_modified?: string;
 };
+
+/** Extract the first available image URL regardless of which field is populated */
+function getImageUrl(p: Product): string {
+  if (Array.isArray(p.images) && p.images.length > 0 && p.images[0].src) {
+    return p.images[0].src;
+  }
+  return p.image ?? '';
+}
 
 const empty: Product = {
   id: '',
@@ -143,7 +154,18 @@ export const Products = () => {
                     <tr key={p.id} className="hover:bg-white/[0.02] transition-colors">
                       <td className="px-6 py-4 w-20">
                         <div className="w-12 h-12 rounded-lg bg-black/40 overflow-hidden">
-                          {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
+                          {(() => {
+                            const url = getImageUrl(p);
+                            return url ? (
+                              <img
+                                src={url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                                decoding="async"
+                              />
+                            ) : null;
+                          })()}
                         </div>
                       </td>
                       <td className="px-6 py-4">
@@ -328,12 +350,32 @@ const ProductDrawer = ({
             />
           </Row>
           <Row label="Image (URL)">
-            <input value={draft.image ?? ''} onChange={(e) => set('image', e.target.value)} className="input" />
-            {draft.image && (
-              <div className="mt-3 aspect-video rounded-xl overflow-hidden bg-black/40">
-                <img src={draft.image} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
+            {/* Show the URL from `image` if set manually, otherwise fall back to
+                the first item of the WC `images[]` array (sent by Logicom).
+                Editing the field clears `images[]` so the manual URL wins. */}
+            <input
+              value={draft.image ?? draft.images?.[0]?.src ?? ''}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDraft((d) => ({ ...d, image: v, images: v ? [{ src: v }] : [] }));
+              }}
+              className="input"
+              placeholder="https://i.ibb.co/..."
+            />
+            {(() => {
+              const previewUrl = draft.image || draft.images?.[0]?.src || '';
+              return previewUrl ? (
+                <div className="mt-3 aspect-video rounded-xl overflow-hidden bg-black/40">
+                  <img
+                    src={previewUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                </div>
+              ) : null;
+            })()}
           </Row>
         </div>
 
