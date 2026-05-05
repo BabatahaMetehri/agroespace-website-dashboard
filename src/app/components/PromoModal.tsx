@@ -85,9 +85,10 @@ export const PromoModal = () => {
             {/* Close Button */}
             <button
               onClick={dismiss}
+              aria-label="Fermer"
               className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/20 hover:bg-black/40 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all backdrop-blur-md"
             >
-              <X className="w-5 h-5" />
+              <X className="w-5 h-5" aria-hidden="true" />
             </button>
 
             {/* Image Side */}
@@ -98,6 +99,7 @@ export const PromoModal = () => {
                   src={promo.image}
                   alt={promo.title ?? 'Promotion'}
                   className="w-full h-full object-cover"
+                  fetchPriority="high"
                 />
                 {promo.badge && (
                   <div className="absolute top-6 left-6 z-20 bg-[#87A922] text-white text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">

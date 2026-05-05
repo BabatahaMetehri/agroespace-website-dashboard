@@ -78,9 +78,12 @@
     <meta name="twitter:image" content="https://agroespace.com/favicon.png" />
 
     <!-- ── Performance hints ────────────────────────────────────────── -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="dns-prefetch" href="https://i.ibb.co" />
+    <!-- Supabase edge functions are called on every page load -->
+    <link rel="preconnect" href="https://jvmddidfxabdbtiscdop.supabase.co" />
+    <!-- Product / blog images served from imgBB -->
+    <link rel="preconnect" href="https://i.ibb.co" crossorigin />
+    <!-- Promo modal image (sipsa) — saves ~360ms on LCP when promo is active -->
+    <link rel="dns-prefetch" href="https://www.sipsa-filaha.com" />
 
     <!-- ── Structured data (JSON-LD): Organization + LocalBusiness ──── -->
     <script type="application/ld+json">

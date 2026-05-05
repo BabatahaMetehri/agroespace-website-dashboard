@@ -175,7 +175,7 @@ export const Footer = () => {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row justify-between items-center text-white/30 text-sm gap-3">
+        <div className="flex flex-col md:flex-row justify-between items-center text-white/50 text-sm gap-3">
           <p>
             © {new Date().getFullYear()} AGROESPACE. {t("footer.rights")}
           </p>

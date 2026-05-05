@@ -34,6 +34,8 @@ export const Hero = () => {
           src="https://images.unsplash.com/photo-1625419196393-fcd5737436a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZ3JpY3VsdHVyZSUyMGlycmlnYXRpb24lMjBwaXZvdCUyMGRyb25lfGVufDF8fHx8MTc3NzMzNTAwMHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
           alt="Agriculture Irrigation"
           className="w-full h-full object-cover scale-105"
+          fetchPriority="high"
+          decoding="async"
         />
       </motion.div>
 

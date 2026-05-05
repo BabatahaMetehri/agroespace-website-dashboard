@@ -85,9 +85,13 @@ export const Testimonials = () => {
                   src={tm.image}
                   alt={tm.name}
                   className="w-14 h-14 rounded-full object-cover border-2 border-[#f4f7f5]"
+                  loading="lazy"
+                  decoding="async"
+                  width="56"
+                  height="56"
                 />
                 <div>
-                  <h4 className="font-bold text-[#0f2618]">{tm.name}</h4>
+                  <h3 className="font-bold text-[#0f2618] text-base">{tm.name}</h3>
                   <p className="text-sm text-[#4a7856] font-medium">{tm.role[lang]}</p>
                 </div>
               </div>

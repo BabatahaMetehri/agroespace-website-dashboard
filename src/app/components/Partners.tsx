@@ -40,7 +40,7 @@ export const Partners = () => {
                 />
               </div>
               {p.tag && (
-                <span className="mt-3 text-[11px] uppercase tracking-[0.25em] text-gray-400 group-hover:text-[#4a7856] transition-colors text-center">
+                <span className="mt-3 text-[11px] uppercase tracking-[0.25em] text-gray-500 group-hover:text-[#4a7856] transition-colors text-center">
                   {p.tag}
                 </span>
               )}

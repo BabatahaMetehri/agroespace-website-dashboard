@@ -69,6 +69,8 @@ export const Products = () => {
                 src={product.img}
                 alt={product.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-8">
                 <div className="text-[#87A922] font-mono text-sm mb-2">
@@ -108,6 +110,8 @@ export const Products = () => {
                 src={product.img}
                 alt={product.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-end p-6">
                 <div className="text-[#87A922] font-mono text-sm mb-1">

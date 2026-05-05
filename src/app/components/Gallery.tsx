@@ -32,6 +32,8 @@ export const Gallery = () => {
               src={images[0]}
               alt="Wheat field"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
             <div className="absolute inset-0 bg-black/10 hover:bg-transparent transition-colors" />
           </motion.div>
@@ -46,6 +48,8 @@ export const Gallery = () => {
               src={images[1]}
               alt="Farmer tech"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           </motion.div>
 
@@ -59,6 +63,8 @@ export const Gallery = () => {
               src={images[2]}
               alt="Water drop"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           </motion.div>
 
@@ -72,6 +78,8 @@ export const Gallery = () => {
               src={images[3]}
               alt="Geometric lines"
               className="w-full h-full object-cover"
+              loading="lazy"
+              decoding="async"
             />
           </motion.div>
         </div>

@@ -87,6 +87,8 @@ export const Services = () => {
                   src={img}
                   alt={t(`services.${key}.title`)}
                   className="w-full h-full object-cover transform hover:scale-105 transition-transform duration-700"
+                  loading="lazy"
+                  decoding="async"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                 {featured && (

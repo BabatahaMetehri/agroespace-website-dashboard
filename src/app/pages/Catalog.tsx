@@ -198,6 +198,8 @@ export const Catalog = () => {
                     src={product.image}
                     alt={product.title}
                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+                    loading="lazy"
+                    decoding="async"
                     onError={(e) => {
                       (e.target as HTMLImageElement).src = FALLBACK_IMAGE;
                     }}
