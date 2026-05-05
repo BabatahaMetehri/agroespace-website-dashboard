@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { useI18n } from '../i18n/I18nProvider';
+import { GoogleAnalytics } from '../analytics/GoogleAnalytics';
 
 export const MainLayout = () => {
   const { dir } = useI18n();
@@ -15,6 +16,8 @@ export const MainLayout = () => {
       style={{ position: 'relative' }}
       dir={dir}
     >
+      {/* GA4 — needs to be inside RouterProvider so useLocation() works */}
+      <GoogleAnalytics />
       <Navigation />
       <main>
         <Outlet />
