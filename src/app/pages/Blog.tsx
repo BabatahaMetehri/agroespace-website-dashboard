@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import Masonry from 'react-responsive-masonry';
 import { Eye, Heart, ArrowRight, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router';
@@ -83,50 +82,57 @@ export const Blog = () => {
         {filtered.length === 0 ? (
           <p className="text-center text-gray-500 py-20">Aucun article trouvé.</p>
         ) : (
-          <Masonry columnsCountBreakPoints={{ 350: 1, 750: 2, 900: 3 }} gutter="2rem">
+          /* Simple CSS grid — no masonry library, no absolute positioning, no collision risk */
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {paginated.map((article, idx) => (
               <motion.div
                 key={article.slug}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 16 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: idx * 0.08 }}
+                transition={{ delay: idx * 0.06, duration: 0.4 }}
+                className="flex flex-col"
               >
                 <Link
                   to={`/blog/${article.slug}`}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#114232]/5 hover:shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition-all duration-500 cursor-pointer mb-8 block"
+                  className="group bg-white rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#114232]/5 hover:shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition-all duration-500 cursor-pointer flex flex-col h-full"
                 >
-                  <div className="relative aspect-[16/9] overflow-hidden">
+                  <div className="relative aspect-[16/9] overflow-hidden shrink-0">
                     <img
                       src={article.image}
                       alt={article.title[lang]}
                       className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
+                      loading="lazy"
+                      decoding="async"
                     />
                     <span className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.18em] font-bold bg-white/90 text-[#0f2618] px-3 py-1.5 rounded-full">
                       {article.category}
                     </span>
                   </div>
 
-                  <div className="p-8">
-                    <div className="text-[#87A922] text-sm font-semibold tracking-wider uppercase mb-4">
-                      {new Date(article.date).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-US' : 'fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  <div className="p-6 md:p-8 flex flex-col flex-1">
+                    <div className="text-[#87A922] text-sm font-semibold tracking-wider uppercase mb-3">
+                      {new Date(article.date).toLocaleDateString(
+                        lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-US' : 'fr-FR',
+                        { day: '2-digit', month: 'long', year: 'numeric' }
+                      )}
                     </div>
-                    <h3 className="text-xl md:text-2xl font-medium text-[#0f2618] leading-snug mb-4 group-hover:text-[#4a7856] transition-colors">
+                    <h2 className="text-lg md:text-xl font-medium text-[#0f2618] leading-snug mb-3 group-hover:text-[#4a7856] transition-colors">
                       {article.title[lang]}
-                    </h3>
-                    <p className="text-gray-500 leading-relaxed line-clamp-3 mb-6">
+                    </h2>
+                    <p className="text-gray-500 leading-relaxed line-clamp-3 mb-6 flex-1 text-sm md:text-base">
                       {article.excerpt[lang]}
                     </p>
 
-                    <div className="flex items-center justify-between border-t border-gray-100 pt-6">
-                      <div className="flex items-center gap-6 text-gray-400 text-sm font-medium">
-                        <span className="flex items-center gap-2">
+                    <div className="flex items-center justify-between border-t border-gray-100 pt-4 mt-auto">
+                      <div className="flex items-center gap-4 text-gray-400 text-sm font-medium">
+                        <span className="flex items-center gap-1.5">
                           <Eye className="w-4 h-4" /> {article.views.toLocaleString()}
                         </span>
-                        <span className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5">
                           <Heart className="w-4 h-4" /> {article.likes.toLocaleString()}
                         </span>
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#87A922] transition-colors">
+                      <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#87A922] transition-colors shrink-0">
                         <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
                       </div>
                     </div>
@@ -134,7 +140,7 @@ export const Blog = () => {
                 </Link>
               </motion.div>
             ))}
-          </Masonry>
+          </div>
         )}
 
         {/* Pagination */}
