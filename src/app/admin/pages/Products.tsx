@@ -486,16 +486,23 @@ export const Products = () => {
                           })()}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="text-white font-medium">{p.name}</div>
+                      <td className="px-6 py-4 max-w-xs">
+                        <div className="flex items-start gap-2 flex-wrap">
+                          <div
+                            className="text-white font-medium line-clamp-2 break-words [overflow-wrap:anywhere]"
+                            title={p.name}
+                          >
+                            {p.name}
+                          </div>
                           {isTrashed && (
-                            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 flex items-center gap-1">
+                            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-red-500/15 text-red-300 border border-red-500/30 flex items-center gap-1 whitespace-nowrap">
                               <Trash2 className="w-3 h-3" /> Corbeille
                             </span>
                           )}
                         </div>
-                        {p.description && <div className="text-white/40 text-xs line-clamp-1 max-w-md">{p.description}</div>}
+                        {p.description && (
+                          <div className="text-white/40 text-xs line-clamp-1 max-w-md">{p.description}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-white/60 font-mono text-xs">{p.sku ?? '—'}</td>
                       <td className="px-6 py-4">
@@ -520,9 +527,9 @@ export const Products = () => {
                       <td className="px-6 py-4 text-[#87A922] font-medium">
                         {p.regular_price ? `${p.regular_price} DZD` : 'Sur devis'}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                          className={`inline-block whitespace-nowrap px-3 py-1 rounded-full text-xs font-medium border ${
                             inStock
                               ? 'bg-green-500/15 text-green-300 border-green-500/25'
                               : 'bg-red-500/15 text-red-300 border-red-500/25'

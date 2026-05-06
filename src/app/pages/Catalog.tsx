@@ -65,7 +65,7 @@ export const Catalog = () => {
   const [active, setActive] = useState<string>("Tous");
   const [quoteFor, setQuoteFor] = useState<Product | null>(null);
   const [page, setPage] = useState(1);
-  const PAGE_SIZE = 9;
+  const PAGE_SIZE = 24;
 
   useEffect(() => {
     fetch(`${FUNCTIONS_BASE}/public/products`)
@@ -275,36 +275,70 @@ export const Catalog = () => {
           </div>
         )}
 
-        {/* Pagination */}
+        {/* Pagination — smart windowed: shows current page, ±1 neighbours,
+            first + last, with ellipses elsewhere. Scales to any page count. */}
         {!loading && !error && totalPages > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-12">
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-12">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage === 1}
               className="w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+              aria-label="Page précédente"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                onClick={() => setPage(n)}
-                className={`min-w-10 h-10 px-3 rounded-full text-sm font-semibold transition-colors ${
-                  n === safePage
-                    ? "bg-[#87A922] text-white"
-                    : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/10"
-                }`}
-              >
-                {n}
-              </button>
-            ))}
+            {(() => {
+              // Build a windowed list of page tokens.
+              // Always include 1, totalPages, current ± 1.
+              // Insert "..." (as the literal string) where there's a gap.
+              const window = new Set<number>([1, totalPages, safePage]);
+              for (let d = 1; d <= 1; d++) {
+                if (safePage - d >= 1) window.add(safePage - d);
+                if (safePage + d <= totalPages) window.add(safePage + d);
+              }
+              const ordered = Array.from(window).sort((a, b) => a - b);
+              const tokens: (number | 'gap')[] = [];
+              for (let i = 0; i < ordered.length; i++) {
+                if (i > 0 && ordered[i] - ordered[i - 1] > 1) tokens.push('gap');
+                tokens.push(ordered[i]);
+              }
+              return tokens.map((tok, i) =>
+                tok === 'gap' ? (
+                  <span
+                    key={`gap-${i}`}
+                    className="min-w-10 h-10 px-2 flex items-center justify-center text-white/30 text-sm select-none"
+                    aria-hidden="true"
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={tok}
+                    onClick={() => setPage(tok)}
+                    aria-current={tok === safePage ? 'page' : undefined}
+                    className={`min-w-10 h-10 px-3 rounded-full text-sm font-semibold transition-colors ${
+                      tok === safePage
+                        ? 'bg-[#87A922] text-white'
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                    }`}
+                  >
+                    {tok}
+                  </button>
+                )
+              );
+            })()}
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
               className="w-10 h-10 rounded-full border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+              aria-label="Page suivante"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
+            {/* Tiny status — useful for users so they know how deep the pagination goes */}
+            <span className="ml-3 text-white/40 text-xs uppercase tracking-wider">
+              Page {safePage} / {totalPages}
+            </span>
           </div>
         )}
       </div>
