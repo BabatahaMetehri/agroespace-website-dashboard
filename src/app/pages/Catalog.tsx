@@ -224,9 +224,26 @@ export const Catalog = () => {
                   <div className="text-white/40 text-xs font-mono mb-3">
                     {product.sku}
                   </div>
-                  <h3 className="text-2xl font-medium text-white mb-8 leading-tight">
-                    {product.title}
-                  </h3>
+                  {/* Dynamic font-size + line clamp so long product names
+                      don't blow up the card height. Tier the size by length:
+                      ≤30 = 2xl, ≤55 = xl, ≤90 = lg, longer = base. Always
+                      clamp to 3 lines max with an ellipsis. */}
+                  {(() => {
+                    const len = product.title.length;
+                    const sizeClass =
+                      len <= 30 ? 'text-2xl'
+                      : len <= 55 ? 'text-xl'
+                      : len <= 90 ? 'text-lg'
+                      : 'text-base';
+                    return (
+                      <h3
+                        title={product.title}
+                        className={`${sizeClass} font-medium text-white mb-8 leading-tight line-clamp-3 break-words [overflow-wrap:anywhere]`}
+                      >
+                        {product.title}
+                      </h3>
+                    );
+                  })()}
 
                   <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
                     {product.price ? (
