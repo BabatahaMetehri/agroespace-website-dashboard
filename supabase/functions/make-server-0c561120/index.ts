@@ -503,7 +503,14 @@ app.delete(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
 
 // ─── Admin: products (built on top of the WooCommerce-mirror store) ───────
 app.get(`${ADMIN}/products`, requireAdmin, async (c) => {
-  const items = await kv.getByPrefix('wc:product:');
+  const items = (await kv.getByPrefix('wc:product:')) as any[];
+  // Hydrate categories on read so old products (created before the hydrate
+  // fix) display proper names in the admin table without needing a re-sync.
+  for (const p of items) {
+    if (Array.isArray(p?.categories) && p.categories.some((c: any) => !c?.name)) {
+      p.categories = await hydrateProductCategories(p.categories);
+    }
+  }
   return c.json(items);
 });
 
@@ -555,8 +562,84 @@ app.delete(`${ADMIN}/products/:id`, requireAdmin, async (c) => {
   const id = c.req.param('id');
   const existing = await kv.get(`wc:product:${id}`);
   if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
-  await kv.del(`wc:product:${id}`);
-  if (existing.sku) await kv.del(`wc:product_sku:${existing.sku}`);
+  const sku = (existing as any).sku ? String((existing as any).sku) : '';
+  const force = String(c.req.query('force') ?? '').toLowerCase();
+  const isForce = force === 'true' || force === '1' || force === 'yes';
+  if (isForce) {
+    await kv.del(`wc:product:${id}`);
+    if (sku) await kv.del(`wc:product_sku:${sku}`);
+    return c.json({ id, deleted: true });
+  }
+  // Soft trash — also clear SKU index so fresh sync with same SKU starts clean
+  const trashed = { ...(existing as any), id: Number(id), status: 'trash', date_modified: new Date().toISOString() };
+  await kv.set(`wc:product:${id}`, trashed);
+  if (sku) await kv.del(`wc:product_sku:${sku}`);
+  return c.json({ ...trashed, trashed: true });
+});
+
+// Restore a trashed product (admin-only)
+app.post(`${ADMIN}/products/:id/restore`, requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(`wc:product:${id}`);
+  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
+  const restored = { ...(existing as any), id: Number(id), status: 'publish', date_modified: new Date().toISOString() };
+  await kv.set(`wc:product:${id}`, restored);
+  return c.json(restored);
+});
+
+// ─── Admin category endpoints ─────────────────────────────────────────────
+// Mirror of the WC endpoints above but session-authed (used by the admin UI).
+app.get(`${ADMIN}/categories`, requireAdmin, async (c) => {
+  const items = (await kv.getByPrefix('wc:category:')) as any[];
+  items.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(items);
+});
+
+app.post(`${ADMIN}/categories`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const name = String(body.name ?? '').trim();
+    if (!name) return c.json({ code: 'invalid_name', message: 'Name required' }, 400);
+    // Canonical lowercase slug, same logic as the public WC endpoint
+    const slug = canonicalSlug(body.slug ?? name);
+    // De-dupe by slug (case-insensitive)
+    const all = (await kv.getByPrefix('wc:category:')) as any[];
+    if (all.find((x: any) => canonicalSlug(x?.slug ?? '') === slug)) {
+      return c.json({ code: 'term_exists', message: 'A category with this slug already exists.' }, 400);
+    }
+    let id: number;
+    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= 2_147_483_647) {
+      id = Number(body.id);
+    } else {
+      id = await nextId('category');
+    }
+    const cat = { id, name, slug, parent: 0, description: String(body.description ?? ''), display: 'default', image: null, menu_order: 0, count: 0 };
+    await kv.set(`wc:category:${id}`, cat);
+    return c.json(cat, 201);
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+app.put(`${ADMIN}/categories/:id`, requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(`wc:category:${id}`);
+  if (!existing) return c.json({ code: 'not_found', message: 'Category not found' }, 404);
+  try {
+    const body = await c.req.json();
+    const next = { ...existing, ...body, id: Number(id) };
+    await kv.set(`wc:category:${id}`, next);
+    return c.json(next);
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+app.delete(`${ADMIN}/categories/:id`, requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(`wc:category:${id}`);
+  if (!existing) return c.json({ code: 'not_found', message: 'Category not found' }, 404);
+  await kv.del(`wc:category:${id}`);
   return c.json({ id, deleted: true });
 });
 
@@ -642,10 +725,25 @@ app.post(
 );
 
 // ─── Public products (no auth) ────────────────────────────────────────────
+// Statuses that hide a product from the public catalog. Matches WooCommerce
+// conventions: only `publish` (and undefined = legacy) is shown; trash/draft/
+// pending/private/deleted are all hidden.
+const PUBLIC_HIDDEN_STATUSES = new Set(['trash', 'draft', 'pending', 'private', 'deleted']);
+
 app.get(`${PUBLIC}/products`, async (c) => {
   const items = (await kv.getByPrefix('wc:product:')) as any[];
-  const visible = items.filter((p) => p?.status !== 'deleted' && p?.stock_status !== 'deleted');
+  const visible = items.filter(
+    (p) => !PUBLIC_HIDDEN_STATUSES.has(String(p?.status ?? 'publish'))
+        && p?.stock_status !== 'deleted'
+  );
   visible.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
+  // Hydrate categories on read so the catalog filter pills show real names
+  // even for products synced before the hydrate fix.
+  for (const p of visible) {
+    if (Array.isArray(p?.categories) && p.categories.some((c: any) => !c?.name)) {
+      p.categories = await hydrateProductCategories(p.categories);
+    }
+  }
   return c.json(visible.map((p) => wcProductShape(p)));
 });
 
@@ -727,10 +825,28 @@ const API_ROOT_ABS = `${SUPABASE_URL_ENV}/functions/v1/make-server-0c561120`;
 
 // Sequential ID counter — WooCommerce uses small auto-increment integers,
 // not Date.now() millisecond timestamps which some sync tools reject.
-async function nextId(kind: 'product' | 'media' | 'category' | 'attribute'): Promise<number> {
+// Sequential 32-bit-safe IDs. CRITICAL for sync compatibility:
+// real WordPress uses MySQL auto-increment giving small ints (15, 16, 17...).
+// Many WC sync clients (including Logicom) store these as 32-bit signed
+// integers — anything >2^31 (~2.1 billion) overflows their internal lookup
+// table, breaks the local id→remote-id mapping, and causes infinite POST
+// retry loops. NEVER use Date.now() for sync-visible IDs.
+async function nextId(
+  kind: 'product' | 'media' | 'category' | 'attribute' | 'customer' | 'order'
+): Promise<number> {
   const key = `counter:${kind}`;
   const cur = (await kv.get(key)) as number | null;
-  const next = (cur ?? (kind === 'media' ? 1000 : 0)) + 1;
+  // Different starting points per resource so no client-side ID collisions
+  // between e.g. category-id 15 and product-id 15 in Logicom's lookup tables.
+  const start: Record<string, number> = {
+    media: 1000,
+    category: 14,    // next will be 15 — matches WC default "Uncategorized" id
+    customer: 1,
+    order: 1,
+    attribute: 0,
+    product: 0,
+  };
+  const next = (cur ?? (start[kind] ?? 0)) + 1;
   await kv.set(key, next);
   return next;
 }
@@ -978,6 +1094,57 @@ async function hydrateProductImages(images: any): Promise<any[]> {
   return out;
 }
 
+// When Logicom assigns a category to a product, it sends only the id:
+// `categories: [{id: 16}]`. The name and slug are empty so the admin table
+// and catalog filter render empty pills. Hydrate by looking up each category
+// in KV so the stored product has the full {id, name, slug} triplet.
+async function hydrateProductCategories(categories: any): Promise<any[]> {
+  if (!Array.isArray(categories)) return [];
+  const out: any[] = [];
+  for (const cat of categories) {
+    if (!cat) continue;
+    const idNum = Number(cat.id ?? 0);
+    // id=0 is Logicom's placeholder for "no category" — drop it (otherwise
+    // products show up with an empty-named ghost pill on the catalog)
+    if (!idNum) continue;
+    const stored = (await kv.get(k.category(idNum))) as any | null;
+    if (stored) {
+      out.push({
+        id: idNum,
+        name: String(stored.name ?? cat.name ?? ''),
+        slug: String(stored.slug ?? cat.slug ?? ''),
+      });
+    } else if (cat.name) {
+      // Category not in our DB but Logicom sent a name — keep what they sent
+      out.push({ id: idNum, name: String(cat.name), slug: String(cat.slug ?? '') });
+    }
+    // No name available and not in DB → drop entry (better than empty pill)
+  }
+  return out;
+}
+
+// WC standard behaviour: PUT replaces the full images array. This matches
+// real WordPress and is what Logicom's connector expects (it was designed to
+// work with real WC). Any merging would prevent users from REMOVING photos in
+// Logicom — the deleted photo would persist on the website.
+//
+// Set `?merge_images=true` (or `merge_images: true` in body) to opt into the
+// legacy union-by-id behaviour, useful for some sync tools that send photos
+// one at a time when first attaching them.
+function mergeImages(
+  existing: any[] = [],
+  incoming: any[] = [],
+  merge: boolean,
+): any[] {
+  if (!merge) return incoming;
+  const seen = new Map<string, any>();
+  const keyOf = (img: any) =>
+    img?.id != null ? `id:${img.id}` : img?.src ? `src:${img.src}` : `?:${Math.random()}`;
+  for (const img of existing) seen.set(keyOf(img), img);
+  for (const img of incoming) seen.set(keyOf(img), { ...seen.get(keyOf(img)), ...img });
+  return Array.from(seen.values());
+}
+
 // Standardised WooCommerce-style error envelope. Sync tools check for the
 // `data.status` field to determine the HTTP code without re-parsing headers.
 function wcError(c: any, code: string, message: string, status: number) {
@@ -1107,12 +1274,47 @@ const k = {
   media: (id: string | number) => `wp:media:${id}`,
 };
 
+// Real WordPress always ships with an "Uncategorized" default category at
+// id=15. Some WC sync clients (Logicom included) assume this exists and may
+// fall back to it for products without an explicit category. Seed once on
+// first call so we never 404 a default-id lookup.
+let _seededDefaults = false;
+async function seedDefaultsOnce() {
+  if (_seededDefaults) return;
+  _seededDefaults = true;
+  const existing = await kv.get(k.category(15));
+  if (!existing) {
+    await kv.set(k.category(15), {
+      id: 15,
+      name: 'Uncategorized',
+      slug: 'uncategorized',
+      parent: 0,
+      description: '',
+      display: 'default',
+      image: null,
+      menu_order: 0,
+      count: 0,
+    });
+    // Make sure the counter doesn't reuse 15
+    const cur = (await kv.get('counter:category')) as number | null;
+    if (!cur || cur < 15) await kv.set('counter:category', 15);
+    console.log('[wc-categories] seeded default Uncategorized id=15');
+  }
+}
+
 app.get(`${WC}/products`, requireApiKey, async (c) => {
   const sku = c.req.query('sku');
   const fields = c.req.query('_fields');
+  const status = c.req.query('status'); // e.g. ?status=publish or ?status=trash
   const items = (await kv.getByPrefix('wc:product:')) as any[];
   let filtered = items;
   if (sku) filtered = filtered.filter((p: any) => p?.sku === sku);
+  if (status) {
+    // ?status=any → return everything (matches WC convention)
+    if (status !== 'any') {
+      filtered = filtered.filter((p: any) => String(p?.status ?? 'publish') === status);
+    }
+  }
   // Newest first — keeps Logicom's incremental pulls deterministic.
   filtered.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
   let page = paginate(c, filtered).map((p) => wcProductShape(p));
@@ -1141,18 +1343,67 @@ app.get(`${WC}/products/:id`, requireApiKey, async (c) => {
 app.post(`${WC}/products`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
+    console.log(`[wc-product-create] body=${JSON.stringify(body).slice(0, 500)}`);
 
-    // If a SKU is given and already exists, return the existing product
-    // (idempotent create — prevents Logicom from spawning duplicates).
-    // Hydrate image src from media kv if Logicom only sent {id: ...}
     if (body.images) body.images = await hydrateProductImages(body.images);
+    if (body.categories) body.categories = await hydrateProductCategories(body.categories);
 
     if (body.sku) {
       const existingMap = (await kv.get(k.productSku(body.sku))) as { id: number } | null;
       if (existingMap?.id != null) {
-        const existing = await kv.get(k.product(existingMap.id));
+        const existing = (await kv.get(k.product(existingMap.id))) as any | null;
         if (existing) {
-          // Merge any new fields from the POST onto the existing record.
+          // ── Recycled-SKU detection ────────────────────────────────────────
+          // Logicom doesn't always call DELETE when a user deletes a product
+          // in their UI — it just reuses the SKU for a different product.
+          // Without intervention, our idempotent POST would merge the new
+          // product's name over the old product's record, keeping the old
+          // price/images/category — a "Frankenstein" record.
+          //
+          // If the incoming POST has a different name (with a name set), or
+          // the existing record was already trashed, treat it as a true
+          // recreate: wipe stale fields, regenerate the picture slot.
+          const incomingName = String(body.name ?? '').trim();
+          const existingName = String(existing.name ?? '').trim();
+          const isRecreation =
+            existing.status === 'trash' ||
+            (incomingName !== '' && existingName !== '' && incomingName !== existingName);
+
+          if (isRecreation) {
+            console.log(`[wc-product-create] RECYCLED SKU "${body.sku}" — old name="${existingName}" new name="${incomingName}" → resetting product`);
+            // Build a fresh product with default fields, only keeping the id+sku
+            const reset = {
+              id: existingMap.id,
+              sku: body.sku,
+              name: '',
+              slug: '',
+              description: '',
+              short_description: '',
+              regular_price: '',
+              sale_price: '',
+              manage_stock: false,
+              stock_quantity: 0,
+              stock_status: 'instock',
+              status: 'publish',
+              categories: [],
+              attributes: [],
+              images: [],
+              meta_data: [],
+              date_created: new Date().toISOString(),
+              date_modified: new Date().toISOString(),
+            };
+            const fresh = {
+              ...reset,
+              ...body,
+              id: existingMap.id,
+              date_created: reset.date_created,
+              date_modified: reset.date_modified,
+            };
+            await kv.set(k.product(existingMap.id), fresh);
+            return c.json(wcProductShape(fresh), 201);
+          }
+
+          // Genuine idempotent retry — same SKU, same name → merge as before
           const merged = {
             ...existing,
             ...body,
@@ -1160,6 +1411,7 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
             date_modified: new Date().toISOString(),
           };
           await kv.set(k.product(existingMap.id), merged);
+          console.log(`[wc-product-create] idempotent retry of sku="${body.sku}" → returning existing id=${existingMap.id}`);
           return c.json(wcProductShape(merged), 200);
         }
       }
@@ -1204,13 +1456,30 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
   }
   try {
     const body = await c.req.json();
-    if (body.images) body.images = await hydrateProductImages(body.images);
+    // Log the full payload so we can diagnose issues like "Logicom isn't
+    // actually sending the new price/image" — invaluable for debugging.
+    console.log(`[wc-product-update] id=${id} body=${JSON.stringify(body).slice(0, 800)}`);
+    if (body.categories) body.categories = await hydrateProductCategories(body.categories);
+    let mergedImages: any[] | undefined;
+    if (body.images !== undefined) {
+      const hydrated = await hydrateProductImages(body.images);
+      // Default = REPLACE (matches real WC). Pass `merge_images: true` if a
+      // sync tool sends photos one at a time and expects them to accumulate.
+      const merge = body.merge_images === true || c.req.query('merge_images') === 'true';
+      mergedImages = mergeImages((existing as any).images ?? [], hydrated, merge);
+      console.log(`[wc-product-update] id=${existing.id} images: incoming=${hydrated.length} ${merge ? 'merge' : 'replace'} → final=${mergedImages.length}`);
+    }
     const next = {
       ...existing,
       ...body,
+      ...(mergedImages !== undefined ? { images: mergedImages } : {}),
       id: Number(id),
       date_modified: new Date().toISOString(),
     };
+    // Strip the meta-flags so they don't end up persisted on the product
+    delete (next as any).replace_images;
+    delete (next as any).delete_existing_images;
+    delete (next as any).merge_images;
     await kv.set(k.product(id), next);
     if (next.sku) await kv.set(k.productSku(next.sku), { id: Number(id) });
     return c.json(wcProductShape(next), 200);
@@ -1219,36 +1488,327 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
   }
 });
 
+// Helper: parse WC's `?force=true` param (also accepts force=1).
+// Standard WooCommerce contract:
+//   DELETE /products/:id            → soft trash (status='trash', stays in DB)
+//   DELETE /products/:id?force=true → permanent delete (hard remove)
+function parseForceFlag(c: any): boolean {
+  const v = String(c.req.query('force') ?? '').toLowerCase();
+  return v === 'true' || v === '1' || v === 'yes';
+}
+
+// Helper: trash or permanently delete a product. Used by both the ID-based
+// and SKU-based delete endpoints below.
+//
+// CRITICAL: When trashing or deleting, we ALSO clear the SKU index. Otherwise
+// when Logicom recreates a product with the same SKU later, our idempotent-
+// create logic finds the trashed/deleted record and merges old data (price,
+// images) into the "new" product, producing a Frankenstein record with the
+// new name but old price/photos.
+async function deleteProductInternal(existing: any, force: boolean): Promise<any> {
+  const id = Number(existing.id);
+  const sku = existing.sku ? String(existing.sku) : '';
+  if (force) {
+    await kv.del(k.product(id));
+    if (sku) await kv.del(k.productSku(sku));
+    console.log(`[wc-delete] permanently deleted product id=${id} sku=${sku}`);
+    return wcProductShape({ ...existing, id });
+  }
+  // Soft trash — keep the record (so admins can restore) but unmap the SKU
+  // immediately so a fresh sync of the same SKU starts clean.
+  const trashed = {
+    ...existing,
+    id,
+    status: 'trash',
+    date_modified: new Date().toISOString(),
+  };
+  await kv.set(k.product(id), trashed);
+  if (sku) {
+    await kv.del(k.productSku(sku));
+    console.log(`[wc-delete] trashed product id=${id} + cleared sku index "${sku}"`);
+  } else {
+    console.log(`[wc-delete] trashed product id=${id} (no sku)`);
+  }
+  return wcProductShape(trashed);
+}
+
 app.delete(`${WC}/products/:id`, requireApiKey, async (c) => {
   const id = c.req.param('id');
   const existing = await kv.get(k.product(id));
   if (!existing) {
     return wcError(c, 'woocommerce_rest_invalid_product_id', 'Invalid ID.', 404);
   }
-  await kv.del(k.product(id));
-  if ((existing as any).sku) await kv.del(k.productSku((existing as any).sku));
-  // WC returns the deleted product in the response, with the shaped object.
-  return c.json(wcProductShape({ ...existing, id: Number(id) }), 200);
+  const result = await deleteProductInternal(existing, parseForceFlag(c));
+  return c.json(result, 200);
 });
 
+// Fallback: delete by SKU. Some sync tools track products by their internal
+// SKU, not the WC-assigned ID. Without this, deletes from Logicom that use
+// SKU-based reference would silently 404 and the product would stay live.
+app.delete(`${WC}/products/by-sku/:sku`, requireApiKey, async (c) => {
+  const sku = c.req.param('sku');
+  const map = (await kv.get(k.productSku(sku))) as { id: number } | null;
+  if (!map?.id) {
+    return wcError(c, 'woocommerce_rest_invalid_product_sku', 'No product with this SKU.', 404);
+  }
+  const existing = await kv.get(k.product(map.id));
+  if (!existing) {
+    // Stale index entry — clean it up
+    await kv.del(k.productSku(sku));
+    return wcError(c, 'woocommerce_rest_invalid_product_sku', 'Product missing.', 404);
+  }
+  const result = await deleteProductInternal(existing, parseForceFlag(c));
+  return c.json(result, 200);
+});
+
+// Bulk delete: WC supports POST /products/batch with {delete: [id1, id2, ...]}.
+// Logicom may use this when a bulk-sync detects missing items.
+app.post(`${WC}/products/batch`, requireApiKey, async (c) => {
+  try {
+    const body = await c.req.json();
+    const force = parseForceFlag(c) || body.force === true;
+    const out: { deleted: any[]; create: any[]; update: any[] } = { deleted: [], create: [], update: [] };
+    if (Array.isArray(body.delete)) {
+      for (const rawId of body.delete) {
+        const existing = await kv.get(k.product(rawId));
+        if (existing) {
+          out.deleted.push(await deleteProductInternal(existing, force));
+        }
+      }
+    }
+    return c.json(out, 200);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
+});
+
+// ─── Product categories ──────────────────────────────────────────────────
+// Logicom (and any WC sync tool) calls these endpoints when the user changes
+// the "famille d'article" of a product. The protocol:
+//   1. Try POST /products/categories with {name, slug}
+//   2. If WC returns 400 `term_exists` with `data.resource_id`, use that ID
+//   3. Otherwise WC returns 201 with the new category
+//   4. PUT /products/:id with `categories: [{id: <that id>}]`
+//
+// The previous implementation always returned 201 with a fresh timestamp ID,
+// so Logicom kept creating duplicate categories on every sync — infinite loop.
+
+// Real WooCommerce ALWAYS lowercases slugs server-side, regardless of what
+// the client sends. Logicom relies on this — it sends `slug: "PIVOT"`, expects
+// `slug: "pivot"` back, and uses the lowercase form for its internal lookup.
+// If we echo "PIVOT" back, Logicom never finds the category in subsequent
+// `GET ?slug=pivot` queries and POSTs again, looping forever.
+function canonicalSlug(s: string): string {
+  return String(s ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9À-ſ]+/g, '-') // keep accented chars
+    .replace(/^-+|-+$/g, '');
+}
+
+// Build WC-style _links so the response shape exactly matches a real
+// WooCommerce install (some sync tools parse self.href to extract the id).
+// IMPORTANT: hardcode HTTPS — Supabase edge runtime sees requests internally
+// as HTTP (TLS terminates at the load balancer), so c.req.url returns http://
+// even though the public URL is https://. If we echo http:// in _links and
+// Logicom does a verification GET on that URL, it fails — and Logicom may
+// interpret that as "category not actually created" and retry the POST.
+function categoryLinks(_c: any, id: number) {
+  const host = 'jvmddidfxabdbtiscdop.supabase.co';
+  const root = `https://${host}/functions/v1/make-server-0c561120/wp-json/wc/v3`;
+  return {
+    self: [{ href: `${root}/products/categories/${id}` }],
+    collection: [{ href: `${root}/products/categories` }],
+  };
+}
+
+// Single source of truth for the category response shape. Field order MUST
+// match real WooCommerce exactly so sync tools that do positional / strict
+// JSON parsing don't get tripped up.
+function categoryShape(c: any, raw: any) {
+  const id = Number(raw?.id ?? 0);
+  return {
+    id,
+    name: String(raw?.name ?? ''),
+    slug: String(raw?.slug ?? ''),
+    parent: Number(raw?.parent ?? 0),
+    description: String(raw?.description ?? ''),
+    display: String(raw?.display ?? 'default'),
+    image: raw?.image ?? null,
+    menu_order: Number(raw?.menu_order ?? 0),
+    count: Number(raw?.count ?? 0),
+    _links: categoryLinks(c, id),
+  };
+}
+
+// Look up a category by its slug. Slug is the canonical WC identifier for
+// duplicate detection (matches WordPress's term_taxonomy table behaviour).
+// Case-insensitive — handles legacy categories stored with mixed-case slugs.
+async function findCategoryBySlug(slug: string): Promise<any | null> {
+  if (!slug) return null;
+  const target = canonicalSlug(slug);
+  const all = (await kv.getByPrefix('wc:category:')) as any[];
+  return all.find((c: any) => canonicalSlug(c?.slug ?? '') === target) ?? null;
+}
+
+app.get(`${WC}/products/categories`, requireApiKey, async (c) => {
+  await seedDefaultsOnce();
+  const all = (await kv.getByPrefix('wc:category:')) as any[];
+  const slug = c.req.query('slug');
+  const search = c.req.query('search');
+  let filtered = all;
+  if (slug) {
+    const target = canonicalSlug(slug);
+    filtered = filtered.filter((cat: any) => canonicalSlug(cat?.slug ?? '') === target);
+  }
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((cat: any) =>
+      String(cat?.name ?? '').toLowerCase().includes(q) ||
+      String(cat?.slug ?? '').toLowerCase().includes(q)
+    );
+  }
+  filtered.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  const shaped = filtered.map((cat: any) => categoryShape(c, cat));
+  console.log(`[wc-categories] GET list slug=${slug ?? '-'} search=${search ?? '-'} → ${shaped.length} results`);
+  return c.json(paginate(c, shaped));
+});
+
+app.get(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const cat = await kv.get(k.category(id));
+  if (!cat) {
+    console.log(`[wc-categories] GET id=${id} → 404`);
+    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
+  }
+  console.log(`[wc-categories] GET id=${id} → 200`);
+  return c.json(categoryShape(c, cat));
+});
+
+// 32-bit signed integer max — IDs above this overflow Logicom's lookup table.
+const MAX_SAFE_WC_ID = 2_147_483_647;
+
+// Migrate any pre-existing category that was saved with an oversized
+// timestamp ID (Date.now() values) to a fresh sequential int. Returns the
+// new shape so callers can use it directly. Idempotent — only runs if the
+// existing id exceeds MAX_SAFE_WC_ID.
+async function migrateOversizedCategoryId(existing: any): Promise<any> {
+  const oldId = Number(existing.id);
+  if (oldId <= MAX_SAFE_WC_ID) return existing;
+  const newId = await nextId('category');
+  const migrated = { ...existing, id: newId };
+  await kv.set(k.category(newId), migrated);
+  await kv.del(k.category(oldId));
+  console.log(`[wc-categories] MIGRATED oversized id=${oldId} → ${newId} (slug=${existing.slug})`);
+  return migrated;
+}
+
 app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
-  const body = await c.req.json();
-  const id = body.id ?? Date.now();
-  const cat = { id, name: body.name ?? '', slug: body.slug ?? '', ...body };
-  await kv.set(k.category(id), cat);
-  return c.json(cat, 201);
+  try {
+    await seedDefaultsOnce();
+    const body = await c.req.json();
+    console.log(`[wc-categories] POST body=${JSON.stringify(body)}`);
+    const name = String(body.name ?? '').trim();
+    if (!name) {
+      return wcError(c, 'woocommerce_rest_category_invalid_name', 'Name is required.', 400);
+    }
+    const slug = canonicalSlug(body.slug ?? name);
+
+    // ── Idempotent create ────────────────────────────────────────────────
+    let dup = await findCategoryBySlug(slug);
+    if (dup) {
+      // First, fix any oversized id from before this migration
+      dup = await migrateOversizedCategoryId(dup);
+
+      const strict = String(c.req.query('strict') ?? '').toLowerCase();
+      if (strict === 'true' || strict === '1') {
+        c.status(400);
+        return c.json({
+          code: 'term_exists',
+          message: 'A term with the name provided already exists with this parent.',
+          data: { status: 400, resource_id: dup.id },
+        });
+      }
+      // Also rewrite slug if mixed-case was stored before the canonical fix
+      const fixed = { ...dup, slug, name: dup.name || name };
+      if (dup.slug !== slug) {
+        await kv.set(k.category(Number(dup.id)), fixed);
+        console.log(`[wc-categories] migrated slug "${dup.slug}" → "${slug}" for id=${dup.id}`);
+      }
+      console.log(`[wc-categories] duplicate slug "${slug}" → returning existing id=${dup.id}`);
+      return c.json(categoryShape(c, fixed), 201);
+    }
+
+    // Use sequential int unless caller explicitly provided a small id
+    let id: number;
+    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
+      id = Number(body.id);
+    } else {
+      id = await nextId('category');
+    }
+    const cat = {
+      id,
+      name,
+      slug,
+      parent: Number(body.parent ?? 0),
+      description: String(body.description ?? ''),
+      display: String(body.display ?? 'default'),
+      image: body.image ?? null,
+      menu_order: Number(body.menu_order ?? 0),
+      count: Number(body.count ?? 0),
+    };
+    await kv.set(k.category(id), cat);
+    console.log(`[wc-categories] created id=${id} slug=${slug}`);
+    return c.json(categoryShape(c, cat), 201);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
 });
 
 app.put(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
   const id = c.req.param('id');
   const existing = await kv.get(k.category(id));
   if (!existing) {
-    return c.json({ code: 'woocommerce_rest_term_invalid', message: 'Invalid term ID.' }, 404);
+    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
   }
-  const body = await c.req.json();
-  const next = { ...existing, ...body, id };
-  await kv.set(k.category(id), next);
-  return c.json(next, 200);
+  try {
+    const body = await c.req.json();
+    // Normalise any slug coming in (lowercase + sanitise)
+    const incomingSlug = body.slug != null ? canonicalSlug(body.slug) : undefined;
+    if (incomingSlug && incomingSlug !== canonicalSlug((existing as any).slug ?? '')) {
+      const dup = await findCategoryBySlug(incomingSlug);
+      if (dup && Number(dup.id) !== Number(id)) {
+        c.status(400);
+        return c.json({
+          code: 'term_exists',
+          message: 'A term with this slug already exists.',
+          data: { status: 400, resource_id: dup.id },
+        });
+      }
+    }
+    const next = {
+      ...existing,
+      ...body,
+      ...(incomingSlug !== undefined ? { slug: incomingSlug } : {}),
+      id: Number(id),
+    };
+    await kv.set(k.category(id), next);
+    console.log(`[wc-categories] PUT id=${id} slug=${(next as any).slug}`);
+    return c.json(categoryShape(c, next), 200);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
+});
+
+app.delete(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(k.category(id));
+  if (!existing) {
+    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
+  }
+  await kv.del(k.category(id));
+  console.log(`[wc-categories] DELETE id=${id}`);
+  return c.json({ ...categoryShape(c, existing), deleted: true }, 200);
 });
 
 app.post(`${WC}/products/attributes`, requireApiKey, async (c) => {
@@ -1311,12 +1871,228 @@ app.put(`${WC}/orders/:id`, requireApiKey, async (c) => {
   return c.json(next, 200);
 });
 
+// ─── Customers (commande vente / sales orders prerequisite) ─────────────
+// Logicom calls this when syncing customer records before pushing orders.
+// Full CRUD with WC-shape responses + idempotent create-by-email.
+
+function wcCustomerShape(c: any) {
+  const empty = {
+    first_name: '', last_name: '', company: '',
+    address_1: '', address_2: '',
+    city: '', state: '', postcode: '', country: '',
+    phone: '',
+  };
+  return {
+    id: Number(c?.id ?? 0),
+    date_created: c?.date_created ?? new Date().toISOString(),
+    date_created_gmt: c?.date_created ?? new Date().toISOString(),
+    date_modified: c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
+    date_modified_gmt: c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
+    email: String(c?.email ?? ''),
+    first_name: String(c?.first_name ?? ''),
+    last_name: String(c?.last_name ?? ''),
+    role: String(c?.role ?? 'customer'),
+    username: String(c?.username ?? c?.email ?? `customer-${c?.id}`),
+    billing: { ...empty, ...(c?.billing ?? {}) },
+    shipping: { ...empty, ...(c?.shipping ?? {}) },
+    is_paying_customer: Boolean(c?.is_paying_customer ?? false),
+    avatar_url: String(c?.avatar_url ?? ''),
+    meta_data: Array.isArray(c?.meta_data) ? c.meta_data : [],
+    _links: {
+      self: [{ href: `${(c?._links?.self?.[0]?.href) ?? ''}` }],
+      collection: [{ href: '' }],
+    },
+  };
+}
+
+async function findCustomerByEmail(email: string): Promise<any | null> {
+  if (!email) return null;
+  const all = (await kv.getByPrefix('wc:customer:')) as any[];
+  const target = email.trim().toLowerCase();
+  return all.find((cus: any) => String(cus?.email ?? '').toLowerCase() === target) ?? null;
+}
+
+app.get(`${WC}/customers`, requireApiKey, async (c) => {
+  const all = (await kv.getByPrefix('wc:customer:')) as any[];
+  const email = c.req.query('email');
+  const search = c.req.query('search');
+  let filtered = all;
+  if (email) filtered = filtered.filter((cu: any) => String(cu?.email ?? '').toLowerCase() === email.toLowerCase());
+  if (search) {
+    const q = search.toLowerCase();
+    filtered = filtered.filter((cu: any) =>
+      [cu?.email, cu?.first_name, cu?.last_name, cu?.company]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q))
+    );
+  }
+  filtered.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(paginate(c, filtered.map(wcCustomerShape)));
+});
+
+app.get(`${WC}/customers/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const cus = await kv.get(k.customer(id));
+  if (!cus) {
+    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+  }
+  return c.json(wcCustomerShape(cus));
+});
+
 app.post(`${WC}/customers`, requireApiKey, async (c) => {
-  const body = await c.req.json();
-  const id = body.id ?? Date.now();
-  const customer = { id, ...body, date_created: new Date().toISOString() };
-  await kv.set(k.customer(id), customer);
-  return c.json(customer, 201);
+  try {
+    const body = await c.req.json();
+    const email = String(body.email ?? '').trim();
+
+    // Idempotent create — Logicom doesn't parse `resource_id` from the
+    // standard 400 `registration-error-email-exists` error, so we return
+    // 201 with the existing customer as if we just created it.
+    // Add `?strict=true` to opt back into the standard WC error behaviour.
+    if (email) {
+      const dup = await findCustomerByEmail(email);
+      if (dup) {
+        const strict = String(c.req.query('strict') ?? '').toLowerCase();
+        if (strict === 'true' || strict === '1') {
+          c.status(400);
+          return c.json({
+            code: 'registration-error-email-exists',
+            message: 'An account is already registered with this email address.',
+            data: { status: 400, resource_id: dup.id },
+          });
+        }
+        console.log(`[wc-customers] duplicate email "${email}" → returning existing id=${dup.id}`);
+        return c.json(wcCustomerShape(dup), 201);
+      }
+    }
+
+    let id: number;
+    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
+      id = Number(body.id);
+    } else {
+      id = await nextId('customer');
+    }
+    const now = new Date().toISOString();
+    const customer = {
+      id,
+      email,
+      first_name: String(body.first_name ?? ''),
+      last_name: String(body.last_name ?? ''),
+      role: String(body.role ?? 'customer'),
+      username: String(body.username ?? email ?? `customer-${id}`),
+      billing: body.billing ?? {},
+      shipping: body.shipping ?? {},
+      is_paying_customer: Boolean(body.is_paying_customer ?? false),
+      meta_data: Array.isArray(body.meta_data) ? body.meta_data : [],
+      date_created: now,
+      date_modified: now,
+    };
+    await kv.set(k.customer(id), customer);
+    return c.json(wcCustomerShape(customer), 201);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
+});
+
+app.put(`${WC}/customers/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(k.customer(id));
+  if (!existing) {
+    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+  }
+  try {
+    const body = await c.req.json();
+    // Reject email change to one already used by another customer
+    if (body.email && body.email !== (existing as any).email) {
+      const dup = await findCustomerByEmail(String(body.email));
+      if (dup && Number(dup.id) !== Number(id)) {
+        c.status(400);
+        return c.json({
+          code: 'registration-error-email-exists',
+          message: 'Another account is already registered with this email.',
+          data: { status: 400, resource_id: dup.id },
+        });
+      }
+    }
+    const next = {
+      ...existing,
+      ...body,
+      id: Number(id),
+      date_modified: new Date().toISOString(),
+    };
+    await kv.set(k.customer(id), next);
+    return c.json(wcCustomerShape(next), 200);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
+});
+
+app.delete(`${WC}/customers/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(k.customer(id));
+  if (!existing) {
+    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+  }
+  await kv.del(k.customer(id));
+  return c.json({ ...wcCustomerShape(existing), deleted: true }, 200);
+});
+
+// ─── Sales orders (commande vente) — also commonly missing ─────────────
+// `GET /orders` already exists. Add POST/GET-by-id/DELETE so Logicom can
+// push real orders once customers are in place.
+app.get(`${WC}/orders/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const order = await kv.get(k.order(id));
+  if (!order) {
+    return wcError(c, 'woocommerce_rest_invalid_order_id', 'Invalid order.', 404);
+  }
+  return c.json(order);
+});
+
+app.post(`${WC}/orders`, requireApiKey, async (c) => {
+  try {
+    const body = await c.req.json();
+    let id: number;
+    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
+      id = Number(body.id);
+    } else {
+      id = await nextId('order');
+    }
+    const now = new Date().toISOString();
+    const order = {
+      id,
+      number: String(id),
+      status: String(body.status ?? 'pending'),
+      currency: String(body.currency ?? 'DZD'),
+      customer_id: Number(body.customer_id ?? 0),
+      billing: body.billing ?? {},
+      shipping: body.shipping ?? {},
+      payment_method: String(body.payment_method ?? ''),
+      payment_method_title: String(body.payment_method_title ?? ''),
+      transaction_id: String(body.transaction_id ?? ''),
+      line_items: Array.isArray(body.line_items) ? body.line_items : [],
+      total: String(body.total ?? '0'),
+      subtotal: String(body.subtotal ?? body.total ?? '0'),
+      total_tax: String(body.total_tax ?? '0'),
+      shipping_total: String(body.shipping_total ?? '0'),
+      meta_data: Array.isArray(body.meta_data) ? body.meta_data : [],
+      date_created: now,
+      date_modified: now,
+    };
+    await kv.set(k.order(id), order);
+    return c.json(order, 201);
+  } catch (e) {
+    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+  }
+});
+
+app.delete(`${WC}/orders/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(k.order(id));
+  if (!existing) {
+    return wcError(c, 'woocommerce_rest_invalid_order_id', 'Invalid order.', 404);
+  }
+  await kv.del(k.order(id));
+  return c.json({ ...existing, deleted: true }, 200);
 });
 
 // WordPress REST media endpoint — accepts THREE upload formats:

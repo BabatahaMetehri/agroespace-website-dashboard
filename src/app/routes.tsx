@@ -40,7 +40,7 @@ export const router = createBrowserRouter([
         element: <ServicePage service="fertilization" />,
       },
       { path: "services/retail", element: <ServicePage service="retail" /> },
-      // { path: 'catalog', Component: Catalog },
+      { path: "catalog", Component: Catalog },
       { path: "technical", Component: Technical },
       { path: "contact", Component: ContactMap },
       { path: "blog", Component: Blog },
