@@ -510,19 +510,87 @@ app.get(`${ADMIN}/products`, requireAdmin, async (c) => {
     if (Array.isArray(p?.categories) && p.categories.some((c: any) => !c?.name)) {
       p.categories = await hydrateProductCategories(p.categories);
     }
+    // Auto-derive stock status — Logicom sometimes leaves "instock" set even
+    // when the quantity reaches 0 or goes negative, so we recompute on read.
+    p.stock_status = deriveStockStatus(p);
   }
   return c.json(items);
+});
+
+// Bulk delete (default = soft trash, ?force=true = permanent). Used by the
+// admin UI's multi-select toolbar. Accepts a JSON body of { ids: [...] }.
+app.post(`${ADMIN}/products/bulk-delete`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const ids: any[] = Array.isArray(body?.ids) ? body.ids : [];
+    const force = body?.force === true || c.req.query('force') === 'true';
+    const results: { id: number | string; ok: boolean; reason?: string }[] = [];
+    for (const rawId of ids) {
+      const id = String(rawId);
+      const existing = await kv.get(`wc:product:${id}`);
+      if (!existing) {
+        results.push({ id, ok: false, reason: 'not_found' });
+        continue;
+      }
+      const sku = (existing as any).sku ? String((existing as any).sku) : '';
+      if (force) {
+        await kv.del(`wc:product:${id}`);
+        if (sku) await kv.del(`wc:product_sku:${sku}`);
+      } else {
+        const trashed = { ...(existing as any), id: Number(id), status: 'trash', date_modified: new Date().toISOString() };
+        await kv.set(`wc:product:${id}`, trashed);
+        if (sku) await kv.del(`wc:product_sku:${sku}`);
+      }
+      results.push({ id, ok: true });
+    }
+    return c.json({ deleted: results.filter((r) => r.ok).map((r) => r.id), errors: results.filter((r) => !r.ok), force });
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+// Bulk restore from trash
+app.post(`${ADMIN}/products/bulk-restore`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const ids: any[] = Array.isArray(body?.ids) ? body.ids : [];
+    const restored: (number | string)[] = [];
+    for (const rawId of ids) {
+      const id = String(rawId);
+      const existing = await kv.get(`wc:product:${id}`);
+      if (!existing) continue;
+      const next = { ...(existing as any), id: Number(id), status: 'publish', date_modified: new Date().toISOString() };
+      await kv.set(`wc:product:${id}`, next);
+      restored.push(id);
+    }
+    return c.json({ restored });
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+// Empty the trash — permanently deletes ALL products with status='trash'.
+app.post(`${ADMIN}/products/empty-trash`, requireAdmin, async (c) => {
+  const items = (await kv.getByPrefix('wc:product:')) as any[];
+  const trashed = items.filter((p: any) => p?.status === 'trash');
+  for (const p of trashed) {
+    await kv.del(`wc:product:${p.id}`);
+    if (p.sku) await kv.del(`wc:product_sku:${p.sku}`);
+  }
+  console.log(`[admin] empty-trash → permanently deleted ${trashed.length} products`);
+  return c.json({ deleted: trashed.length });
 });
 
 app.post(`${ADMIN}/products`, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
-    const id = body.id ?? Date.now();
+    const id = await safeIncomingId('product', body.id);
     const product = {
       id,
       sku: body.sku ?? null,
       name: body.name ?? '',
       description: body.description ?? '',
+      short_description: body.short_description ?? '',
       regular_price: body.regular_price ?? '',
       sale_price: body.sale_price ?? '',
       manage_stock: body.manage_stock ?? false,
@@ -535,6 +603,7 @@ app.post(`${ADMIN}/products`, requireAdmin, async (c) => {
       ...body,
       date_created: new Date().toISOString(),
     };
+    product.stock_status = deriveStockStatus(product);
     await kv.set(`wc:product:${id}`, product);
     if (product.sku) await kv.set(`wc:product_sku:${product.sku}`, { id });
     return c.json(product, 201);
@@ -549,7 +618,8 @@ app.put(`${ADMIN}/products/:id`, requireAdmin, async (c) => {
   if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
   try {
     const body = await c.req.json();
-    const next = { ...existing, ...body, id, date_modified: new Date().toISOString() };
+    const next: any = { ...existing, ...body, id, date_modified: new Date().toISOString() };
+    next.stock_status = deriveStockStatus(next);
     await kv.set(`wc:product:${id}`, next);
     if (next.sku) await kv.set(`wc:product_sku:${next.sku}`, { id });
     return c.json(next);
@@ -607,12 +677,7 @@ app.post(`${ADMIN}/categories`, requireAdmin, async (c) => {
     if (all.find((x: any) => canonicalSlug(x?.slug ?? '') === slug)) {
       return c.json({ code: 'term_exists', message: 'A category with this slug already exists.' }, 400);
     }
-    let id: number;
-    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= 2_147_483_647) {
-      id = Number(body.id);
-    } else {
-      id = await nextId('category');
-    }
+    const id = await safeIncomingId('category', body.id);
     const cat = { id, name, slug, parent: 0, description: String(body.description ?? ''), display: 'default', image: null, menu_order: 0, count: 0 };
     await kv.set(`wc:category:${id}`, cat);
     return c.json(cat, 201);
@@ -831,9 +896,16 @@ const API_ROOT_ABS = `${SUPABASE_URL_ENV}/functions/v1/make-server-0c561120`;
 // integers — anything >2^31 (~2.1 billion) overflows their internal lookup
 // table, breaks the local id→remote-id mapping, and causes infinite POST
 // retry loops. NEVER use Date.now() for sync-visible IDs.
-async function nextId(
-  kind: 'product' | 'media' | 'category' | 'attribute' | 'customer' | 'order'
-): Promise<number> {
+type IdKind =
+  | 'product'
+  | 'media'
+  | 'category'
+  | 'attribute'
+  | 'attribute_term'
+  | 'customer'
+  | 'order';
+
+async function nextId(kind: IdKind): Promise<number> {
   const key = `counter:${kind}`;
   const cur = (await kv.get(key)) as number | null;
   // Different starting points per resource so no client-side ID collisions
@@ -844,11 +916,76 @@ async function nextId(
     customer: 1,
     order: 1,
     attribute: 0,
+    attribute_term: 0,
     product: 0,
   };
   const next = (cur ?? (start[kind] ?? 0)) + 1;
   await kv.set(key, next);
   return next;
+}
+
+// 32-bit signed integer max — IDs above this overflow Logicom's lookup table
+// (and many other WC sync clients that store remote IDs as int32). Anything
+// above this and the client cannot map our id back to its local row → it
+// retries the create endlessly. NEVER expose an id larger than this.
+const MAX_SAFE_WC_ID_GLOBAL = 2_147_483_647;
+
+// Generic helper used by every WC endpoint that mints/persists an ID.
+// - If the caller supplied a positive int32 id, accept it (idempotent re-create).
+// - Otherwise (no id, oversized id, garbage value) → mint a fresh sequential
+//   id from the per-resource counter.
+// This is the ONE place to enforce the 32-bit-safe rule, so adding a new
+// resource type later automatically inherits the protection.
+async function safeIncomingId(kind: IdKind, providedId: any): Promise<number> {
+  const n = providedId != null ? Number(providedId) : NaN;
+  if (Number.isFinite(n) && n > 0 && Math.floor(n) === n && n <= MAX_SAFE_WC_ID_GLOBAL) {
+    return n;
+  }
+  return await nextId(kind);
+}
+
+// Generic oversized-ID migrator. When we LOOK UP an existing record (by slug,
+// SKU, email, etc.) and find a row whose id was minted before the int32 fix,
+// rewrite it under a fresh sequential id and delete the old key. Returns the
+// migrated record so the caller can return it to the client immediately.
+//
+// The kvKeyFor function builds the storage key from an id (e.g. k.attribute,
+// k.category). secondaryUpdates lets you update auxiliary indexes (e.g. the
+// SKU → id map for products).
+async function migrateOversizedId<T extends { id: number | string }>(
+  existing: T,
+  kind: IdKind,
+  kvKeyFor: (id: number | string) => string,
+  secondaryUpdates?: (newId: number, oldId: number) => Promise<void>,
+): Promise<T> {
+  const oldId = Number(existing.id);
+  if (!Number.isFinite(oldId) || oldId <= MAX_SAFE_WC_ID_GLOBAL) return existing;
+  const newId = await nextId(kind);
+  const migrated: T = { ...existing, id: newId };
+  await kv.set(kvKeyFor(newId), migrated);
+  await kv.del(kvKeyFor(oldId));
+  if (secondaryUpdates) await secondaryUpdates(newId, oldId);
+  console.log(`[wc-id-migrate] ${kind} ${oldId} → ${newId} (int32 overflow fix)`);
+  return migrated;
+}
+
+// Auto-derive stock_status from quantity. Real WooCommerce flips a product
+// to "outofstock" automatically once stock_quantity reaches 0 (when stock is
+// managed). Logicom often leaves stock_status as "instock" no matter what,
+// so we enforce the rule here on every read AND every write.
+function deriveStockStatus(p: any): 'instock' | 'outofstock' {
+  // Universal rule: if a quantity is present and it's 0 or negative, the
+  // product is out of stock — regardless of whether `manage_stock` is on.
+  // Logicom often sends `stock_quantity: 0` with `manage_stock: false` and
+  // `stock_status: "instock"` (stale), so we always recompute from quantity.
+  const hasQty = p?.stock_quantity != null && p?.stock_quantity !== '';
+  if (hasQty) {
+    const qty = Number(p.stock_quantity);
+    if (!Number.isFinite(qty) || qty <= 0) return 'outofstock';
+    return 'instock';
+  }
+  // No quantity supplied at all → trust the stored status (defaults instock).
+  return p?.stock_status === 'outofstock' ? 'outofstock' : 'instock';
 }
 
 // ISO date without trailing Z — matches WordPress format ("2026-05-03T14:09:58")
@@ -937,7 +1074,7 @@ function wcProductShape(p: any): any {
     tax_class: '',
     manage_stock: p.manage_stock === true,
     stock_quantity: p.manage_stock ? Number(p.stock_quantity ?? 0) : null,
-    stock_status: String(p.stock_status ?? 'instock'),
+    stock_status: deriveStockStatus(p),
     backorders: 'no',
     backorders_allowed: false,
     backordered: false,
@@ -1417,9 +1554,9 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
       }
     }
 
-    const id = body.id != null ? Number(body.id) : await nextId('product');
+    const id = await safeIncomingId('product', body.id);
     const now = new Date().toISOString();
-    const product = {
+    const product: any = {
       id,
       sku: body.sku ?? '',
       name: body.name ?? '',
@@ -1440,6 +1577,7 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
       date_created: now,
       date_modified: now,
     };
+    product.stock_status = deriveStockStatus(product);
     await kv.set(k.product(id), product);
     if (product.sku) await kv.set(k.productSku(product.sku), { id });
     return c.json(wcProductShape(product), 201);
@@ -1469,7 +1607,7 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
       mergedImages = mergeImages((existing as any).images ?? [], hydrated, merge);
       console.log(`[wc-product-update] id=${existing.id} images: incoming=${hydrated.length} ${merge ? 'merge' : 'replace'} → final=${mergedImages.length}`);
     }
-    const next = {
+    const next: any = {
       ...existing,
       ...body,
       ...(mergedImages !== undefined ? { images: mergedImages } : {}),
@@ -1477,9 +1615,11 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
       date_modified: new Date().toISOString(),
     };
     // Strip the meta-flags so they don't end up persisted on the product
-    delete (next as any).replace_images;
-    delete (next as any).delete_existing_images;
-    delete (next as any).merge_images;
+    delete next.replace_images;
+    delete next.delete_existing_images;
+    delete next.merge_images;
+    // Auto-derive stock_status from quantity (real WC behaviour)
+    next.stock_status = deriveStockStatus(next);
     await kv.set(k.product(id), next);
     if (next.sku) await kv.set(k.productSku(next.sku), { id: Number(id) });
     return c.json(wcProductShape(next), 200);
@@ -1685,23 +1825,11 @@ app.get(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
   return c.json(categoryShape(c, cat));
 });
 
-// 32-bit signed integer max — IDs above this overflow Logicom's lookup table.
-const MAX_SAFE_WC_ID = 2_147_483_647;
-
-// Migrate any pre-existing category that was saved with an oversized
-// timestamp ID (Date.now() values) to a fresh sequential int. Returns the
-// new shape so callers can use it directly. Idempotent — only runs if the
-// existing id exceeds MAX_SAFE_WC_ID.
-async function migrateOversizedCategoryId(existing: any): Promise<any> {
-  const oldId = Number(existing.id);
-  if (oldId <= MAX_SAFE_WC_ID) return existing;
-  const newId = await nextId('category');
-  const migrated = { ...existing, id: newId };
-  await kv.set(k.category(newId), migrated);
-  await kv.del(k.category(oldId));
-  console.log(`[wc-categories] MIGRATED oversized id=${oldId} → ${newId} (slug=${existing.slug})`);
-  return migrated;
-}
+// Backwards-compat alias — the rest of the file still uses these names.
+// All new code should use MAX_SAFE_WC_ID_GLOBAL + migrateOversizedId() above.
+const MAX_SAFE_WC_ID = MAX_SAFE_WC_ID_GLOBAL;
+const migrateOversizedCategoryId = (existing: any) =>
+  migrateOversizedId(existing, 'category', (id) => k.category(id));
 
 app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
   try {
@@ -1740,12 +1868,7 @@ app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
     }
 
     // Use sequential int unless caller explicitly provided a small id
-    let id: number;
-    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
-      id = Number(body.id);
-    } else {
-      id = await nextId('category');
-    }
+    const id = await safeIncomingId('category', body.id);
     const cat = {
       id,
       name,
@@ -1811,46 +1934,145 @@ app.delete(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
   return c.json({ ...categoryShape(c, existing), deleted: true }, 200);
 });
 
-app.post(`${WC}/products/attributes`, requireApiKey, async (c) => {
-  const body = await c.req.json();
-  const id = body.id ?? Date.now();
-  const attr = { id, name: body.name ?? '', slug: body.slug ?? '', type: body.type ?? 'select', ...body };
-  await kv.set(k.attribute(id), attr);
-  return c.json(attr, 201);
+// List attributes — needed by Logicom's "characteristics" sync option which
+// fetches the full list before deciding whether to create a new attribute.
+app.get(`${WC}/products/attributes`, requireApiKey, async (c) => {
+  const items = (await kv.getByPrefix('wc:attribute:')) as any[];
+  // Filter out term entries (key shape `wc:attribute:<aid>:term:<tid>`)
+  const attrs = items.filter((x: any) => x && x.id != null && !('term' in x === false && false));
+  // Simpler: by-prefix returns everything; tag terms with a marker so we can
+  // skip them. We instead identify attributes by checking the stored shape:
+  // attributes have `slug` + `type`, terms don't have `type`.
+  const onlyAttrs = items.filter((x: any) => x && typeof x === 'object' && 'type' in x);
+  onlyAttrs.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(onlyAttrs);
 });
 
-app.put(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
+app.get(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
   const id = c.req.param('id');
   const existing = await kv.get(k.attribute(id));
   if (!existing) {
     return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
   }
+  return c.json(existing);
+});
+
+app.post(`${WC}/products/attributes`, requireApiKey, async (c) => {
   const body = await c.req.json();
-  const next = { ...existing, ...body, id };
-  await kv.set(k.attribute(id), next);
+  console.log(`[wc-attributes] POST body=${JSON.stringify(body).slice(0, 400)}`);
+  // Idempotent: if an attribute with the same slug already exists, return it.
+  // This stops Logicom's "characteristics" loop that would otherwise re-POST
+  // the same attribute with a fresh huge timestamp id every time.
+  const slug = canonicalSlug(body.slug ?? body.name ?? '');
+  if (slug) {
+    const all = (await kv.getByPrefix('wc:attribute:')) as any[];
+    let dup = all.find((x: any) => x && 'type' in x && canonicalSlug(x.slug ?? '') === slug);
+    if (dup) {
+      // Heal any pre-existing oversized id before returning.
+      dup = await migrateOversizedId(dup, 'attribute', (id) => k.attribute(id));
+      console.log(`[wc-attributes] duplicate slug "${slug}" → returning existing id=${dup.id}`);
+      return c.json(dup, 201);
+    }
+  }
+  const id = await safeIncomingId('attribute', body.id);
+  const attr = {
+    ...body,
+    id,
+    name: body.name ?? '',
+    slug: slug || canonicalSlug(`attribute-${id}`),
+    type: body.type ?? 'select',
+    order_by: body.order_by ?? 'menu_order',
+    has_archives: body.has_archives === true,
+  };
+  await kv.set(k.attribute(id), attr);
+  console.log(`[wc-attributes] created id=${id} slug=${attr.slug}`);
+  return c.json(attr, 201);
+});
+
+app.put(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  let existing = await kv.get(k.attribute(id));
+  if (!existing) {
+    return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
+  }
+  // Heal oversized id transparently
+  existing = await migrateOversizedId(existing as any, 'attribute', (i) => k.attribute(i));
+  const body = await c.req.json();
+  const next = { ...existing, ...body, id: Number((existing as any).id) };
+  await kv.set(k.attribute((existing as any).id), next);
   return c.json(next, 200);
+});
+
+app.delete(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(k.attribute(id));
+  if (!existing) {
+    return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
+  }
+  await kv.del(k.attribute(id));
+  return c.json({ ...(existing as any), deleted: true });
+});
+
+app.get(`${WC}/products/attributes/:attrId/terms`, requireApiKey, async (c) => {
+  const attrId = c.req.param('attrId');
+  const items = (await kv.getByPrefix(`wc:attribute:${attrId}:term:`)) as any[];
+  items.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(items);
 });
 
 app.post(`${WC}/products/attributes/:attrId/terms`, requireApiKey, async (c) => {
   const attrId = c.req.param('attrId');
   const body = await c.req.json();
-  const id = body.id ?? Date.now();
-  const term = { id, name: body.name ?? '', slug: body.slug ?? '', ...body };
+  console.log(`[wc-attr-terms] POST attrId=${attrId} body=${JSON.stringify(body).slice(0, 400)}`);
+  const slug = canonicalSlug(body.slug ?? body.name ?? '');
+  if (slug) {
+    const all = (await kv.getByPrefix(`wc:attribute:${attrId}:term:`)) as any[];
+    let dup = all.find((x: any) => x && canonicalSlug(x.slug ?? '') === slug);
+    if (dup) {
+      dup = await migrateOversizedId(dup, 'attribute_term', (id) => k.attrTerm(attrId, id));
+      console.log(`[wc-attr-terms] duplicate slug "${slug}" → returning existing id=${dup.id}`);
+      return c.json(dup, 201);
+    }
+  }
+  const id = await safeIncomingId('attribute_term', body.id);
+  const term = {
+    ...body,
+    id,
+    name: body.name ?? '',
+    slug: slug || canonicalSlug(`term-${id}`),
+  };
   await kv.set(k.attrTerm(attrId, id), term);
+  console.log(`[wc-attr-terms] created id=${id} slug=${term.slug}`);
   return c.json(term, 201);
 });
 
 app.put(`${WC}/products/attributes/:attrId/terms/:id`, requireApiKey, async (c) => {
   const attrId = c.req.param('attrId');
   const id = c.req.param('id');
+  let existing = await kv.get(k.attrTerm(attrId, id));
+  if (!existing) {
+    return c.json({ code: 'woocommerce_rest_term_invalid', message: 'Invalid term ID.' }, 404);
+  }
+  existing = await migrateOversizedId(
+    existing as any,
+    'attribute_term',
+    (i) => k.attrTerm(attrId, i),
+  );
+  const body = await c.req.json();
+  const next = { ...existing, ...body, id: Number((existing as any).id) };
+  await kv.set(k.attrTerm(attrId, (existing as any).id), next);
+  return c.json(next, 200);
+});
+
+app.delete(`${WC}/products/attributes/:attrId/terms/:id`, requireApiKey, async (c) => {
+  const attrId = c.req.param('attrId');
+  const id = c.req.param('id');
   const existing = await kv.get(k.attrTerm(attrId, id));
   if (!existing) {
     return c.json({ code: 'woocommerce_rest_term_invalid', message: 'Invalid term ID.' }, 404);
   }
-  const body = await c.req.json();
-  const next = { ...existing, ...body, id };
-  await kv.set(k.attrTerm(attrId, id), next);
-  return c.json(next, 200);
+  await kv.del(k.attrTerm(attrId, id));
+  return c.json({ ...(existing as any), deleted: true });
 });
 
 app.get(`${WC}/orders`, requireApiKey, async (c) => {
@@ -1965,12 +2187,7 @@ app.post(`${WC}/customers`, requireApiKey, async (c) => {
       }
     }
 
-    let id: number;
-    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
-      id = Number(body.id);
-    } else {
-      id = await nextId('customer');
-    }
+    const id = await safeIncomingId('customer', body.id);
     const now = new Date().toISOString();
     const customer = {
       id,
@@ -2051,12 +2268,7 @@ app.get(`${WC}/orders/:id`, requireApiKey, async (c) => {
 app.post(`${WC}/orders`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
-    let id: number;
-    if (body.id != null && Number(body.id) > 0 && Number(body.id) <= MAX_SAFE_WC_ID) {
-      id = Number(body.id);
-    } else {
-      id = await nextId('order');
-    }
+    const id = await safeIncomingId('order', body.id);
     const now = new Date().toISOString();
     const order = {
       id,

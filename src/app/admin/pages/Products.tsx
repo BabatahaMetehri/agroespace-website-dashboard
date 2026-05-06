@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Save, X, Tag, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Save, X, Tag, RotateCcw, AlertTriangle, CheckSquare, Square } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';
@@ -16,6 +16,7 @@ type Product = {
   sku?: string;
   name: string;
   description?: string;
+  short_description?: string;
   regular_price?: string;
   sale_price?: string;
   manage_stock?: boolean;
@@ -63,6 +64,9 @@ export const Products = () => {
   const [statusFilter, setStatusFilter] = useState<'active' | 'trash' | 'all'>('active');
   const [editing, setEditing] = useState<Product | null>(null);
   const [managingCats, setManagingCats] = useState(false);
+  // Bulk-select state — keyed by product id (as string for cross-type safety)
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const refresh = async () => {
     try {
@@ -138,6 +142,94 @@ export const Products = () => {
       toast.success('Produit supprimé définitivement');
     } catch (e) {
       toast.error((e as Error).message);
+    }
+  };
+
+  // ── Bulk actions (multi-select toolbar) ──────────────────────────────────
+  const toggleSelect = (id: Product['id']) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      const key = String(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelected(new Set());
+
+  // Reset selection whenever the visible filter changes (avoids invisible-but-selected rows)
+  useEffect(() => {
+    clearSelection();
+  }, [statusFilter, activeCat, query]);
+
+  const bulkTrash = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`Mettre ${selected.size} produit(s) à la corbeille ?`)) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      await api('/admin/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
+      setProducts((prev) => prev.map((p) => (ids.includes(String(p.id)) ? { ...p, status: 'trash' } : p)));
+      toast.success(`${ids.length} produit(s) mis à la corbeille`);
+      clearSelection();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkRestore = async () => {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      await api('/admin/products/bulk-restore', { method: 'POST', body: JSON.stringify({ ids }) });
+      setProducts((prev) => prev.map((p) => (ids.includes(String(p.id)) ? { ...p, status: 'publish' } : p)));
+      toast.success(`${ids.length} produit(s) restauré(s)`);
+      clearSelection();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const bulkForceDelete = async () => {
+    if (selected.size === 0) return;
+    if (!confirm(`SUPPRIMER DÉFINITIVEMENT ${selected.size} produit(s) ? Cette action est irréversible.`)) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      await api('/admin/products/bulk-delete?force=true', { method: 'POST', body: JSON.stringify({ ids, force: true }) });
+      setProducts((prev) => prev.filter((p) => !ids.includes(String(p.id))));
+      toast.success(`${ids.length} produit(s) supprimé(s)`);
+      clearSelection();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const emptyTrash = async () => {
+    const trashCount = products.filter((p) => p.status === 'trash').length;
+    if (trashCount === 0) {
+      toast.info('La corbeille est déjà vide.');
+      return;
+    }
+    if (!confirm(`VIDER LA CORBEILLE ? ${trashCount} produit(s) seront définitivement supprimés.`)) return;
+    setBulkBusy(true);
+    try {
+      const res = await api<{ deleted: number }>('/admin/products/empty-trash', { method: 'POST' });
+      setProducts((prev) => prev.filter((p) => p.status !== 'trash'));
+      toast.success(`Corbeille vidée (${res.deleted} produit(s) supprimés)`);
+      clearSelection();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -250,11 +342,86 @@ export const Products = () => {
         </div>
       )}
 
+      {/* Bulk-action toolbar — shows when at least one row is selected,
+          OR when in trash view (so "Vider la corbeille" stays reachable). */}
+      {(selected.size > 0 || statusFilter === 'trash') && (
+        <div className="flex flex-wrap items-center gap-2 mb-3 bg-white/[0.03] border border-white/10 rounded-2xl px-4 py-2.5">
+          {selected.size > 0 && (
+            <>
+              <span className="text-white/70 text-xs uppercase tracking-wider font-semibold">
+                {selected.size} sélectionné{selected.size > 1 ? 's' : ''}
+              </span>
+              <button
+                onClick={clearSelection}
+                className="text-white/40 hover:text-white text-xs underline ml-1"
+              >
+                désélectionner
+              </button>
+              <span className="w-px h-5 bg-white/10 mx-2" />
+              {statusFilter === 'trash' ? (
+                <>
+                  <button
+                    onClick={bulkRestore}
+                    disabled={bulkBusy}
+                    className="flex items-center gap-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-200 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Restaurer
+                  </button>
+                  <button
+                    onClick={bulkForceDelete}
+                    disabled={bulkBusy}
+                    className="flex items-center gap-1.5 bg-red-500/30 hover:bg-red-500/40 text-red-100 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" /> Supprimer définitivement
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={bulkTrash}
+                  disabled={bulkBusy}
+                  className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                >
+                  <Trash2 className="w-3.5 h-3.5" /> Mettre à la corbeille
+                </button>
+              )}
+            </>
+          )}
+          {statusFilter === 'trash' && (
+            <button
+              onClick={emptyTrash}
+              disabled={bulkBusy || counts.trash === 0}
+              className="ml-auto flex items-center gap-1.5 bg-red-500/30 hover:bg-red-500/40 text-red-100 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50 border border-red-500/30"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Vider la corbeille ({counts.trash})
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="bg-[#0f2618] border border-white/5 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-white/5 text-white/40 text-xs uppercase tracking-wider bg-white/[0.02]">
+                <th className="pl-6 pr-2 py-4 font-medium w-10">
+                  {(() => {
+                    const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(String(p.id)));
+                    const someSelected = !allSelected && filtered.some((p) => selected.has(String(p.id)));
+                    return (
+                      <button
+                        onClick={() => {
+                          if (allSelected) clearSelection();
+                          else setSelected(new Set(filtered.map((p) => String(p.id))));
+                        }}
+                        className={`p-1 rounded hover:bg-white/5 ${someSelected ? 'text-[#87A922]' : 'text-white/40'}`}
+                        title={allSelected ? 'Tout désélectionner' : 'Tout sélectionner'}
+                        aria-label="Tout sélectionner"
+                      >
+                        {allSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                      </button>
+                    );
+                  })()}
+                </th>
                 <th className="px-6 py-4 font-medium">Image</th>
                 <th className="px-6 py-4 font-medium">Nom</th>
                 <th className="px-6 py-4 font-medium">SKU</th>
@@ -267,27 +434,42 @@ export const Products = () => {
             <tbody className="divide-y divide-white/5 text-sm">
               {loading && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-white/40">
+                  <td colSpan={8} className="px-6 py-12 text-center text-white/40">
                     Chargement...
                   </td>
                 </tr>
               )}
               {!loading && filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-white/40">
+                  <td colSpan={8} className="px-6 py-12 text-center text-white/40">
                     Aucun produit. Cliquez « Nouveau produit » ou laissez Logicom/Delfiv synchroniser.
                   </td>
                 </tr>
               )}
               {!loading &&
                 filtered.map((p) => {
-                  const inStock = (p.stock_status ?? 'instock') === 'instock';
+                  // Auto-derive stock_status: any quantity ≤ 0 = "Rupture",
+                  // regardless of manage_stock or what Logicom set on stock_status.
+                  const hasQty = p.stock_quantity != null && (p.stock_quantity as any) !== '';
+                  const qty = Number(p.stock_quantity ?? 0);
+                  const computedOutOfStock = hasQty && (!Number.isFinite(qty) || qty <= 0);
+                  const inStock = !computedOutOfStock && (p.stock_status ?? 'instock') === 'instock';
                   const isTrashed = p.status === 'trash';
+                  const isSelected = selected.has(String(p.id));
                   return (
                     <tr
                       key={p.id}
-                      className={`hover:bg-white/[0.02] transition-colors ${isTrashed ? 'opacity-60' : ''}`}
+                      className={`hover:bg-white/[0.02] transition-colors ${isTrashed ? 'opacity-60' : ''} ${isSelected ? 'bg-[#87A922]/[0.06]' : ''}`}
                     >
+                      <td className="pl-6 pr-2 py-4 w-10">
+                        <button
+                          onClick={() => toggleSelect(p.id)}
+                          className={`p-1 rounded hover:bg-white/5 ${isSelected ? 'text-[#87A922]' : 'text-white/30'}`}
+                          aria-label={isSelected ? 'Désélectionner' : 'Sélectionner'}
+                        >
+                          {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                        </button>
+                      </td>
                       <td className="px-6 py-4 w-20">
                         <div className="w-12 h-12 rounded-lg bg-black/40 overflow-hidden">
                           {(() => {
@@ -537,7 +719,16 @@ const ProductDrawer = ({
               />
             </Row>
           )}
-          <Row label="Description">
+          <Row label="Description courte">
+            <textarea
+              rows={2}
+              value={draft.short_description ?? ''}
+              onChange={(e) => set('short_description', e.target.value)}
+              placeholder="Résumé en une ou deux phrases (affiché sur la fiche produit)"
+              className="input resize-none"
+            />
+          </Row>
+          <Row label="Description complète">
             <textarea
               rows={4}
               value={draft.description ?? ''}
