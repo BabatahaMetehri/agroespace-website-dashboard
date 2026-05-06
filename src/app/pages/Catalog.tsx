@@ -29,17 +29,12 @@ type Product = {
   price: string | null;
 };
 
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1611040549344-f71005756038?w=600&q=80";
+const FALLBACK_IMAGE = "https://i.ibb.co/VWgjMWw3/logo-with-shadow.png";
 
 function mapProduct(p: WcProduct): Product {
-  const imageUrl =
-    p.images?.[0]?.src ||
-    p.image ||
-    FALLBACK_IMAGE;
+  const imageUrl = p.images?.[0]?.src || p.image || FALLBACK_IMAGE;
 
-  const categoryName =
-    p.categories?.[0]?.name ?? "Produits";
+  const categoryName = p.categories?.[0]?.name ?? "Produits";
 
   // Public-facing catalog hides prices on purpose — visitors always go through
   // the quote flow. Admin still sees regular_price/sale_price in /admin/products.
@@ -103,7 +98,10 @@ export const Catalog = () => {
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const paginated = filtered.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
 
   const catLabel = (c: string) => (c === "Tous" ? t("catalog.all") : c);
 
@@ -120,7 +118,9 @@ export const Catalog = () => {
             </span>
             <h1 className="text-4xl md:text-6xl font-light text-white leading-tight">
               {t("catalog.hero.title.1")}{" "}
-              <span className="font-serif italic text-white/80">{t("catalog.hero.title.italic")}</span>
+              <span className="font-serif italic text-white/80">
+                {t("catalog.hero.title.italic")}
+              </span>
             </h1>
           </div>
 
@@ -231,10 +231,13 @@ export const Catalog = () => {
                   {(() => {
                     const len = product.title.length;
                     const sizeClass =
-                      len <= 30 ? 'text-2xl'
-                      : len <= 55 ? 'text-xl'
-                      : len <= 90 ? 'text-lg'
-                      : 'text-base';
+                      len <= 30
+                        ? "text-2xl"
+                        : len <= 55
+                          ? "text-xl"
+                          : len <= 90
+                            ? "text-lg"
+                            : "text-base";
                     return (
                       <h3
                         title={product.title}
@@ -297,13 +300,14 @@ export const Catalog = () => {
                 if (safePage + d <= totalPages) window.add(safePage + d);
               }
               const ordered = Array.from(window).sort((a, b) => a - b);
-              const tokens: (number | 'gap')[] = [];
+              const tokens: (number | "gap")[] = [];
               for (let i = 0; i < ordered.length; i++) {
-                if (i > 0 && ordered[i] - ordered[i - 1] > 1) tokens.push('gap');
+                if (i > 0 && ordered[i] - ordered[i - 1] > 1)
+                  tokens.push("gap");
                 tokens.push(ordered[i]);
               }
               return tokens.map((tok, i) =>
-                tok === 'gap' ? (
+                tok === "gap" ? (
                   <span
                     key={`gap-${i}`}
                     className="min-w-10 h-10 px-2 flex items-center justify-center text-white/30 text-sm select-none"
@@ -315,16 +319,16 @@ export const Catalog = () => {
                   <button
                     key={tok}
                     onClick={() => setPage(tok)}
-                    aria-current={tok === safePage ? 'page' : undefined}
+                    aria-current={tok === safePage ? "page" : undefined}
                     className={`min-w-10 h-10 px-3 rounded-full text-sm font-semibold transition-colors ${
                       tok === safePage
-                        ? 'bg-[#87A922] text-white'
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                        ? "bg-[#87A922] text-white"
+                        : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/10"
                     }`}
                   >
                     {tok}
                   </button>
-                )
+                ),
               );
             })()}
             <button
