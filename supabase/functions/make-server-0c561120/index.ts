@@ -440,10 +440,58 @@ const sanitize = (raw: any, fallbackSlug?: string): BlogPostShape => {
   };
 };
 
+// Admin blog list. Same pagination/filter contract as /admin/products:
+//   ?page=N&per_page=N&search=<query>&status=published|draft|all&all=true
+// Without ?all=true returns the paginated shape; with ?all=true returns the
+// raw array for any older caller that hasn't migrated.
 app.get(`${ADMIN}/blog`, requireAdmin, async (c) => {
   const posts = (await kv.getByPrefix('blog:post:')) as BlogPostShape[];
   const merged = await Promise.all(posts.map((p) => withCounter(p)));
-  return c.json(merged);
+
+  if (c.req.query('all') === 'true') return c.json(merged);
+
+  const counts = {
+    all: merged.length,
+    published: merged.filter((p: any) => p?.published !== false).length,
+    draft: merged.filter((p: any) => p?.published === false).length,
+  };
+
+  const status = (c.req.query('status') ?? 'all').toLowerCase();
+  const search = (c.req.query('search') ?? '').trim().toLowerCase();
+
+  let filtered: any[] = merged;
+  if (status === 'published') filtered = filtered.filter((p: any) => p?.published !== false);
+  else if (status === 'draft') filtered = filtered.filter((p: any) => p?.published === false);
+
+  if (search) {
+    filtered = filtered.filter((p: any) =>
+      [
+        p?.title?.fr, p?.title?.ar, p?.title?.en,
+        p?.excerpt?.fr, p?.excerpt?.ar, p?.excerpt?.en,
+        p?.category, p?.slug,
+      ]
+        .filter(Boolean)
+        .some((v: any) => String(v).toLowerCase().includes(search))
+    );
+  }
+
+  filtered.sort((a: any, b: any) => String(b?.date ?? '').localeCompare(String(a?.date ?? '')));
+
+  const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1);
+  const perPage = Math.min(200, Math.max(1, Number(c.req.query('per_page') ?? 24) || 24));
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * perPage;
+
+  return c.json({
+    items: filtered.slice(start, start + perPage),
+    total,
+    page: safePage,
+    per_page: perPage,
+    total_pages: totalPages,
+    counts,
+  });
 });
 
 app.get(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
@@ -502,19 +550,116 @@ app.delete(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
 });
 
 // ─── Admin: products (built on top of the WooCommerce-mirror store) ───────
+// Admin product list. Supports server-side pagination + filtering so the UI
+// stays fast even with 5000+ synced products. Query params:
+//   ?page=N            (1-based, default 1)
+//   ?per_page=N        (default 50, max 500)
+//   ?status=active|trash|all   (default all)
+//   ?category=<id>     (optional)
+//   ?search=<query>    (matches name | sku | id)
+//   ?all=true          (legacy: returns the full unpaginated array)
+//
+// Response shape (paginated): { items, total, page, per_page, total_pages,
+//   counts: { all, active, trash }, categories: [...lightweight category list] }
+//
+// Skipping ?all returns the new shape; passing ?all=true returns the bare
+// array for any caller that hasn't migrated yet.
 app.get(`${ADMIN}/products`, requireAdmin, async (c) => {
   const items = (await kv.getByPrefix('wc:product:')) as any[];
-  // Hydrate categories on read so old products (created before the hydrate
-  // fix) display proper names in the admin table without needing a re-sync.
+  // Always derive stock status + hydrate categories on read.
   for (const p of items) {
-    if (Array.isArray(p?.categories) && p.categories.some((c: any) => !c?.name)) {
+    if (Array.isArray(p?.categories) && p.categories.some((cc: any) => !cc?.name)) {
       p.categories = await hydrateProductCategories(p.categories);
     }
-    // Auto-derive stock status — Logicom sometimes leaves "instock" set even
-    // when the quantity reaches 0 or goes negative, so we recompute on read.
     p.stock_status = deriveStockStatus(p);
   }
-  return c.json(items);
+
+  // Legacy mode — full array, used by older code paths.
+  if (c.req.query('all') === 'true') {
+    return c.json(items);
+  }
+
+  // Counts (computed against the FULL list so pills always show accurate totals).
+  const counts = {
+    all: items.length,
+    active: items.filter((p: any) => p?.status !== 'trash').length,
+    trash: items.filter((p: any) => p?.status === 'trash').length,
+    hidden: items.filter((p: any) => p?.hidden_from_catalog === true && p?.status !== 'trash').length,
+  };
+
+  // ── Filter ──────────────────────────────────────────────────────────────
+  const status = (c.req.query('status') ?? 'all').toLowerCase();
+  const categoryFilter = c.req.query('category') ?? '';
+  const search = (c.req.query('search') ?? '').trim().toLowerCase();
+  // visibility=visible|hidden|all (default all). Hidden = hidden_from_catalog=true
+  const visibility = (c.req.query('visibility') ?? 'all').toLowerCase();
+
+  let filtered = items;
+  if (status === 'active') filtered = filtered.filter((p: any) => p?.status !== 'trash');
+  else if (status === 'trash') filtered = filtered.filter((p: any) => p?.status === 'trash');
+
+  if (visibility === 'hidden') {
+    filtered = filtered.filter((p: any) => p?.hidden_from_catalog === true);
+  } else if (visibility === 'visible') {
+    filtered = filtered.filter((p: any) => p?.hidden_from_catalog !== true);
+  }
+
+  if (categoryFilter && categoryFilter !== 'all') {
+    filtered = filtered.filter((p: any) =>
+      Array.isArray(p?.categories) &&
+      p.categories.some((cc: any) => String(cc?.id ?? cc?.name) === String(categoryFilter))
+    );
+  }
+
+  if (search) {
+    filtered = filtered.filter((p: any) =>
+      [p?.name, p?.sku, p?.id, p?.description]
+        .filter((v) => v != null)
+        .some((v: any) => String(v).toLowerCase().includes(search))
+    );
+  }
+
+  // ── Sort: most recently modified first (admins want fresh stuff on top) ─
+  filtered.sort((a: any, b: any) => {
+    const am = a?.date_modified ?? a?.date_created ?? '';
+    const bm = b?.date_modified ?? b?.date_created ?? '';
+    return String(bm).localeCompare(String(am));
+  });
+
+  // ── Per-category counts on the FILTERED-by-status set so pills reflect
+  // what the user is currently viewing.
+  const categoryCountSource = status === 'trash'
+    ? items.filter((p: any) => p?.status === 'trash')
+    : status === 'active'
+      ? items.filter((p: any) => p?.status !== 'trash')
+      : items;
+  const categoryCounts: Record<string, number> = {};
+  for (const p of categoryCountSource) {
+    for (const cc of (Array.isArray(p?.categories) ? p.categories : [])) {
+      const key = String(cc?.id ?? cc?.name ?? '');
+      if (!key) continue;
+      categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
+    }
+  }
+
+  // ── Paginate ────────────────────────────────────────────────────────────
+  const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1);
+  const perPage = Math.min(500, Math.max(1, Number(c.req.query('per_page') ?? 50) || 50));
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * perPage;
+  const slice = filtered.slice(start, start + perPage);
+
+  return c.json({
+    items: slice,
+    total,
+    page: safePage,
+    per_page: perPage,
+    total_pages: totalPages,
+    counts,
+    category_counts: categoryCounts,
+  });
 });
 
 // Bulk delete (default = soft trash, ?force=true = permanent). Used by the
@@ -564,6 +709,59 @@ app.post(`${ADMIN}/products/bulk-restore`, requireAdmin, async (c) => {
       restored.push(id);
     }
     return c.json({ restored });
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+// Bulk toggle catalog visibility. Sets `hidden_from_catalog: true|false` on
+// the listed products. Hidden products keep syncing from Logicom (SKUs and
+// stock stay accurate) but disappear from the public catalog. Use case:
+// admin wants to temporarily pull a product without deleting it.
+app.post(`${ADMIN}/products/bulk-visibility`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const ids: any[] = Array.isArray(body?.ids) ? body.ids : [];
+    const hidden = body?.hidden === true;
+    const updated: (number | string)[] = [];
+    for (const rawId of ids) {
+      const id = String(rawId);
+      const existing = await kv.get(`wc:product:${id}`);
+      if (!existing) continue;
+      const next = {
+        ...(existing as any),
+        id: Number(id),
+        hidden_from_catalog: hidden,
+        date_modified: new Date().toISOString(),
+      };
+      await kv.set(`wc:product:${id}`, next);
+      updated.push(id);
+    }
+    console.log(`[admin] bulk-visibility hidden=${hidden} count=${updated.length}`);
+    return c.json({ updated, hidden });
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+// Single-row toggle (used by the eye icon in the products table).
+app.post(`${ADMIN}/products/:id/visibility`, requireAdmin, async (c) => {
+  const id = c.req.param('id');
+  const existing = await kv.get(`wc:product:${id}`);
+  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    // If `hidden` is not provided, just flip the current value.
+    const cur = (existing as any).hidden_from_catalog === true;
+    const hidden = typeof body?.hidden === 'boolean' ? body.hidden : !cur;
+    const next = {
+      ...(existing as any),
+      id: Number(id),
+      hidden_from_catalog: hidden,
+      date_modified: new Date().toISOString(),
+    };
+    await kv.set(`wc:product:${id}`, next);
+    return c.json(next);
   } catch (e) {
     return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
   }
@@ -800,6 +998,12 @@ app.get(`${PUBLIC}/products`, async (c) => {
   const visible = items.filter(
     (p) => !PUBLIC_HIDDEN_STATUSES.has(String(p?.status ?? 'publish'))
         && p?.stock_status !== 'deleted'
+        // Admin-controlled: products with `hidden_from_catalog: true` keep
+        // syncing from Logicom (so SKUs/stock stay accurate) but are NOT
+        // shown to public visitors. Used to temporarily hide items.
+        && p?.hidden_from_catalog !== true
+        // WC standard: catalog_visibility="hidden" or "search" → not in catalog
+        && p?.catalog_visibility !== 'hidden'
   );
   visible.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
   // Hydrate categories on read so the catalog filter pills show real names

@@ -76,12 +76,32 @@ export const mdel = async (keys: string[]): Promise<void> => {
   }
 };
 
-// Search for key-value pairs by prefix.
+// Search for key-value pairs by prefix. Supabase silently caps single
+// select() calls at 1000 rows, so once the catalog crosses ~1000 products
+// (or 1000 categories, etc.) results were being truncated. We page through
+// the table 1000 rows at a time until we hit the end.
 export const getByPrefix = async (prefix: string): Promise<any[]> => {
-  const supabase = client()
-  const { data, error } = await supabase.from("kv_store_0c561120").select("key, value").like("key", prefix + "%");
-  if (error) {
-    throw new Error(error.message);
+  const supabase = client();
+  const PAGE = 1000;
+  const out: any[] = [];
+  let from = 0;
+  // Loop until a page returns less than PAGE rows (= last page).
+  // Hard upper bound of 100 pages (= 100k rows) as a safety net so a buggy
+  // prefix can never spin forever.
+  for (let i = 0; i < 100; i++) {
+    const { data, error } = await supabase
+      .from("kv_store_0c561120")
+      .select("value")
+      .like("key", prefix + "%")
+      .order("key", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) {
+      throw new Error(error.message);
+    }
+    if (!data || data.length === 0) break;
+    for (const d of data) out.push(d.value);
+    if (data.length < PAGE) break;
+    from += PAGE;
   }
-  return data?.map((d) => d.value) ?? [];
+  return out;
 };

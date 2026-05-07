@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Save, X, Tag, RotateCcw, AlertTriangle, CheckSquare, Square } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Pencil, Trash2, Search, Save, X, Tag, RotateCcw, AlertTriangle, CheckSquare, Square, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';
@@ -29,6 +29,10 @@ type Product = {
   image?: string;
   // 'publish' = active, 'trash' = soft-deleted (hidden from public catalog)
   status?: string;
+  // Admin-only flag: when true, the product still syncs/exists but is filtered
+  // out of the public catalog. Use it to temporarily hide products without
+  // deleting them.
+  hidden_from_catalog?: boolean;
   date_modified?: string;
 };
 
@@ -53,6 +57,20 @@ const empty: Product = {
   image: '',
 };
 
+// Server response shape from GET /admin/products (paginated mode)
+type ProductsPage = {
+  items: Product[];
+  total: number;
+  page: number;
+  per_page: number;
+  total_pages: number;
+  counts: { all: number; active: number; trash: number; hidden: number };
+  category_counts: Record<string, number>;
+};
+
+const PER_PAGE_OPTIONS = [25, 50, 100, 200] as const;
+const DEFAULT_PER_PAGE = 50;
+
 export const Products = () => {
   const { api } = useAdminAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -60,24 +78,65 @@ export const Products = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  // Debounced query — used for the actual server fetch so we don't fire a
+  // request on every keystroke when 5000 products are in the DB.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<'active' | 'trash' | 'all'>('active');
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'visible' | 'hidden'>('all');
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState<number>(DEFAULT_PER_PAGE);
+  // Total counts (drive the pills) — pulled from server on every refresh.
+  const [counts, setCounts] = useState<{ active: number; trash: number; all: number; hidden: number }>({
+    active: 0,
+    trash: 0,
+    all: 0,
+    hidden: 0,
+  });
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [editing, setEditing] = useState<Product | null>(null);
   const [managingCats, setManagingCats] = useState(false);
   // Bulk-select state — keyed by product id (as string for cross-type safety)
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
 
+  // Debounce the search query: wait 300ms of inactivity before firing.
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedQuery(query), 300);
+    return () => window.clearTimeout(t);
+  }, [query]);
+
+  // Server-side fetch — runs whenever any filter/page input changes.
+  // The dashboard never holds the full 5000-row list in memory anymore;
+  // it only ever has the current page slice (≤ perPage rows).
   const refresh = async () => {
     try {
       setLoading(true);
-      const [list, cats] = await Promise.all([
-        api<Product[]>('/admin/products'),
+      const params = new URLSearchParams({
+        status: statusFilter,
+        visibility: visibilityFilter,
+        page: String(page),
+        per_page: String(perPage),
+      });
+      if (activeCat && activeCat !== 'all') params.set('category', activeCat);
+      if (debouncedQuery.trim()) params.set('search', debouncedQuery.trim());
+
+      const [data, cats] = await Promise.all([
+        api<ProductsPage>(`/admin/products?${params.toString()}`),
         api<Category[]>('/admin/categories').catch(() => [] as Category[]),
       ]);
-      setProducts(list);
+      setProducts(data.items);
+      setTotal(data.total);
+      setTotalPages(data.total_pages);
+      setCounts(data.counts);
+      setCategoryCounts(data.category_counts ?? {});
       setCategories(cats);
       setError(null);
+      // If the current page slipped past the new totalPages (e.g. after a
+      // bulk delete shrunk the list), snap back to the last valid page.
+      if (data.page !== page) setPage(data.page);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -85,49 +144,27 @@ export const Products = () => {
     }
   };
 
+  // Re-fetch on any input change. We DON'T include `page` in this reset
+  // effect — only the filters reset the page back to 1.
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, visibilityFilter, activeCat, debouncedQuery, perPage]);
+
   useEffect(() => {
     refresh();
-  }, [api]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, statusFilter, visibilityFilter, activeCat, debouncedQuery, page, perPage]);
 
-  // Pre-compute counts for the status pills (always based on full product list)
-  const counts = useMemo(() => {
-    let active = 0, trash = 0;
-    for (const p of products) {
-      if (p.status === 'trash') trash++;
-      else active++;
-    }
-    return { active, trash, all: products.length };
-  }, [products]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter((p) => {
-      // Status filter (soft-trash awareness)
-      const isTrash = p.status === 'trash';
-      if (statusFilter === 'active' && isTrash) return false;
-      if (statusFilter === 'trash' && !isTrash) return false;
-      // Category filter
-      if (activeCat !== 'all') {
-        const ids = (p.categories ?? []).map((c) => String(c.id ?? c.name));
-        if (!ids.includes(activeCat)) return false;
-      }
-      if (!q) return true;
-      return [p.name, p.sku, String(p.id), p.description]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
-    });
-  }, [products, query, activeCat, statusFilter]);
+  // Server already filters/sorts/paginates, so the rendered list IS the page.
+  const filtered = products;
 
   // Soft delete (move to trash) — matches the Logicom/WC default
   const remove = async (id: Product['id']) => {
     if (!confirm('Mettre ce produit à la corbeille ? Il disparaîtra du site mais pourra être restauré.')) return;
     try {
-      const updated = await api<Product>(`/admin/products/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
-      // Edge function returns the trashed product (status=trash); update locally
-      setProducts((prev) =>
-        prev.map((p) => (String(p.id) === String(id) ? { ...p, ...updated, status: 'trash' } : p))
-      );
+      await api<Product>(`/admin/products/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
       toast.success('Produit mis à la corbeille');
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -138,8 +175,8 @@ export const Products = () => {
     if (!confirm('SUPPRIMER DÉFINITIVEMENT ce produit ? Cette action est irréversible.')) return;
     try {
       await api(`/admin/products/${encodeURIComponent(String(id))}?force=true`, { method: 'DELETE' });
-      setProducts((prev) => prev.filter((p) => String(p.id) !== String(id)));
       toast.success('Produit supprimé définitivement');
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -161,7 +198,7 @@ export const Products = () => {
   // Reset selection whenever the visible filter changes (avoids invisible-but-selected rows)
   useEffect(() => {
     clearSelection();
-  }, [statusFilter, activeCat, query]);
+  }, [statusFilter, visibilityFilter, activeCat, query]);
 
   const bulkTrash = async () => {
     if (selected.size === 0) return;
@@ -170,9 +207,9 @@ export const Products = () => {
     try {
       const ids = Array.from(selected);
       await api('/admin/products/bulk-delete', { method: 'POST', body: JSON.stringify({ ids }) });
-      setProducts((prev) => prev.map((p) => (ids.includes(String(p.id)) ? { ...p, status: 'trash' } : p)));
       toast.success(`${ids.length} produit(s) mis à la corbeille`);
       clearSelection();
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -186,13 +223,53 @@ export const Products = () => {
     try {
       const ids = Array.from(selected);
       await api('/admin/products/bulk-restore', { method: 'POST', body: JSON.stringify({ ids }) });
-      setProducts((prev) => prev.map((p) => (ids.includes(String(p.id)) ? { ...p, status: 'publish' } : p)));
       toast.success(`${ids.length} produit(s) restauré(s)`);
       clearSelection();
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
       setBulkBusy(false);
+    }
+  };
+
+  // Set visibility on every selected product. `hidden=true` removes them
+  // from the public catalog without deleting them; `false` re-shows them.
+  const bulkSetVisibility = async (hidden: boolean) => {
+    if (selected.size === 0) return;
+    setBulkBusy(true);
+    try {
+      const ids = Array.from(selected);
+      await api('/admin/products/bulk-visibility', {
+        method: 'POST',
+        body: JSON.stringify({ ids, hidden }),
+      });
+      toast.success(
+        hidden
+          ? `${ids.length} produit(s) masqué(s) du catalogue`
+          : `${ids.length} produit(s) ré-affiché(s) dans le catalogue`,
+      );
+      clearSelection();
+      refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  // Per-row toggle (the eye icon). Flips hidden_from_catalog for one product.
+  const toggleVisibility = async (p: Product) => {
+    try {
+      const next = !(p.hidden_from_catalog === true);
+      await api(`/admin/products/${encodeURIComponent(String(p.id))}/visibility`, {
+        method: 'POST',
+        body: JSON.stringify({ hidden: next }),
+      });
+      toast.success(next ? 'Masqué du catalogue' : 'Affiché dans le catalogue');
+      refresh();
+    } catch (e) {
+      toast.error((e as Error).message);
     }
   };
 
@@ -203,9 +280,9 @@ export const Products = () => {
     try {
       const ids = Array.from(selected);
       await api('/admin/products/bulk-delete?force=true', { method: 'POST', body: JSON.stringify({ ids, force: true }) });
-      setProducts((prev) => prev.filter((p) => !ids.includes(String(p.id))));
       toast.success(`${ids.length} produit(s) supprimé(s)`);
       clearSelection();
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -214,18 +291,17 @@ export const Products = () => {
   };
 
   const emptyTrash = async () => {
-    const trashCount = products.filter((p) => p.status === 'trash').length;
-    if (trashCount === 0) {
+    if (counts.trash === 0) {
       toast.info('La corbeille est déjà vide.');
       return;
     }
-    if (!confirm(`VIDER LA CORBEILLE ? ${trashCount} produit(s) seront définitivement supprimés.`)) return;
+    if (!confirm(`VIDER LA CORBEILLE ? ${counts.trash} produit(s) seront définitivement supprimés.`)) return;
     setBulkBusy(true);
     try {
       const res = await api<{ deleted: number }>('/admin/products/empty-trash', { method: 'POST' });
-      setProducts((prev) => prev.filter((p) => p.status !== 'trash'));
       toast.success(`Corbeille vidée (${res.deleted} produit(s) supprimés)`);
       clearSelection();
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -236,11 +312,9 @@ export const Products = () => {
   // Restore from trash
   const restore = async (id: Product['id']) => {
     try {
-      const updated = await api<Product>(`/admin/products/${encodeURIComponent(String(id))}/restore`, { method: 'POST' });
-      setProducts((prev) =>
-        prev.map((p) => (String(p.id) === String(id) ? { ...p, ...updated, status: 'publish' } : p))
-      );
+      await api<Product>(`/admin/products/${encodeURIComponent(String(id))}/restore`, { method: 'POST' });
       toast.success('Produit restauré');
+      refresh();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -300,6 +374,33 @@ export const Products = () => {
             {label}
           </button>
         ))}
+        {/* Visibility filter — only relevant when not viewing the trash. */}
+        {statusFilter !== 'trash' && (
+          <>
+            <span className="w-px h-6 bg-white/10 mx-1 self-center" />
+            {([
+              ['all', `Toute visibilité`],
+              ['visible', `Visibles`],
+              ['hidden', `Cachés (${counts.hidden})`],
+            ] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setVisibilityFilter(key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-colors flex items-center gap-1.5 ${
+                  visibilityFilter === key
+                    ? key === 'hidden'
+                      ? 'bg-amber-500/80 text-[#0f2618]'
+                      : 'bg-[#0f2618] text-white border border-[#87A922]'
+                    : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+                }`}
+              >
+                {key === 'hidden' && <EyeOff className="w-3.5 h-3.5" />}
+                {key === 'visible' && <Eye className="w-3.5 h-3.5" />}
+                {label}
+              </button>
+            ))}
+          </>
+        )}
       </div>
 
       {/* Category filter pills */}
@@ -313,12 +414,10 @@ export const Products = () => {
                 : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
             }`}
           >
-            Toutes ({products.length})
+            Toutes ({statusFilter === 'trash' ? counts.trash : statusFilter === 'active' ? counts.active : counts.all})
           </button>
           {categories.map((cat) => {
-            const count = products.filter((p) =>
-              (p.categories ?? []).some((c) => String(c.id ?? c.name) === String(cat.id))
-            ).length;
+            const count = categoryCounts[String(cat.id)] ?? 0;
             return (
               <button
                 key={cat.id}
@@ -376,13 +475,31 @@ export const Products = () => {
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={bulkTrash}
-                  disabled={bulkBusy}
-                  className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Mettre à la corbeille
-                </button>
+                <>
+                  <button
+                    onClick={() => bulkSetVisibility(true)}
+                    disabled={bulkBusy}
+                    className="flex items-center gap-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                    title="Masquer du catalogue (le produit reste synchronisé mais invisible pour les visiteurs)"
+                  >
+                    <EyeOff className="w-3.5 h-3.5" /> Masquer du catalogue
+                  </button>
+                  <button
+                    onClick={() => bulkSetVisibility(false)}
+                    disabled={bulkBusy}
+                    className="flex items-center gap-1.5 bg-[#87A922]/20 hover:bg-[#87A922]/30 text-[#bfd866] text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                    title="Réafficher dans le catalogue"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Afficher
+                  </button>
+                  <button
+                    onClick={bulkTrash}
+                    disabled={bulkBusy}
+                    className="flex items-center gap-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-200 text-xs uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-colors disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Corbeille
+                  </button>
+                </>
               )}
             </>
           )}
@@ -499,6 +616,11 @@ export const Products = () => {
                               <Trash2 className="w-3 h-3" /> Corbeille
                             </span>
                           )}
+                          {p.hidden_from_catalog && !isTrashed && (
+                            <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1 whitespace-nowrap">
+                              <EyeOff className="w-3 h-3" /> Caché
+                            </span>
+                          )}
                         </div>
                         {p.description && (
                           <div className="text-white/40 text-xs line-clamp-1 max-w-md">{p.description}</div>
@@ -560,6 +682,25 @@ export const Products = () => {
                           ) : (
                             <>
                               <button
+                                onClick={() => toggleVisibility(p)}
+                                className={`p-2 rounded-lg hover:bg-white/5 ${
+                                  p.hidden_from_catalog
+                                    ? 'text-amber-300 hover:text-amber-200'
+                                    : 'text-white/50 hover:text-white'
+                                }`}
+                                title={
+                                  p.hidden_from_catalog
+                                    ? 'Réafficher dans le catalogue'
+                                    : 'Masquer du catalogue (sans supprimer)'
+                                }
+                              >
+                                {p.hidden_from_catalog ? (
+                                  <EyeOff className="w-4 h-4" />
+                                ) : (
+                                  <Eye className="w-4 h-4" />
+                                )}
+                              </button>
+                              <button
                                 onClick={() => setEditing({ ...p })}
                                 className="p-2 text-white/60 hover:text-white hover:bg-white/5 rounded-lg"
                                 title="Modifier"
@@ -585,20 +726,47 @@ export const Products = () => {
         </div>
       </div>
 
+      {/* Pagination footer — server-driven, smart-windowed.
+          Renders only when there's more than one page of results. */}
+      {!loading && totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-1">
+          <div className="text-white/40 text-xs uppercase tracking-wider">
+            {total > 0 && (
+              <>
+                {(page - 1) * perPage + 1}–{Math.min(page * perPage, total)} sur {total}
+              </>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="text-white/40 text-xs uppercase tracking-wider mr-1">Par page</label>
+            <select
+              value={perPage}
+              onChange={(e) => setPerPage(Number(e.target.value))}
+              className="bg-white/5 border border-white/10 rounded-lg text-white/70 text-xs px-2 py-1 focus:outline-none focus:border-[#87A922]"
+            >
+              {PER_PAGE_OPTIONS.map((n) => (
+                <option key={n} value={n} className="bg-[#0f2618]">
+                  {n}
+                </option>
+              ))}
+            </select>
+            <PaginationControls
+              page={page}
+              totalPages={totalPages}
+              onChange={setPage}
+            />
+          </div>
+        </div>
+      )}
+
       {editing && (
         <ProductDrawer
           product={editing}
           allCategories={categories}
           onClose={() => setEditing(null)}
-          onSaved={(saved) => {
-            setProducts((prev) => {
-              const i = prev.findIndex((p) => String(p.id) === String(saved.id));
-              if (i === -1) return [saved, ...prev];
-              const next = [...prev];
-              next[i] = saved;
-              return next;
-            });
+          onSaved={() => {
             setEditing(null);
+            refresh();
           }}
         />
       )}
@@ -726,6 +894,21 @@ const ProductDrawer = ({
               />
             </Row>
           )}
+          <Row label="Visibilité catalogue">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!draft.hidden_from_catalog}
+                onChange={(e) => set('hidden_from_catalog', !e.target.checked)}
+                className="w-4 h-4 accent-[#87A922]"
+              />
+              <span className="text-white/70 text-sm">
+                {draft.hidden_from_catalog
+                  ? 'Caché — le produit reste synchronisé mais n’apparaît pas sur /catalog'
+                  : 'Visible dans le catalogue public'}
+              </span>
+            </label>
+          </Row>
           <Row label="Description courte">
             <textarea
               rows={2}
@@ -947,6 +1130,75 @@ const CategoryManager = ({
           </button>
         </footer>
       </div>
+    </div>
+  );
+};
+
+// Smart-windowed pagination: shows ±1 around the current page, plus first
+// and last, with "…" gaps. Same pattern as the public catalog so a 100-page
+// list never blows out of one row.
+const PaginationControls = ({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (n: number) => void;
+}) => {
+  const tokens: (number | 'gap')[] = (() => {
+    const win = new Set<number>([1, totalPages, page]);
+    for (let d = 1; d <= 1; d++) {
+      if (page - d >= 1) win.add(page - d);
+      if (page + d <= totalPages) win.add(page + d);
+    }
+    const ordered = Array.from(win).sort((a, b) => a - b);
+    const out: (number | 'gap')[] = [];
+    for (let i = 0; i < ordered.length; i++) {
+      if (i > 0 && ordered[i] - ordered[i - 1] > 1) out.push('gap');
+      out.push(ordered[i]);
+    }
+    return out;
+  })();
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange(Math.max(1, page - 1))}
+        disabled={page <= 1}
+        className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white/60"
+        aria-label="Page précédente"
+      >
+        ‹
+      </button>
+      {tokens.map((tok, i) =>
+        tok === 'gap' ? (
+          <span key={`gap-${i}`} className="px-1 text-white/30 text-xs select-none">
+            …
+          </span>
+        ) : (
+          <button
+            key={tok}
+            onClick={() => onChange(tok)}
+            aria-current={tok === page ? 'page' : undefined}
+            className={`min-w-8 h-8 px-2 rounded-lg text-xs font-semibold transition-colors ${
+              tok === page
+                ? 'bg-[#87A922] text-white'
+                : 'bg-white/5 text-white/60 hover:bg-white/10 border border-white/10'
+            }`}
+          >
+            {tok}
+          </button>
+        )
+      )}
+      <button
+        onClick={() => onChange(Math.min(totalPages, page + 1))}
+        disabled={page >= totalPages}
+        className="w-8 h-8 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center text-white/60"
+        aria-label="Page suivante"
+      >
+        ›
+      </button>
     </div>
   );
 };

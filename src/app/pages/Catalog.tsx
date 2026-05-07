@@ -29,7 +29,8 @@ type Product = {
   price: string | null;
 };
 
-const FALLBACK_IMAGE = "https://i.ibb.co/VWgjMWw3/logo-with-shadow.png";
+const FALLBACK_IMAGE =
+  "https://i.ibb.co/pvjVWRfp/youre-an-expert-designer-create-a-placeh-IM5r1rwm-Wl-Os-Ut-NZCKXG9w-q-We-PUN3x-SZWUFCEKo7rq5-A-cover.jpg";
 
 function mapProduct(p: WcProduct): Product {
   const imageUrl = p.images?.[0]?.src || p.image || FALLBACK_IMAGE;
