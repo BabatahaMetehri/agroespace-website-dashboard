@@ -16,7 +16,7 @@ export const VideoShowcase = () => {
   const containerRef = useRef(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
 
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -53,7 +53,9 @@ export const VideoShowcase = () => {
         </span>
         <h2 className="text-4xl md:text-5xl font-light text-white leading-tight">
           {t("video.title.1")}{" "}
-          <span className="font-serif italic text-white/80">{t("video.title.italic")}</span>
+          <span className="font-serif italic text-white/80">
+            {t("video.title.italic")}
+          </span>
         </h2>
       </div>
 
@@ -140,9 +142,7 @@ export const VideoShowcase = () => {
               <h3 className="text-2xl md:text-3xl font-medium text-white mb-2">
                 {t("video.caption.title")}
               </h3>
-              <p className="text-white/70">
-                {t("video.caption.desc")}
-              </p>
+              <p className="text-white/70">{t("video.caption.desc")}</p>
             </div>
 
             <button
