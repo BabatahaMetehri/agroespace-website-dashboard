@@ -90,10 +90,13 @@ export const Dashboard = () => {
     },
   ];
 
+  const fullName = user?.email?.split("@")[0];
+  const first = fullName?.split(".")[0];
+
   return (
     <div className="p-8" style={{ position: "relative" }}>
       <AdminHeader
-        title={`Bienvenue${user?.email ? ", " + user.email.split("@")[0].split(".")[0].replace(user.email.split("@")[0].split(".")[0][0], user.email.split("@")[0].split(".")[0][0].toUpperCase()) : ""}`}
+        title={`Bienvenue${user?.email ? ", " + first?.split(".")[0].replace(first[0], first[0].toUpperCase()) : ""}`}
         subtitle="Une vue d'ensemble du pipeline commercial et du contenu publié."
       />
 
