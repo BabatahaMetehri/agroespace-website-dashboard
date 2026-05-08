@@ -1835,6 +1835,7 @@ async function saveInst(){
     for(const p of miPhotos){
       await db.from("installation_photos").insert({installation_id:instId,url:p.url,is_cover:p.is_cover});
     }
+    clearForm(); miPhotos=[];
     closeInstM();
     await load();
     openPanel(instId);
