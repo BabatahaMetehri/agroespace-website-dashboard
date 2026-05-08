@@ -1,36 +1,48 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { Inbox, FileText, Package, ArrowUpRight, Clock } from 'lucide-react';
-import { useAdminAuth } from '../auth/AuthProvider';
-import { AdminHeader } from './AdminHeader';
+import { useEffect, useState } from "react";
+import { Link } from "react-router";
+import { Inbox, FileText, Package, ArrowUpRight, Clock } from "lucide-react";
+import { useAdminAuth } from "../auth/AuthProvider";
+import { AdminHeader } from "./AdminHeader";
 
 type Stats = {
-  quotes: { total: number; pending: number; recent: { id: string; product_title?: string; name?: string; created_at: string; status?: string }[] };
+  quotes: {
+    total: number;
+    pending: number;
+    recent: {
+      id: string;
+      product_title?: string;
+      name?: string;
+      created_at: string;
+      status?: string;
+    }[];
+  };
   posts: { total: number };
   products: { total: number };
 };
 
 const StatusPill = ({ status }: { status?: string }) => {
   const map: Record<string, string> = {
-    pending: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-    contacted: 'bg-blue-500/15 text-blue-300 border-blue-500/25',
-    quoted: 'bg-purple-500/15 text-purple-300 border-purple-500/25',
-    won: 'bg-green-500/15 text-green-300 border-green-500/25',
-    lost: 'bg-red-500/15 text-red-300 border-red-500/25',
+    pending: "bg-yellow-500/15 text-yellow-300 border-yellow-500/25",
+    contacted: "bg-blue-500/15 text-blue-300 border-blue-500/25",
+    quoted: "bg-purple-500/15 text-purple-300 border-purple-500/25",
+    won: "bg-green-500/15 text-green-300 border-green-500/25",
+    lost: "bg-red-500/15 text-red-300 border-red-500/25",
   };
-  const cls = map[status ?? 'pending'] ?? map.pending;
+  const cls = map[status ?? "pending"] ?? map.pending;
   const label =
-    status === 'contacted'
-      ? 'Contacté'
-      : status === 'quoted'
-        ? 'Devis envoyé'
-        : status === 'won'
-          ? 'Signé'
-          : status === 'lost'
-            ? 'Perdu'
-            : 'En attente';
+    status === "contacted"
+      ? "Contacté"
+      : status === "quoted"
+        ? "Devis envoyé"
+        : status === "won"
+          ? "Signé"
+          : status === "lost"
+            ? "Perdu"
+            : "En attente";
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium tracking-wide border ${cls}`}>
+    <span
+      className={`px-3 py-1 rounded-full text-xs font-medium tracking-wide border ${cls}`}
+    >
       {label}
     </span>
   );
@@ -42,46 +54,46 @@ export const Dashboard = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api<Stats>('/admin/stats')
+    api<Stats>("/admin/stats")
       .then(setStats)
       .catch((e) => setError(e.message));
   }, [api]);
 
   const cards = [
     {
-      label: 'Devis en attente',
-      value: stats?.quotes.pending ?? '—',
+      label: "Devis en attente",
+      value: stats?.quotes.pending ?? "—",
       icon: Clock,
-      to: '/admin/quotes',
-      tone: 'text-yellow-300',
+      to: "/admin/quotes",
+      tone: "text-yellow-300",
     },
     {
-      label: 'Total demandes',
-      value: stats?.quotes.total ?? '—',
+      label: "Total demandes",
+      value: stats?.quotes.total ?? "—",
       icon: Inbox,
-      to: '/admin/quotes',
-      tone: 'text-[#87A922]',
+      to: "/admin/quotes",
+      tone: "text-[#87A922]",
     },
     {
-      label: 'Articles publiés',
-      value: stats?.posts.total ?? '—',
+      label: "Articles publiés",
+      value: stats?.posts.total ?? "—",
       icon: FileText,
-      to: '/admin/blog',
-      tone: 'text-blue-300',
+      to: "/admin/blog",
+      tone: "text-blue-300",
     },
     {
-      label: 'Produits gérés',
-      value: stats?.products.total ?? '—',
+      label: "Produits gérés",
+      value: stats?.products.total ?? "—",
       icon: Package,
-      to: '/admin/products',
-      tone: 'text-purple-300',
+      to: "/admin/products",
+      tone: "text-purple-300",
     },
   ];
 
   return (
-    <div className="p-8" style={{ position: 'relative' }}>
+    <div className="p-8" style={{ position: "relative" }}>
       <AdminHeader
-        title={`Bienvenue${user?.email ? ', ' + user.email.split('@')[0] : ''}`}
+        title={`Bienvenue${user?.email ? ", " + user.email.split("@")[0].split(".")[0].replace(user.email.split("@")[0].split(".")[0][0], user.email.split("@")[0].split(".")[0][0].toUpperCase()) : ""}`}
         subtitle="Une vue d'ensemble du pipeline commercial et du contenu publié."
       />
 
@@ -105,7 +117,9 @@ export const Dashboard = () => {
                 <ArrowUpRight className="w-4 h-4 text-white/30 group-hover:text-white transition-colors" />
               </div>
               <div className="text-4xl font-light text-white">{c.value}</div>
-              <div className="text-xs text-white/50 uppercase tracking-[0.15em] mt-2">{c.label}</div>
+              <div className="text-xs text-white/50 uppercase tracking-[0.15em] mt-2">
+                {c.label}
+              </div>
             </Link>
           );
         })}
@@ -114,7 +128,9 @@ export const Dashboard = () => {
       <section className="bg-[#0f2618] border border-white/5 rounded-2xl overflow-hidden">
         <header className="flex items-center justify-between px-6 py-5 border-b border-white/5">
           <div>
-            <h2 className="text-white text-lg font-medium">Demandes récentes</h2>
+            <h2 className="text-white text-lg font-medium">
+              Demandes récentes
+            </h2>
             <p className="text-white/40 text-sm">Les 5 derniers devis reçus.</p>
           </div>
           <Link
@@ -129,21 +145,26 @@ export const Dashboard = () => {
             <p className="px-6 py-8 text-white/40 text-sm">Chargement...</p>
           )}
           {stats?.quotes.recent.length === 0 && (
-            <p className="px-6 py-8 text-white/40 text-sm">Aucune demande pour le moment.</p>
+            <p className="px-6 py-8 text-white/40 text-sm">
+              Aucune demande pour le moment.
+            </p>
           )}
           {stats?.quotes.recent.map((q) => (
-            <div key={q.id} className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-white/[0.02]">
+            <div
+              key={q.id}
+              className="flex items-center justify-between gap-4 px-6 py-4 hover:bg-white/[0.02]"
+            >
               <div className="min-w-0">
                 <div className="text-white text-sm font-medium truncate">
-                  {q.product_title ?? 'Demande générale'}
+                  {q.product_title ?? "Demande générale"}
                 </div>
                 <div className="text-white/50 text-xs mt-0.5">
-                  {q.name ?? '—'} ·{' '}
-                  {new Date(q.created_at).toLocaleString('fr-FR', {
-                    day: '2-digit',
-                    month: 'short',
-                    hour: '2-digit',
-                    minute: '2-digit',
+                  {q.name ?? "—"} ·{" "}
+                  {new Date(q.created_at).toLocaleString("fr-FR", {
+                    day: "2-digit",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
                   })}
                 </div>
               </div>
@@ -152,6 +173,6 @@ export const Dashboard = () => {
           ))}
         </div>
       </section>
-      </div>
+    </div>
   );
 };
