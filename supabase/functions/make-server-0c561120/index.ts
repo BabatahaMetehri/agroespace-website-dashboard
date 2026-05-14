@@ -1083,6 +1083,158 @@ app.put(`${ADMIN}/promo`, requireAdmin, async (c) => {
   }
 });
 
+// ─── Featured / pinned products ──────────────────────────────────────────
+// Highlight layer over the normal catalog. Stored in its own namespace so
+// Logicom sync never touches it. Each entry references a product_id and
+// carries marketing metadata (tagline, expandable description, technical
+// specs, gallery URLs, brochure links).
+
+const FEATURED_KV_PREFIX = 'featured:';
+const featuredKey = (productId: string | number) => `${FEATURED_KV_PREFIX}${productId}`;
+
+type Translatable = { fr: string; en?: string; ar?: string };
+type FeaturedSpec = { label: Translatable; value: Translatable };
+type FeaturedBrochure = { label: Translatable; url: string };
+type FeaturedProduct = {
+  product_id: number;
+  enabled: boolean;
+  sort_order: number;
+  tagline: Translatable;
+  highlight: Translatable;
+  specs: FeaturedSpec[];
+  gallery: string[];
+  brochures: FeaturedBrochure[];
+  updated_at: string;
+};
+
+function sanitizeTranslatable(raw: any, max = 1000): Translatable {
+  return {
+    fr: String(raw?.fr ?? '').slice(0, max),
+    en: raw?.en != null ? String(raw.en).slice(0, max) : '',
+    ar: raw?.ar != null ? String(raw.ar).slice(0, max) : '',
+  };
+}
+
+function sanitizeFeaturedUrl(raw: any, maxLen = 1000): string {
+  const s = String(raw ?? '').trim().slice(0, maxLen);
+  if (!s) return '';
+  // Only http(s) or in-app absolute paths — blocks javascript:/data:/vbscript:
+  return /^(https?:\/\/|\/)/i.test(s) ? s : '';
+}
+
+function sanitizeFeatured(body: any, productId: number): FeaturedProduct {
+  return {
+    product_id: productId,
+    enabled: body?.enabled !== false,
+    sort_order: Number.isFinite(Number(body?.sort_order))
+      ? Math.floor(Number(body.sort_order))
+      : 0,
+    tagline: sanitizeTranslatable(body?.tagline, 200),
+    highlight: sanitizeTranslatable(body?.highlight, 4000),
+    specs: Array.isArray(body?.specs)
+      ? body.specs.slice(0, 30).map((s: any) => ({
+          label: sanitizeTranslatable(s?.label, 200),
+          value: sanitizeTranslatable(s?.value, 500),
+        }))
+      : [],
+    gallery: Array.isArray(body?.gallery)
+      ? body.gallery
+          .slice(0, 30)
+          .map((u: any) => sanitizeFeaturedUrl(u, 1000))
+          .filter(Boolean)
+      : [],
+    brochures: Array.isArray(body?.brochures)
+      ? body.brochures.slice(0, 20).map((b: any) => ({
+          label: sanitizeTranslatable(b?.label, 200),
+          url: sanitizeFeaturedUrl(b?.url, 1000),
+        }))
+      : [],
+    updated_at: new Date().toISOString(),
+  };
+}
+
+// Public endpoint used by /catalog — hydrates each featured entry with the
+// live product (so SKU, title, stock, image stay current). Filters out
+// entries whose product has been hidden, trashed, or deleted.
+app.get(`${PUBLIC}/featured`, async (c) => {
+  const items = (await kv.getByPrefix(FEATURED_KV_PREFIX)) as FeaturedProduct[];
+  const enabled = items.filter((f) => f?.enabled !== false);
+  enabled.sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+  const hydrated = await Promise.all(
+    enabled.map(async (f) => {
+      const product = (await kv.get(k.product(f.product_id))) as any | null;
+      if (!product) return null;
+      if (PUBLIC_HIDDEN_STATUSES.has(String(product.status ?? 'publish'))) return null;
+      if (product.hidden_from_catalog === true || product.catalog_visibility === 'hidden')
+        return null;
+      return { ...f, product: wcProductShape(product) };
+    }),
+  );
+  return c.json(hydrated.filter(Boolean));
+});
+
+app.get(`${ADMIN}/featured`, requireAdmin, async (c) => {
+  const items = (await kv.getByPrefix(FEATURED_KV_PREFIX)) as FeaturedProduct[];
+  items.sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+  const hydrated = await Promise.all(
+    items.map(async (f) => {
+      const product = (await kv.get(k.product(f.product_id))) as any | null;
+      return { ...f, product: product ? wcProductShape(product) : null };
+    }),
+  );
+  return c.json(hydrated);
+});
+
+app.post(`${ADMIN}/featured`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const productId = Number(body?.product_id);
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return c.json({ code: 'rest_invalid_payload', message: 'product_id required' }, 400);
+    }
+    const product = await kv.get(k.product(productId));
+    if (!product) {
+      return c.json(
+        { code: 'rest_product_not_found', message: 'Product does not exist' },
+        404,
+      );
+    }
+    const config = sanitizeFeatured(body, productId);
+    await kv.set(featuredKey(productId), config);
+    return c.json(config);
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+app.put(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
+  try {
+    const productId = Number(c.req.param('id'));
+    if (!Number.isFinite(productId) || productId <= 0) {
+      return c.json({ code: 'rest_invalid_id', message: 'invalid id' }, 400);
+    }
+    const existing = (await kv.get(featuredKey(productId))) as FeaturedProduct | null;
+    if (!existing) {
+      return c.json({ code: 'rest_not_found', message: 'Featured entry not found' }, 404);
+    }
+    const body = await c.req.json();
+    const config = sanitizeFeatured({ ...existing, ...body }, productId);
+    await kv.set(featuredKey(productId), config);
+    return c.json(config);
+  } catch (e) {
+    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+  }
+});
+
+app.delete(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
+  const productId = Number(c.req.param('id'));
+  if (!Number.isFinite(productId) || productId <= 0) {
+    return c.json({ code: 'rest_invalid_id', message: 'invalid id' }, 400);
+  }
+  await kv.del(featuredKey(productId));
+  return c.json({ deleted: true, id: productId });
+});
+
 // ─── Shape helpers (match WC/WP REST API exactly) ────────────────────────
 // Logicom and other ERP sync tools recognise existing products by parsing
 // the WooCommerce/WordPress response shape. If the shape doesn't match,

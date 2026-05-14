@@ -611,11 +611,14 @@ UPDATE installations
   </div>
   <div class="umenu hidden" id="umenu" style="pointer-events:all">
     <div class="umenu-email" id="u-email"></div>
-    <div class="umenu-item danger" onclick="doLogout()">
-      <svg width="12" height="12" viewBox="0 0 13 13" fill="none"><path d="M5 2H2v9h3M9 9l3-2.5L9 4M6 6.5h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>Deconnexion
+    <div class="umenu-item" id="menu-pwd" onclick="openPwd()">
+      <svg width="12" height="12" viewBox="0 0 13 13" fill="none"><rect x="2" y="6" width="9" height="6" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M4 6V4a2.5 2.5 0 015 0v2" stroke="currentColor" stroke-width="1.3"/></svg><span id="lbl-menu-pwd">Mot de passe</span>
     </div>
     <div class="umenu-item" id="menu-config" onclick="showSetup()" style="display:none">
       <svg width="12" height="12" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="2" stroke="currentColor" stroke-width="1.3"/><path d="M6.5 1v1.5M6.5 10.5V12M1 6.5h1.5M10.5 6.5H12" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Configuration
+    </div>
+    <div class="umenu-item danger" onclick="doLogout()">
+      <svg width="12" height="12" viewBox="0 0 13 13" fill="none"><path d="M5 2H2v9h3M9 9l3-2.5L9 4M6 6.5h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="lbl-menu-logout">Deconnexion</span>
     </div>
   </div>
 </div>
@@ -902,6 +905,28 @@ UPDATE installations
   </div>
 </div>
 
+<!-- CHANGE PASSWORD MODAL -->
+<div class="mbg hidden" id="m-pwd">
+<div class="modal" style="max-width:420px">
+  <div class="mhdr">
+    <div class="mtitle" id="pwd-title">Changer le mot de passe</div>
+    <div class="mclose" onclick="closePwd()">✕</div>
+  </div>
+  <div class="mbody" style="padding:18px 22px">
+    <div class="fgrid" style="gap:11px">
+      <div class="fg s2"><label><span id="pwd-cur-lbl">Mot de passe actuel</span> <span class="req">*</span></label><input class="fi" id="pwd-cur" type="password" autocomplete="current-password"></div>
+      <div class="fg s2"><label><span id="pwd-new-lbl">Nouveau mot de passe</span> <span class="req">*</span></label><input class="fi" id="pwd-new" type="password" autocomplete="new-password"></div>
+      <div class="fg s2"><label><span id="pwd-new2-lbl">Confirmer le nouveau mot de passe</span> <span class="req">*</span></label><input class="fi" id="pwd-new2" type="password" autocomplete="new-password"></div>
+    </div>
+    <div id="pwd-msg" class="msg msg-err hidden"></div>
+  </div>
+  <div class="mfoot">
+    <button class="btn btn-s" id="pwd-cancel" onclick="closePwd()">Annuler</button>
+    <button class="btn btn-p" id="pwd-save" onclick="savePwd()">Enregistrer</button>
+  </div>
+</div>
+</div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <!-- Pinned to a specific version so a future malicious release of @2 cannot
@@ -1000,6 +1025,15 @@ fr:{
   imgbbStatus:"Cle ImgBB: ",yes:"oui",no:"non",
   marque:"Marque",
   routine_short:"Routine",urgent_short:"Urgente",preventive_short:"Preventive",install_short:"Installation",
+  pwdMenuLabel:"Mot de passe",pwdTitle:"Changer le mot de passe",
+  pwdCurLbl:"Mot de passe actuel",pwdNewLbl:"Nouveau mot de passe",
+  pwdNew2Lbl:"Confirmer le nouveau mot de passe",
+  pwdAllRequired:"Tous les champs sont requis.",
+  pwdTooShort:"Au moins 8 caracteres.",
+  pwdMismatch:"Les mots de passe ne correspondent pas.",
+  pwdWrongCurrent:"Mot de passe actuel incorrect.",
+  pwdSaving:"Enregistrement...",
+  toastPwdUpdated:"Mot de passe mis a jour.",
 },
 ar:{
   loginTitle:"دخول آمن",loginSub:"موظفو أكروإسباس المخولون فقط.",
@@ -1080,6 +1114,15 @@ ar:{
   imgbbStatus:"مفتاح ImgBB: ",yes:"نعم",no:"لا",
   marque:"العلامة التجارية",
   routine_short:"روتينية",urgent_short:"عاجلة",preventive_short:"وقائية",install_short:"تركيب",
+  pwdMenuLabel:"كلمة المرور",pwdTitle:"تغيير كلمة المرور",
+  pwdCurLbl:"كلمة المرور الحالية",pwdNewLbl:"كلمة المرور الجديدة",
+  pwdNew2Lbl:"تأكيد كلمة المرور الجديدة",
+  pwdAllRequired:"جميع الحقول مطلوبة.",
+  pwdTooShort:"8 أحرف على الأقل.",
+  pwdMismatch:"كلمتا المرور غير متطابقتين.",
+  pwdWrongCurrent:"كلمة المرور الحالية غير صحيحة.",
+  pwdSaving:"جارٍ الحفظ...",
+  toastPwdUpdated:"تم تحديث كلمة المرور.",
 }};
 
 function t(key){ return (T[currentLang]||T.fr)[key] || T.fr[key] || key; }
@@ -1107,6 +1150,15 @@ function applyTranslations(){
     "t-email-lbl":"emailLbl","t-pass-lbl":"passLbl",
     "l-btn":"signIn","t-login-ver":"loginVer",
     "lang-btn-login": currentLang==="fr"?"العربية":"Français",
+    // User menu items and password modal
+    "lbl-menu-pwd":"pwdMenuLabel",
+    "lbl-menu-logout":"deconnexion",
+    "pwd-title":"pwdTitle",
+    "pwd-cur-lbl":"pwdCurLbl",
+    "pwd-new-lbl":"pwdNewLbl",
+    "pwd-new2-lbl":"pwdNew2Lbl",
+    "pwd-cancel":"annuler",
+    "pwd-save":"enregistrer",
   };
   for(const [id,key] of Object.entries(ids)){
     const el=document.getElementById(id);
@@ -1342,6 +1394,62 @@ async function doLogout(){
   closePanel();
   show("login");
 }
+
+// ═══ CHANGE PASSWORD ═══
+// Available to all logged-in roles (admin, engineer, viewer). We re-verify
+// the current password via signInWithPassword before calling updateUser so
+// a stolen tab can't silently take over the account.
+function openPwd(){
+  document.getElementById("pwd-cur").value="";
+  document.getElementById("pwd-new").value="";
+  document.getElementById("pwd-new2").value="";
+  const msg=document.getElementById("pwd-msg");
+  msg.classList.add("hidden"); msg.classList.remove("msg-ok"); msg.classList.add("msg-err");
+  document.getElementById("umenu").classList.add("hidden");
+  document.getElementById("m-pwd").classList.remove("hidden");
+  setTimeout(()=>document.getElementById("pwd-cur").focus(),50);
+}
+function closePwd(){ document.getElementById("m-pwd").classList.add("hidden"); }
+
+async function savePwd(){
+  const cur=document.getElementById("pwd-cur").value;
+  const np=document.getElementById("pwd-new").value;
+  const np2=document.getElementById("pwd-new2").value;
+  const msg=document.getElementById("pwd-msg");
+  const btn=document.getElementById("pwd-save");
+  const showErr=(text)=>{
+    msg.classList.remove("hidden","msg-ok"); msg.classList.add("msg-err");
+    msg.textContent=text;
+  };
+  msg.classList.add("hidden");
+  if(!cur || !np || !np2){ showErr(t("pwdAllRequired")); return; }
+  if(np.length<8){ showErr(t("pwdTooShort")); return; }
+  if(np!==np2){ showErr(t("pwdMismatch")); return; }
+  if(!db){ showErr("Not authenticated"); return; }
+  const savedLabel=t("enregistrer");
+  btn.disabled=true; btn.textContent=t("pwdSaving");
+  try{
+    const userResp=await db.auth.getUser();
+    const email=userResp?.data?.user?.email;
+    if(!email) throw new Error("not authenticated");
+    // Verify current password by re-attempting sign-in. Supabase doesn't
+    // expose a "verify password" endpoint, so this is the cleanest way.
+    const verify=await db.auth.signInWithPassword({email,password:cur});
+    if(verify.error){ showErr(t("pwdWrongCurrent")); btn.disabled=false; btn.textContent=savedLabel; return; }
+    const upd=await db.auth.updateUser({password:np});
+    if(upd.error) throw new Error(upd.error.message);
+    toast(t("toastPwdUpdated"),"ok");
+    closePwd();
+  } catch(e){
+    showErr(e.message || String(e));
+  }
+  btn.disabled=false; btn.textContent=savedLabel;
+}
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape" && !document.getElementById("m-pwd").classList.contains("hidden")) closePwd();
+  if(e.key==="Enter" && !document.getElementById("m-pwd").classList.contains("hidden")) savePwd();
+});
 function toggleMenu(){ document.getElementById("umenu").classList.toggle("hidden"); }
 document.addEventListener("click",e=>{
   if(!e.target.closest("#ubtn")&&!e.target.closest("#umenu"))

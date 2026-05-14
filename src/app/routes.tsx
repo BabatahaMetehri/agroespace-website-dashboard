@@ -20,6 +20,7 @@ import { Quotes } from "./admin/pages/Quotes";
 import { BlogList } from "./admin/pages/BlogList";
 import { BlogEditor } from "./admin/pages/BlogEditor";
 import { Products } from "./admin/pages/Products";
+import { Featured } from "./admin/pages/Featured";
 import { Settings } from "./admin/pages/Settings";
 import { Promo } from "./admin/pages/Promo";
 
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
       { path: "blog/new", Component: BlogEditor },
       { path: "blog/:slug", Component: BlogEditor },
       { path: "products", Component: Products },
+      { path: "featured", Component: Featured },
       { path: "promo", Component: Promo },
       { path: "settings", Component: Settings },
       { path: "*", element: <Navigate to="/admin" replace /> },

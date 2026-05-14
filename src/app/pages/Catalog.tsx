@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Search, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, ArrowRight, ChevronLeft, ChevronRight, Star } from "lucide-react";
 import { motion } from "motion/react";
 import { useI18n } from "../i18n/I18nProvider";
 import { QuoteModal } from "../components/QuoteModal";
+import {
+  FeaturedProductCard,
+  type FeaturedRecord,
+} from "../components/FeaturedProductCard";
 import { FUNCTIONS_BASE } from "../admin/auth/supabase";
 
 type WcProduct = {
@@ -55,6 +59,7 @@ function mapProduct(p: WcProduct): Product {
 export const Catalog = () => {
   const { t } = useI18n();
   const [products, setProducts] = useState<Product[]>([]);
+  const [featured, setFeatured] = useState<FeaturedRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -64,12 +69,23 @@ export const Catalog = () => {
   const PAGE_SIZE = 24;
 
   useEffect(() => {
-    fetch(`${FUNCTIONS_BASE}/public/products`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<WcProduct[]>;
-      })
-      .then((data) => setProducts(data.map(mapProduct)))
+    // Fetch products + featured in parallel. Featured failure is non-fatal —
+    // the rest of the catalog should still render even if the featured
+    // endpoint is unavailable.
+    Promise.all([
+      fetch(`${FUNCTIONS_BASE}/public/products`)
+        .then((r) => {
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          return r.json() as Promise<WcProduct[]>;
+        })
+        .then((data) => setProducts(data.map(mapProduct))),
+      fetch(`${FUNCTIONS_BASE}/public/featured`)
+        .then((r) => (r.ok ? (r.json() as Promise<FeaturedRecord[]>) : []))
+        .then((data) =>
+          setFeatured(Array.isArray(data) ? data.filter(Boolean) : []),
+        )
+        .catch(() => setFeatured([])),
+    ])
       .catch((e) => setError((e as Error).message))
       .finally(() => setLoading(false));
   }, []);
@@ -80,9 +96,22 @@ export const Catalog = () => {
     return ["Tous", ...cats];
   }, [products]);
 
+  // Featured product IDs — used to de-duplicate so the same product doesn't
+  // appear both as a featured big-card AND in the regular grid below.
+  const featuredIds = useMemo(
+    () => new Set(featured.map((f) => f.product_id)),
+    [featured],
+  );
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const noFilters = q === "" && active === "Tous";
     return products.filter((p) => {
+      // When no filters are active, featured products are shown in the
+      // dedicated band above — hide them from the regular grid to avoid
+      // duplicates. As soon as the visitor searches or picks a category,
+      // featured products reappear in the grid so they're still findable.
+      if (noFilters && featuredIds.has(p.id)) return false;
       const matchesCat = active === "Tous" || p.category === active;
       const matchesQuery =
         q === "" ||
@@ -90,7 +119,7 @@ export const Catalog = () => {
         p.sku.toLowerCase().includes(q);
       return matchesCat && matchesQuery;
     });
-  }, [query, active, products]);
+  }, [query, active, products, featuredIds]);
 
   // Reset to page 1 whenever filters change
   useEffect(() => {
@@ -105,6 +134,17 @@ export const Catalog = () => {
   );
 
   const catLabel = (c: string) => (c === "Tous" ? t("catalog.all") : c);
+
+  // Featured products only show on the first page when no filters are
+  // active. Once the visitor starts filtering/searching/paginating they're
+  // in "browse mode" and the big cards just get in the way.
+  const showFeatured =
+    !loading &&
+    !error &&
+    featured.length > 0 &&
+    safePage === 1 &&
+    query.trim() === "" &&
+    active === "Tous";
 
   return (
     <div
@@ -155,6 +195,51 @@ export const Catalog = () => {
             </button>
           ))}
         </div>
+
+        {/* Featured / pinned products band — shown only on page 1 with no
+            filters so it doesn't fight the user's browse intent. */}
+        {showFeatured && (
+          <section className="mb-16">
+            <div className="flex items-baseline gap-3 mb-6">
+              <Star className="w-5 h-5 text-[#87A922]" fill="currentColor" />
+              <h2 className="text-2xl md:text-3xl font-light text-white">
+                {t("catalog.featured.section.title", "Produits")}{" "}
+                <span className="font-serif italic text-white/80">
+                  {t("catalog.featured.section.italic", "Phares")}
+                </span>
+              </h2>
+              <span className="ms-2 text-white/40 text-xs uppercase tracking-[0.2em]">
+                {t("catalog.featured.section.hint", "Sélection AGROESPACE")}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 gap-6">
+              {featured.map((rec) => {
+                const fp = rec.product;
+                // Build a Product-shape object for the QuoteModal so existing
+                // contact flow keeps working without changes.
+                const productForQuote: Product = {
+                  id: rec.product_id,
+                  sku: fp?.sku ?? `SKU-${rec.product_id}`,
+                  title: fp?.name ?? `Produit #${rec.product_id}`,
+                  category: fp?.categories?.[0]?.name ?? "Produits",
+                  image:
+                    fp?.images?.[0]?.src ||
+                    (fp as any)?.image ||
+                    FALLBACK_IMAGE,
+                  inStock: fp?.stock_status !== "outofstock",
+                  price: null,
+                };
+                return (
+                  <FeaturedProductCard
+                    key={rec.product_id}
+                    record={rec}
+                    onQuote={() => setQuoteFor(productForQuote)}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Loading state */}
         {loading && (

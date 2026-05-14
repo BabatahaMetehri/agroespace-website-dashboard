@@ -13,6 +13,7 @@ import {
   MapPin,
   Menu,
   X,
+  Star,
 } from 'lucide-react';
 import logoImg from '../../imports/logo-with-shadow.png';
 import { AdminAuthProvider, useAdminAuth } from '../admin/auth/AuthProvider';
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
   { name: 'Devis en attente', path: '/admin/quotes', icon: Inbox },
   { name: 'Articles Blog', path: '/admin/blog', icon: FileText },
   { name: 'Produits', path: '/admin/products', icon: Package },
+  { name: 'Produits Phares', path: '/admin/featured', icon: Star },
   { name: 'Bannière Promo', path: '/admin/promo', icon: Megaphone },
   { name: 'Carte des Pivots', external: '/map/index.html', icon: MapPin },
   { name: 'Paramètres', path: '/admin/settings', icon: SettingsIcon },
