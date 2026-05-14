@@ -1,66 +1,70 @@
-import { Hono } from 'npm:hono';
-import { cors } from 'npm:hono/cors';
-import { logger } from 'npm:hono/logger';
-import { createClient } from 'jsr:@supabase/supabase-js@2.49.8';
-import * as kv from './kv_store.ts';
+import { Hono } from "npm:hono";
+import { cors } from "npm:hono/cors";
+import { logger } from "npm:hono/logger";
+import { createClient } from "jsr:@supabase/supabase-js@2.49.8";
+import * as kv from "./kv_store.ts";
 
 const app = new Hono();
 
 // ─── Redacted request logger (does not log bodies / auth headers) ─────────
-app.use('*', async (c, next) => {
+app.use("*", async (c, next) => {
   const start = Date.now();
   await next();
   const ms = Date.now() - start;
-  console.log(`${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${ms}ms`);
+  console.log(
+    `${c.req.method} ${new URL(c.req.url).pathname} ${c.res.status} ${ms}ms`,
+  );
 });
 
 // ─── CORS allowlist (origins) ─────────────────────────────────────────────
 // Set CORS_ORIGINS env var to a comma-separated list of allowed origins.
 // Defaults to production + localhost when unset to avoid breaking local dev.
-const CORS_ALLOWED = (Deno.env.get('CORS_ORIGINS') ?? '')
-  .split(',')
+const CORS_ALLOWED = (Deno.env.get("CORS_ORIGINS") ?? "")
+  .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
 const DEFAULT_CORS = [
-  'https://agroespace.com',
-  'https://www.agroespace.com',
-  'https://agroespace-website-dashboard.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:4173',
+  "https://agroespace.com",
+  "https://www.agroespace.com",
+  "https://agroespace-website-dashboard.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:4173",
 ];
 const corsAllow = CORS_ALLOWED.length > 0 ? CORS_ALLOWED : DEFAULT_CORS;
 
 app.use(
-  '/*',
+  "/*",
   cors({
     origin: (origin) => {
-      if (!origin) return ''; // server-to-server / curl
+      if (!origin) return ""; // server-to-server / curl
       // Allow any *.vercel.app preview deploy in addition to allowlist
       if (
         corsAllow.includes(origin) ||
-        /^https:\/\/agroespace-website-dashboard(-[a-z0-9-]+)?\.vercel\.app$/.test(origin)
+        /^https:\/\/agroespace-website-dashboard(-[a-z0-9-]+)?\.vercel\.app$/.test(
+          origin,
+        )
       ) {
         return origin;
       }
-      return '';
+      return "";
     },
-    allowHeaders: ['Content-Type', 'Authorization', 'X-API-KEY'],
-    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    exposeHeaders: ['Content-Length'],
+    allowHeaders: ["Content-Type", "Authorization", "X-API-KEY"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    exposeHeaders: ["Content-Length"],
     maxAge: 600,
-  })
+  }),
 );
 
 // ─── Body size cap (50 KB default; 10 MB on media upload routes) ──────────
-app.use('*', async (c, next) => {
-  const cl = Number(c.req.header('Content-Length') ?? 0);
+app.use("*", async (c, next) => {
+  const cl = Number(c.req.header("Content-Length") ?? 0);
   const path = new URL(c.req.url).pathname;
-  const isMedia = path.includes('/wp-json/wp/v2/media');
+  const isMedia = path.includes("/wp-json/wp/v2/media");
   const max = isMedia ? 10 * 1024 * 1024 : 50 * 1024;
   if (cl > max) {
     return c.json(
-      { code: 'payload_too_large', message: `Body exceeds ${max} bytes` },
-      413
+      { code: "payload_too_large", message: `Body exceeds ${max} bytes` },
+      413,
     );
   }
   await next();
@@ -82,9 +86,9 @@ function rateLimit(opts: {
 }) {
   return async (c: any, next: any) => {
     const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
-      c.req.header('x-real-ip') ||
-      'anon';
+      c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+      c.req.header("x-real-ip") ||
+      "anon";
     const key = `${opts.key}:${ip}`;
     const now = Date.now();
     const cutoff = now - opts.windowMs;
@@ -99,7 +103,7 @@ function rateLimit(opts: {
         const persisted = await kv.get(`rl:${key}`);
         if (persisted && Array.isArray(persisted.hits)) {
           const merged = Array.from(
-            new Set([...bucket.hits, ...persisted.hits])
+            new Set([...bucket.hits, ...persisted.hits]),
           )
             .filter((t: number) => t > cutoff)
             .sort();
@@ -113,22 +117,27 @@ function rateLimit(opts: {
     if (bucket.hits.length >= opts.max) {
       const retryAfter = Math.max(
         1,
-        Math.ceil((bucket.hits[0] + opts.windowMs - now) / 1000)
+        Math.ceil((bucket.hits[0] + opts.windowMs - now) / 1000),
       );
-      c.header('Retry-After', String(retryAfter));
+      c.header("Retry-After", String(retryAfter));
       // Save current state so concurrent isolates see the limit too
       rlState.set(key, bucket);
       if (opts.persist) {
         try {
-          await kv.set(`rl:${key}`, { hits: bucket.hits, exp: now + opts.windowMs });
-        } catch {/* ignore */}
+          await kv.set(`rl:${key}`, {
+            hits: bucket.hits,
+            exp: now + opts.windowMs,
+          });
+        } catch {
+          /* ignore */
+        }
       }
       return c.json(
         {
-          code: 'rate_limited',
+          code: "rate_limited",
           message: `Too many requests, retry in ${retryAfter}s`,
         },
-        429
+        429,
       );
     }
 
@@ -136,14 +145,20 @@ function rateLimit(opts: {
     rlState.set(key, bucket);
     if (opts.persist) {
       try {
-        await kv.set(`rl:${key}`, { hits: bucket.hits, exp: now + opts.windowMs });
-      } catch {/* ignore */}
+        await kv.set(`rl:${key}`, {
+          hits: bucket.hits,
+          exp: now + opts.windowMs,
+        });
+      } catch {
+        /* ignore */
+      }
     }
 
     // periodic cleanup so the in-mem map doesn't grow unbounded
     if (rlState.size > 5000) {
       for (const [k, b] of rlState) {
-        if (!b.hits.length || b.hits[b.hits.length - 1] < cutoff) rlState.delete(k);
+        if (!b.hits.length || b.hits[b.hits.length - 1] < cutoff)
+          rlState.delete(k);
       }
     }
     await next();
@@ -152,11 +167,11 @@ function rateLimit(opts: {
 
 // ─── Input sanitisation helpers ──────────────────────────────────────────
 function sanitiseStr(v: unknown, max = 500): string {
-  if (typeof v !== 'string') return '';
+  if (typeof v !== "string") return "";
   // strip control chars + tags + collapse whitespace, then cap length
   return v
-    .replace(/<[^>]*>/g, '')
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .replace(/<[^>]*>/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
     .trim()
     .slice(0, max);
 }
@@ -167,25 +182,28 @@ function isPhone(s: string): boolean {
   return /^[+\d][\d\s().-]{5,24}$/.test(s);
 }
 
-const ROOT = '/make-server-0c561120';
+const ROOT = "/make-server-0c561120";
 const WC = `${ROOT}/wp-json/wc/v3`;
 const WP = `${ROOT}/wp-json/wp/v2`;
 const ADMIN = `${ROOT}/admin`;
 const PUBLIC = `${ROOT}/public`;
 
 // ─── Health ───────────────────────────────────────────────────────────────
-app.get(`${ROOT}/health`, (c) => c.json({ status: 'ok' }));
+app.get(`${ROOT}/health`, (c) => c.json({ status: "ok" }));
 
 // ─── Public quote intake ──────────────────────────────────────────────────
 // Rate-limited (10 / 15min per IP) + strictly validated.
 app.post(
   `${ROOT}/quotes`,
-  rateLimit({ key: 'quotes', max: 10, windowMs: 15 * 60_000, persist: true }),
+  rateLimit({ key: "quotes", max: 10, windowMs: 15 * 60_000, persist: true }),
   async (c) => {
     try {
       const raw = await c.req.json();
-      if (!raw || typeof raw !== 'object') {
-        return c.json({ code: 'rest_invalid_payload', message: 'Bad payload' }, 400);
+      if (!raw || typeof raw !== "object") {
+        return c.json(
+          { code: "rest_invalid_payload", message: "Bad payload" },
+          400,
+        );
       }
       // Whitelist fields, sanitise + length-cap
       const name = sanitiseStr(raw.name, 100);
@@ -194,24 +212,27 @@ app.post(
       const company = sanitiseStr(raw.company, 150);
       const address = sanitiseStr(raw.address, 200);
       const message = sanitiseStr(raw.message, 2000);
-      const product_id = sanitiseStr(String(raw.product_id ?? ''), 80);
+      const product_id = sanitiseStr(String(raw.product_id ?? ""), 80);
       const product_sku = sanitiseStr(raw.product_sku, 80);
       const product_title = sanitiseStr(raw.product_title, 200);
 
       if (!name || name.length < 2) {
-        return c.json({ code: 'invalid_name', message: 'Name required' }, 400);
+        return c.json({ code: "invalid_name", message: "Name required" }, 400);
       }
       if (!phone || !isPhone(phone)) {
-        return c.json({ code: 'invalid_phone', message: 'Valid phone required' }, 400);
+        return c.json(
+          { code: "invalid_phone", message: "Valid phone required" },
+          400,
+        );
       }
       if (email && !isEmail(email)) {
-        return c.json({ code: 'invalid_email', message: 'Invalid email' }, 400);
+        return c.json({ code: "invalid_email", message: "Invalid email" }, 400);
       }
 
       const id = `quote_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       const record = {
         id,
-        status: 'pending' as const,
+        status: "pending" as const,
         created_at: new Date().toISOString(),
         name,
         phone,
@@ -222,42 +243,48 @@ app.post(
         product_id,
         product_sku,
         product_title,
-        ip: c.req.header('x-forwarded-for')?.split(',')[0].trim() || null,
+        ip: c.req.header("x-forwarded-for")?.split(",")[0].trim() || null,
       };
       await kv.set(`quote:${id}`, record);
-      return c.json({ id, status: 'queued' }, 201);
+      return c.json({ id, status: "queued" }, 201);
     } catch (e) {
-      return c.json({ code: 'rest_invalid_payload', message: 'Bad request' }, 400);
+      return c.json(
+        { code: "rest_invalid_payload", message: "Bad request" },
+        400,
+      );
     }
-  }
+  },
 );
 
 // ─── Admin auth middleware ────────────────────────────────────────────────
 // Validates the Supabase JWT and checks the user's email against the
 // ADMIN_EMAILS allowlist. The list is comma-separated, lower-cased on read.
 const adminAuthClient = () => {
-  const url = Deno.env.get('SUPABASE_URL');
-  const anon = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!url || !anon) throw new Error('Missing SUPABASE_URL or SUPABASE_ANON_KEY env');
+  const url = Deno.env.get("SUPABASE_URL");
+  const anon =
+    Deno.env.get("SUPABASE_ANON_KEY") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !anon)
+    throw new Error("Missing SUPABASE_URL or SUPABASE_ANON_KEY env");
   return createClient(url, anon);
 };
 
 // Per-IP rate limit on bearer-token verification (catches admin login probes
 // and broken-token spam): 5 failed attempts per 15 minutes.
 const requireAdminRateLimit = rateLimit({
-  key: 'admin-auth',
+  key: "admin-auth",
   max: 5,
   windowMs: 15 * 60_000,
   persist: true,
 });
 
 async function requireAdmin(c: any, next: any) {
-  const auth = c.req.header('Authorization') ?? '';
-  if (!auth.toLowerCase().startsWith('bearer ')) {
+  const auth = c.req.header("Authorization") ?? "";
+  if (!auth.toLowerCase().startsWith("bearer ")) {
     // Apply rate limit only when the request is malformed/unauthenticated to
     // avoid penalising legitimately authed admin browsing.
     return await requireAdminRateLimit(c, () =>
-      c.json({ code: 'unauthorized', message: 'Missing bearer token' }, 401)
+      c.json({ code: "unauthorized", message: "Missing bearer token" }, 401),
     );
   }
   const token = auth.slice(7).trim();
@@ -266,53 +293,56 @@ async function requireAdmin(c: any, next: any) {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
       return await requireAdminRateLimit(c, () =>
-        c.json({ code: 'unauthorized', message: 'Invalid session' }, 401)
+        c.json({ code: "unauthorized", message: "Invalid session" }, 401),
       );
     }
-    const allowed = (Deno.env.get('ADMIN_EMAILS') ?? '')
-      .split(',')
+    const allowed = (Deno.env.get("ADMIN_EMAILS") ?? "")
+      .split(",")
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
     // Fail closed: if ADMIN_EMAILS is unset, no one is admin.
     if (allowed.length === 0) {
-      console.error('SECURITY: ADMIN_EMAILS env var not set; denying all admin access');
+      console.error(
+        "SECURITY: ADMIN_EMAILS env var not set; denying all admin access",
+      );
       return c.json(
-        { code: 'forbidden', message: 'Admin allowlist not configured' },
-        403
+        { code: "forbidden", message: "Admin allowlist not configured" },
+        403,
       );
     }
-    const email = (data.user.email ?? '').toLowerCase();
+    const email = (data.user.email ?? "").toLowerCase();
     if (!allowed.includes(email)) {
       return await requireAdminRateLimit(c, () =>
         c.json(
-          { code: 'forbidden', message: 'Account not in admin allowlist' },
-          403
-        )
+          { code: "forbidden", message: "Account not in admin allowlist" },
+          403,
+        ),
       );
     }
-    c.set('admin', { id: data.user.id, email });
+    c.set("admin", { id: data.user.id, email });
     await next();
   } catch (e) {
-    return c.json({ code: 'unauthorized', message: 'Auth check failed' }, 401);
+    return c.json({ code: "unauthorized", message: "Auth check failed" }, 401);
   }
 }
 
-app.get(`${ADMIN}/whoami`, requireAdmin, (c) => c.json(c.get('admin')));
+app.get(`${ADMIN}/whoami`, requireAdmin, (c) => c.json(c.get("admin")));
 
 // ─── Admin: dashboard stats ───────────────────────────────────────────────
 app.get(`${ADMIN}/stats`, requireAdmin, async (c) => {
   const [quotes, posts, products] = await Promise.all([
-    kv.getByPrefix('quote:'),
-    kv.getByPrefix('blog:post:'),
-    kv.getByPrefix('wc:product:'),
+    kv.getByPrefix("quote:"),
+    kv.getByPrefix("blog:post:"),
+    kv.getByPrefix("wc:product:"),
   ]);
   const sortedQuotes = quotes.sort((a: any, b: any) =>
-    (a?.created_at ?? '') < (b?.created_at ?? '') ? 1 : -1
+    (a?.created_at ?? "") < (b?.created_at ?? "") ? 1 : -1,
   );
   return c.json({
     quotes: {
       total: quotes.length,
-      pending: quotes.filter((q: any) => (q?.status ?? 'pending') === 'pending').length,
+      pending: quotes.filter((q: any) => (q?.status ?? "pending") === "pending")
+        .length,
       recent: sortedQuotes.slice(0, 5),
     },
     posts: { total: posts.length },
@@ -322,26 +352,32 @@ app.get(`${ADMIN}/stats`, requireAdmin, async (c) => {
 
 // ─── Admin: quotes ────────────────────────────────────────────────────────
 app.get(`${ADMIN}/quotes`, requireAdmin, async (c) => {
-  const items = await kv.getByPrefix('quote:');
+  const items = await kv.getByPrefix("quote:");
   return c.json(items);
 });
 
 app.patch(`${ADMIN}/quotes/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`quote:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Quote not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Quote not found" }, 404);
   try {
     const patch = await c.req.json();
-    const next = { ...existing, ...patch, id, updated_at: new Date().toISOString() };
+    const next = {
+      ...existing,
+      ...patch,
+      id,
+      updated_at: new Date().toISOString(),
+    };
     await kv.set(`quote:${id}`, next);
     return c.json(next);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.delete(`${ADMIN}/quotes/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   await kv.del(`quote:${id}`);
   return c.json({ id, deleted: true });
 });
@@ -366,7 +402,7 @@ type BlogPostShape = {
   gallery?: string[];
   videos?: string[];
   published: boolean;
-  source: 'cms';
+  source: "cms";
   updated_at?: string;
 };
 
@@ -378,10 +414,10 @@ const counterKey = (slug: string) => `blog:counter:${slug}`;
 const slugify = (s: string) =>
   s
     .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
     .slice(0, 80);
 
 async function getCounter(slug: string): Promise<BlogCounter> {
@@ -391,7 +427,7 @@ async function getCounter(slug: string): Promise<BlogCounter> {
 
 async function bumpCounter(
   slug: string,
-  patch: { views?: number; likes?: number }
+  patch: { views?: number; likes?: number },
 ): Promise<BlogCounter> {
   const cur = await getCounter(slug);
   const next: BlogCounter = {
@@ -404,38 +440,38 @@ async function bumpCounter(
 }
 
 async function withCounter<T extends { slug: string }>(
-  post: T
+  post: T,
 ): Promise<T & { views: number; likes: number }> {
   const c = await getCounter(post.slug);
   return { ...post, views: c.views, likes: c.likes };
 }
 
 const sanitize = (raw: any, fallbackSlug?: string): BlogPostShape => {
-  const slug = slugify(String(raw?.slug ?? fallbackSlug ?? ''));
+  const slug = slugify(String(raw?.slug ?? fallbackSlug ?? ""));
   return {
     slug,
     title: {
-      fr: String(raw?.title?.fr ?? ''),
+      fr: String(raw?.title?.fr ?? ""),
       ar: raw?.title?.ar ? String(raw.title.ar) : undefined,
       en: raw?.title?.en ? String(raw.title.en) : undefined,
     },
     excerpt: {
-      fr: String(raw?.excerpt?.fr ?? ''),
+      fr: String(raw?.excerpt?.fr ?? ""),
       ar: raw?.excerpt?.ar ? String(raw.excerpt.ar) : undefined,
       en: raw?.excerpt?.en ? String(raw.excerpt.en) : undefined,
     },
     body: {
-      fr: String(raw?.body?.fr ?? ''),
+      fr: String(raw?.body?.fr ?? ""),
       ar: raw?.body?.ar ? String(raw.body.ar) : undefined,
       en: raw?.body?.en ? String(raw.body.en) : undefined,
     },
-    category: String(raw?.category ?? 'Innovation'),
+    category: String(raw?.category ?? "Innovation"),
     date: String(raw?.date ?? new Date().toISOString().slice(0, 10)),
-    image: String(raw?.image ?? ''),
+    image: String(raw?.image ?? ""),
     gallery: Array.isArray(raw?.gallery) ? raw.gallery.map(String) : [],
     videos: Array.isArray(raw?.videos) ? raw.videos.map(String) : [],
     published: raw?.published !== false,
-    source: 'cms',
+    source: "cms",
     updated_at: new Date().toISOString(),
   };
 };
@@ -445,10 +481,10 @@ const sanitize = (raw: any, fallbackSlug?: string): BlogPostShape => {
 // Without ?all=true returns the paginated shape; with ?all=true returns the
 // raw array for any older caller that hasn't migrated.
 app.get(`${ADMIN}/blog`, requireAdmin, async (c) => {
-  const posts = (await kv.getByPrefix('blog:post:')) as BlogPostShape[];
+  const posts = (await kv.getByPrefix("blog:post:")) as BlogPostShape[];
   const merged = await Promise.all(posts.map((p) => withCounter(p)));
 
-  if (c.req.query('all') === 'true') return c.json(merged);
+  if (c.req.query("all") === "true") return c.json(merged);
 
   const counts = {
     all: merged.length,
@@ -456,29 +492,41 @@ app.get(`${ADMIN}/blog`, requireAdmin, async (c) => {
     draft: merged.filter((p: any) => p?.published === false).length,
   };
 
-  const status = (c.req.query('status') ?? 'all').toLowerCase();
-  const search = (c.req.query('search') ?? '').trim().toLowerCase();
+  const status = (c.req.query("status") ?? "all").toLowerCase();
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
 
   let filtered: any[] = merged;
-  if (status === 'published') filtered = filtered.filter((p: any) => p?.published !== false);
-  else if (status === 'draft') filtered = filtered.filter((p: any) => p?.published === false);
+  if (status === "published")
+    filtered = filtered.filter((p: any) => p?.published !== false);
+  else if (status === "draft")
+    filtered = filtered.filter((p: any) => p?.published === false);
 
   if (search) {
     filtered = filtered.filter((p: any) =>
       [
-        p?.title?.fr, p?.title?.ar, p?.title?.en,
-        p?.excerpt?.fr, p?.excerpt?.ar, p?.excerpt?.en,
-        p?.category, p?.slug,
+        p?.title?.fr,
+        p?.title?.ar,
+        p?.title?.en,
+        p?.excerpt?.fr,
+        p?.excerpt?.ar,
+        p?.excerpt?.en,
+        p?.category,
+        p?.slug,
       ]
         .filter(Boolean)
-        .some((v: any) => String(v).toLowerCase().includes(search))
+        .some((v: any) => String(v).toLowerCase().includes(search)),
     );
   }
 
-  filtered.sort((a: any, b: any) => String(b?.date ?? '').localeCompare(String(a?.date ?? '')));
+  filtered.sort((a: any, b: any) =>
+    String(b?.date ?? "").localeCompare(String(a?.date ?? "")),
+  );
 
-  const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1);
-  const perPage = Math.min(200, Math.max(1, Number(c.req.query('per_page') ?? 24) || 24));
+  const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
+  const perPage = Math.min(
+    200,
+    Math.max(1, Number(c.req.query("per_page") ?? 24) || 24),
+  );
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const safePage = Math.min(page, totalPages);
@@ -495,9 +543,10 @@ app.get(`${ADMIN}/blog`, requireAdmin, async (c) => {
 });
 
 app.get(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
-  const slug = c.req.param('slug');
+  const slug = c.req.param("slug");
   const item = (await kv.get(blogKey(slug))) as BlogPostShape | null;
-  if (!item) return c.json({ code: 'not_found', message: 'Post not found' }, 404);
+  if (!item)
+    return c.json({ code: "not_found", message: "Post not found" }, 404);
   return c.json(await withCounter(item));
 });
 
@@ -505,23 +554,37 @@ app.post(`${ADMIN}/blog`, requireAdmin, async (c) => {
   try {
     const raw = await c.req.json();
     const post = sanitize(raw);
-    if (!post.slug) return c.json({ code: 'invalid_slug', message: 'Slug is required.' }, 400);
+    if (!post.slug)
+      return c.json(
+        { code: "invalid_slug", message: "Slug is required." },
+        400,
+      );
     if (!post.title.fr.trim())
-      return c.json({ code: 'invalid_title', message: 'French title is required.' }, 400);
+      return c.json(
+        { code: "invalid_title", message: "French title is required." },
+        400,
+      );
     const exists = await kv.get(blogKey(post.slug));
     if (exists)
-      return c.json({ code: 'slug_taken', message: 'A post with this slug already exists.' }, 409);
+      return c.json(
+        {
+          code: "slug_taken",
+          message: "A post with this slug already exists.",
+        },
+        409,
+      );
     await kv.set(blogKey(post.slug), post);
     return c.json(await withCounter(post), 201);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.put(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
-  const slug = c.req.param('slug');
+  const slug = c.req.param("slug");
   const existing = await kv.get(blogKey(slug));
-  if (!existing) return c.json({ code: 'not_found', message: 'Post not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Post not found" }, 404);
   try {
     const raw = await c.req.json();
     const post = sanitize({ ...existing, ...raw }, slug);
@@ -539,12 +602,12 @@ app.put(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
     }
     return c.json(await withCounter(post));
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.delete(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
-  const slug = c.req.param('slug');
+  const slug = c.req.param("slug");
   await Promise.all([kv.del(blogKey(slug)), kv.del(counterKey(slug))]);
   return c.json({ slug, deleted: true });
 });
@@ -565,49 +628,59 @@ app.delete(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
 // Skipping ?all returns the new shape; passing ?all=true returns the bare
 // array for any caller that hasn't migrated yet.
 app.get(`${ADMIN}/products`, requireAdmin, async (c) => {
-  const items = (await kv.getByPrefix('wc:product:')) as any[];
+  const items = (await kv.getByPrefix("wc:product:")) as any[];
   // Always derive stock status + hydrate categories on read.
   for (const p of items) {
-    if (Array.isArray(p?.categories) && p.categories.some((cc: any) => !cc?.name)) {
+    if (
+      Array.isArray(p?.categories) &&
+      p.categories.some((cc: any) => !cc?.name)
+    ) {
       p.categories = await hydrateProductCategories(p.categories);
     }
     p.stock_status = deriveStockStatus(p);
   }
 
   // Legacy mode — full array, used by older code paths.
-  if (c.req.query('all') === 'true') {
+  if (c.req.query("all") === "true") {
     return c.json(items);
   }
 
   // Counts (computed against the FULL list so pills always show accurate totals).
   const counts = {
     all: items.length,
-    active: items.filter((p: any) => p?.status !== 'trash').length,
-    trash: items.filter((p: any) => p?.status === 'trash').length,
-    hidden: items.filter((p: any) => p?.hidden_from_catalog === true && p?.status !== 'trash').length,
+    active: items.filter((p: any) => p?.status !== "trash").length,
+    trash: items.filter((p: any) => p?.status === "trash").length,
+    hidden: items.filter(
+      (p: any) => p?.hidden_from_catalog === true && p?.status !== "trash",
+    ).length,
   };
 
   // ── Filter ──────────────────────────────────────────────────────────────
-  const status = (c.req.query('status') ?? 'all').toLowerCase();
-  const categoryFilter = c.req.query('category') ?? '';
-  const search = (c.req.query('search') ?? '').trim().toLowerCase();
+  const status = (c.req.query("status") ?? "all").toLowerCase();
+  const categoryFilter = c.req.query("category") ?? "";
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
   // visibility=visible|hidden|all (default all). Hidden = hidden_from_catalog=true
-  const visibility = (c.req.query('visibility') ?? 'all').toLowerCase();
+  const visibility = (c.req.query("visibility") ?? "all").toLowerCase();
 
   let filtered = items;
-  if (status === 'active') filtered = filtered.filter((p: any) => p?.status !== 'trash');
-  else if (status === 'trash') filtered = filtered.filter((p: any) => p?.status === 'trash');
+  if (status === "active")
+    filtered = filtered.filter((p: any) => p?.status !== "trash");
+  else if (status === "trash")
+    filtered = filtered.filter((p: any) => p?.status === "trash");
 
-  if (visibility === 'hidden') {
+  if (visibility === "hidden") {
     filtered = filtered.filter((p: any) => p?.hidden_from_catalog === true);
-  } else if (visibility === 'visible') {
+  } else if (visibility === "visible") {
     filtered = filtered.filter((p: any) => p?.hidden_from_catalog !== true);
   }
 
-  if (categoryFilter && categoryFilter !== 'all') {
-    filtered = filtered.filter((p: any) =>
-      Array.isArray(p?.categories) &&
-      p.categories.some((cc: any) => String(cc?.id ?? cc?.name) === String(categoryFilter))
+  if (categoryFilter && categoryFilter !== "all") {
+    filtered = filtered.filter(
+      (p: any) =>
+        Array.isArray(p?.categories) &&
+        p.categories.some(
+          (cc: any) => String(cc?.id ?? cc?.name) === String(categoryFilter),
+        ),
     );
   }
 
@@ -615,36 +688,40 @@ app.get(`${ADMIN}/products`, requireAdmin, async (c) => {
     filtered = filtered.filter((p: any) =>
       [p?.name, p?.sku, p?.id, p?.description]
         .filter((v) => v != null)
-        .some((v: any) => String(v).toLowerCase().includes(search))
+        .some((v: any) => String(v).toLowerCase().includes(search)),
     );
   }
 
   // ── Sort: most recently modified first (admins want fresh stuff on top) ─
   filtered.sort((a: any, b: any) => {
-    const am = a?.date_modified ?? a?.date_created ?? '';
-    const bm = b?.date_modified ?? b?.date_created ?? '';
+    const am = a?.date_modified ?? a?.date_created ?? "";
+    const bm = b?.date_modified ?? b?.date_created ?? "";
     return String(bm).localeCompare(String(am));
   });
 
   // ── Per-category counts on the FILTERED-by-status set so pills reflect
   // what the user is currently viewing.
-  const categoryCountSource = status === 'trash'
-    ? items.filter((p: any) => p?.status === 'trash')
-    : status === 'active'
-      ? items.filter((p: any) => p?.status !== 'trash')
-      : items;
+  const categoryCountSource =
+    status === "trash"
+      ? items.filter((p: any) => p?.status === "trash")
+      : status === "active"
+        ? items.filter((p: any) => p?.status !== "trash")
+        : items;
   const categoryCounts: Record<string, number> = {};
   for (const p of categoryCountSource) {
-    for (const cc of (Array.isArray(p?.categories) ? p.categories : [])) {
-      const key = String(cc?.id ?? cc?.name ?? '');
+    for (const cc of Array.isArray(p?.categories) ? p.categories : []) {
+      const key = String(cc?.id ?? cc?.name ?? "");
       if (!key) continue;
       categoryCounts[key] = (categoryCounts[key] ?? 0) + 1;
     }
   }
 
   // ── Paginate ────────────────────────────────────────────────────────────
-  const page = Math.max(1, Number(c.req.query('page') ?? 1) || 1);
-  const perPage = Math.min(500, Math.max(1, Number(c.req.query('per_page') ?? 50) || 50));
+  const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
+  const perPage = Math.min(
+    500,
+    Math.max(1, Number(c.req.query("per_page") ?? 50) || 50),
+  );
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const safePage = Math.min(page, totalPages);
@@ -668,29 +745,38 @@ app.post(`${ADMIN}/products/bulk-delete`, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
     const ids: any[] = Array.isArray(body?.ids) ? body.ids : [];
-    const force = body?.force === true || c.req.query('force') === 'true';
+    const force = body?.force === true || c.req.query("force") === "true";
     const results: { id: number | string; ok: boolean; reason?: string }[] = [];
     for (const rawId of ids) {
       const id = String(rawId);
       const existing = await kv.get(`wc:product:${id}`);
       if (!existing) {
-        results.push({ id, ok: false, reason: 'not_found' });
+        results.push({ id, ok: false, reason: "not_found" });
         continue;
       }
-      const sku = (existing as any).sku ? String((existing as any).sku) : '';
+      const sku = (existing as any).sku ? String((existing as any).sku) : "";
       if (force) {
         await kv.del(`wc:product:${id}`);
         if (sku) await kv.del(`wc:product_sku:${sku}`);
       } else {
-        const trashed = { ...(existing as any), id: Number(id), status: 'trash', date_modified: new Date().toISOString() };
+        const trashed = {
+          ...(existing as any),
+          id: Number(id),
+          status: "trash",
+          date_modified: new Date().toISOString(),
+        };
         await kv.set(`wc:product:${id}`, trashed);
         if (sku) await kv.del(`wc:product_sku:${sku}`);
       }
       results.push({ id, ok: true });
     }
-    return c.json({ deleted: results.filter((r) => r.ok).map((r) => r.id), errors: results.filter((r) => !r.ok), force });
+    return c.json({
+      deleted: results.filter((r) => r.ok).map((r) => r.id),
+      errors: results.filter((r) => !r.ok),
+      force,
+    });
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
@@ -704,13 +790,18 @@ app.post(`${ADMIN}/products/bulk-restore`, requireAdmin, async (c) => {
       const id = String(rawId);
       const existing = await kv.get(`wc:product:${id}`);
       if (!existing) continue;
-      const next = { ...(existing as any), id: Number(id), status: 'publish', date_modified: new Date().toISOString() };
+      const next = {
+        ...(existing as any),
+        id: Number(id),
+        status: "publish",
+        date_modified: new Date().toISOString(),
+      };
       await kv.set(`wc:product:${id}`, next);
       restored.push(id);
     }
     return c.json({ restored });
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
@@ -737,23 +828,26 @@ app.post(`${ADMIN}/products/bulk-visibility`, requireAdmin, async (c) => {
       await kv.set(`wc:product:${id}`, next);
       updated.push(id);
     }
-    console.log(`[admin] bulk-visibility hidden=${hidden} count=${updated.length}`);
+    console.log(
+      `[admin] bulk-visibility hidden=${hidden} count=${updated.length}`,
+    );
     return c.json({ updated, hidden });
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 // Single-row toggle (used by the eye icon in the products table).
 app.post(`${ADMIN}/products/:id/visibility`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:product:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Product not found" }, 404);
   try {
     const body = await c.req.json().catch(() => ({}));
     // If `hidden` is not provided, just flip the current value.
     const cur = (existing as any).hidden_from_catalog === true;
-    const hidden = typeof body?.hidden === 'boolean' ? body.hidden : !cur;
+    const hidden = typeof body?.hidden === "boolean" ? body.hidden : !cur;
     const next = {
       ...(existing as any),
       id: Number(id),
@@ -763,40 +857,42 @@ app.post(`${ADMIN}/products/:id/visibility`, requireAdmin, async (c) => {
     await kv.set(`wc:product:${id}`, next);
     return c.json(next);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 // Empty the trash — permanently deletes ALL products with status='trash'.
 app.post(`${ADMIN}/products/empty-trash`, requireAdmin, async (c) => {
-  const items = (await kv.getByPrefix('wc:product:')) as any[];
-  const trashed = items.filter((p: any) => p?.status === 'trash');
+  const items = (await kv.getByPrefix("wc:product:")) as any[];
+  const trashed = items.filter((p: any) => p?.status === "trash");
   for (const p of trashed) {
     await kv.del(`wc:product:${p.id}`);
     if (p.sku) await kv.del(`wc:product_sku:${p.sku}`);
   }
-  console.log(`[admin] empty-trash → permanently deleted ${trashed.length} products`);
+  console.log(
+    `[admin] empty-trash → permanently deleted ${trashed.length} products`,
+  );
   return c.json({ deleted: trashed.length });
 });
 
 app.post(`${ADMIN}/products`, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
-    const id = await safeIncomingId('product', body.id);
+    const id = await safeIncomingId("product", body.id);
     const product = {
       id,
       sku: body.sku ?? null,
-      name: body.name ?? '',
-      description: body.description ?? '',
-      short_description: body.short_description ?? '',
-      regular_price: body.regular_price ?? '',
-      sale_price: body.sale_price ?? '',
+      name: body.name ?? "",
+      description: body.description ?? "",
+      short_description: body.short_description ?? "",
+      regular_price: body.regular_price ?? "",
+      sale_price: body.sale_price ?? "",
       manage_stock: body.manage_stock ?? false,
       stock_quantity: body.stock_quantity ?? 0,
-      stock_status: body.stock_status ?? 'instock',
+      stock_status: body.stock_status ?? "instock",
       categories: body.categories ?? [],
       attributes: body.attributes ?? [],
-      image: body.image ?? '',
+      image: body.image ?? "",
       images: body.images ?? (body.image ? [{ src: body.image }] : []),
       ...body,
       date_created: new Date().toISOString(),
@@ -806,40 +902,52 @@ app.post(`${ADMIN}/products`, requireAdmin, async (c) => {
     if (product.sku) await kv.set(`wc:product_sku:${product.sku}`, { id });
     return c.json(product, 201);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.put(`${ADMIN}/products/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:product:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Product not found" }, 404);
   try {
     const body = await c.req.json();
-    const next: any = { ...existing, ...body, id, date_modified: new Date().toISOString() };
+    const next: any = {
+      ...existing,
+      ...body,
+      id,
+      date_modified: new Date().toISOString(),
+    };
     next.stock_status = deriveStockStatus(next);
     await kv.set(`wc:product:${id}`, next);
     if (next.sku) await kv.set(`wc:product_sku:${next.sku}`, { id });
     return c.json(next);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.delete(`${ADMIN}/products/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:product:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
-  const sku = (existing as any).sku ? String((existing as any).sku) : '';
-  const force = String(c.req.query('force') ?? '').toLowerCase();
-  const isForce = force === 'true' || force === '1' || force === 'yes';
+  if (!existing)
+    return c.json({ code: "not_found", message: "Product not found" }, 404);
+  const sku = (existing as any).sku ? String((existing as any).sku) : "";
+  const force = String(c.req.query("force") ?? "").toLowerCase();
+  const isForce = force === "true" || force === "1" || force === "yes";
   if (isForce) {
     await kv.del(`wc:product:${id}`);
     if (sku) await kv.del(`wc:product_sku:${sku}`);
     return c.json({ id, deleted: true });
   }
   // Soft trash — also clear SKU index so fresh sync with same SKU starts clean
-  const trashed = { ...(existing as any), id: Number(id), status: 'trash', date_modified: new Date().toISOString() };
+  const trashed = {
+    ...(existing as any),
+    id: Number(id),
+    status: "trash",
+    date_modified: new Date().toISOString(),
+  };
   await kv.set(`wc:product:${id}`, trashed);
   if (sku) await kv.del(`wc:product_sku:${sku}`);
   return c.json({ ...trashed, trashed: true });
@@ -847,10 +955,16 @@ app.delete(`${ADMIN}/products/:id`, requireAdmin, async (c) => {
 
 // Restore a trashed product (admin-only)
 app.post(`${ADMIN}/products/:id/restore`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:product:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Product not found' }, 404);
-  const restored = { ...(existing as any), id: Number(id), status: 'publish', date_modified: new Date().toISOString() };
+  if (!existing)
+    return c.json({ code: "not_found", message: "Product not found" }, 404);
+  const restored = {
+    ...(existing as any),
+    id: Number(id),
+    status: "publish",
+    date_modified: new Date().toISOString(),
+  };
   await kv.set(`wc:product:${id}`, restored);
   return c.json(restored);
 });
@@ -858,7 +972,7 @@ app.post(`${ADMIN}/products/:id/restore`, requireAdmin, async (c) => {
 // ─── Admin category endpoints ─────────────────────────────────────────────
 // Mirror of the WC endpoints above but session-authed (used by the admin UI).
 app.get(`${ADMIN}/categories`, requireAdmin, async (c) => {
-  const items = (await kv.getByPrefix('wc:category:')) as any[];
+  const items = (await kv.getByPrefix("wc:category:")) as any[];
   items.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
   return c.json(items);
 });
@@ -866,49 +980,68 @@ app.get(`${ADMIN}/categories`, requireAdmin, async (c) => {
 app.post(`${ADMIN}/categories`, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
-    const name = String(body.name ?? '').trim();
-    if (!name) return c.json({ code: 'invalid_name', message: 'Name required' }, 400);
+    const name = String(body.name ?? "").trim();
+    if (!name)
+      return c.json({ code: "invalid_name", message: "Name required" }, 400);
     // Canonical lowercase slug, same logic as the public WC endpoint
     const slug = canonicalSlug(body.slug ?? name);
     // De-dupe by slug (case-insensitive)
-    const all = (await kv.getByPrefix('wc:category:')) as any[];
-    if (all.find((x: any) => canonicalSlug(x?.slug ?? '') === slug)) {
-      return c.json({ code: 'term_exists', message: 'A category with this slug already exists.' }, 400);
+    const all = (await kv.getByPrefix("wc:category:")) as any[];
+    if (all.find((x: any) => canonicalSlug(x?.slug ?? "") === slug)) {
+      return c.json(
+        {
+          code: "term_exists",
+          message: "A category with this slug already exists.",
+        },
+        400,
+      );
     }
-    const id = await safeIncomingId('category', body.id);
-    const cat = { id, name, slug, parent: 0, description: String(body.description ?? ''), display: 'default', image: null, menu_order: 0, count: 0 };
+    const id = await safeIncomingId("category", body.id);
+    const cat = {
+      id,
+      name,
+      slug,
+      parent: 0,
+      description: String(body.description ?? ""),
+      display: "default",
+      image: null,
+      menu_order: 0,
+      count: 0,
+    };
     await kv.set(`wc:category:${id}`, cat);
     return c.json(cat, 201);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.put(`${ADMIN}/categories/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:category:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Category not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Category not found" }, 404);
   try {
     const body = await c.req.json();
     const next = { ...existing, ...body, id: Number(id) };
     await kv.set(`wc:category:${id}`, next);
     return c.json(next);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.delete(`${ADMIN}/categories/:id`, requireAdmin, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(`wc:category:${id}`);
-  if (!existing) return c.json({ code: 'not_found', message: 'Category not found' }, 404);
+  if (!existing)
+    return c.json({ code: "not_found", message: "Category not found" }, 404);
   await kv.del(`wc:category:${id}`);
   return c.json({ id, deleted: true });
 });
 
 // ─── Public blog endpoints (no auth) ──────────────────────────────────────
 app.get(`${PUBLIC}/blog`, async (c) => {
-  const posts = (await kv.getByPrefix('blog:post:')) as BlogPostShape[];
+  const posts = (await kv.getByPrefix("blog:post:")) as BlogPostShape[];
   const published = posts.filter((p) => p?.published !== false);
   const merged = await Promise.all(published.map((p) => withCounter(p)));
   return c.json(merged);
@@ -918,25 +1051,26 @@ app.get(`${PUBLIC}/blog`, async (c) => {
 // overlay live counts on top of static seed posts that don't have a
 // CMS-stored body.
 app.get(`${PUBLIC}/blog/counters`, async (_c) => {
-  const counters = (await kv.getByPrefix('blog:counter:')) as BlogCounter[];
+  const counters = (await kv.getByPrefix("blog:counter:")) as BlogCounter[];
   return _c.json(counters);
 });
 
 app.get(`${PUBLIC}/blog/:slug`, async (c) => {
-  const slug = c.req.param('slug');
+  const slug = c.req.param("slug");
   const item = (await kv.get(blogKey(slug))) as BlogPostShape | null;
-  if (!item) return c.json({ code: 'not_found', message: 'Post not found' }, 404);
+  if (!item)
+    return c.json({ code: "not_found", message: "Post not found" }, 404);
   return c.json(await withCounter(item));
 });
 
 app.post(
   `${PUBLIC}/blog/:slug/view`,
-  rateLimit({ key: 'blog-view', max: 30, windowMs: 60_000 }),
+  rateLimit({ key: "blog-view", max: 30, windowMs: 60_000 }),
   async (c) => {
-    const slug = c.req.param('slug');
+    const slug = c.req.param("slug");
     const next = await bumpCounter(slug, { views: 1 });
     return c.json({ views: next.views });
-  }
+  },
 );
 
 // Dedupe + persistence: a (slug, hashed-IP) pair can flip the like state once
@@ -944,23 +1078,23 @@ app.post(
 // cross-isolate (unlike the in-memory rate limiter).
 async function hashIP(ip: string): Promise<string> {
   const data = new TextEncoder().encode(`agroespace-like-salt::${ip}`);
-  const buf = await crypto.subtle.digest('SHA-256', data);
+  const buf = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(buf))
     .slice(0, 12)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 app.post(
   `${PUBLIC}/blog/:slug/like`,
-  rateLimit({ key: 'blog-like', max: 10, windowMs: 60_000 }),
+  rateLimit({ key: "blog-like", max: 10, windowMs: 60_000 }),
   async (c) => {
-    const slug = c.req.param('slug');
-    const dir = c.req.query('dir') === 'down' ? -1 : 1;
+    const slug = c.req.param("slug");
+    const dir = c.req.query("dir") === "down" ? -1 : 1;
     const ip =
-      c.req.header('x-forwarded-for')?.split(',')[0].trim() ||
-      c.req.header('x-real-ip') ||
-      'anon';
+      c.req.header("x-forwarded-for")?.split(",")[0].trim() ||
+      c.req.header("x-real-ip") ||
+      "anon";
     const ipHash = await hashIP(ip);
     const dedupeKey = `like-vote:${slug}:${ipHash}`;
     try {
@@ -984,32 +1118,44 @@ app.post(
     }
     const next = await bumpCounter(slug, { likes: dir });
     return c.json({ likes: next.likes });
-  }
+  },
 );
 
 // ─── Public products (no auth) ────────────────────────────────────────────
 // Statuses that hide a product from the public catalog. Matches WooCommerce
 // conventions: only `publish` (and undefined = legacy) is shown; trash/draft/
 // pending/private/deleted are all hidden.
-const PUBLIC_HIDDEN_STATUSES = new Set(['trash', 'draft', 'pending', 'private', 'deleted']);
+const PUBLIC_HIDDEN_STATUSES = new Set([
+  "trash",
+  "draft",
+  "pending",
+  "private",
+  "deleted",
+]);
 
 app.get(`${PUBLIC}/products`, async (c) => {
-  const items = (await kv.getByPrefix('wc:product:')) as any[];
+  const items = (await kv.getByPrefix("wc:product:")) as any[];
   const visible = items.filter(
-    (p) => !PUBLIC_HIDDEN_STATUSES.has(String(p?.status ?? 'publish'))
-        && p?.stock_status !== 'deleted'
-        // Admin-controlled: products with `hidden_from_catalog: true` keep
-        // syncing from Logicom (so SKUs/stock stay accurate) but are NOT
-        // shown to public visitors. Used to temporarily hide items.
-        && p?.hidden_from_catalog !== true
-        // WC standard: catalog_visibility="hidden" or "search" → not in catalog
-        && p?.catalog_visibility !== 'hidden'
+    (p) =>
+      !PUBLIC_HIDDEN_STATUSES.has(String(p?.status ?? "publish")) &&
+      p?.stock_status !== "deleted" &&
+      // Admin-controlled: products with `hidden_from_catalog: true` keep
+      // syncing from Logicom (so SKUs/stock stay accurate) but are NOT
+      // shown to public visitors. Used to temporarily hide items.
+      p?.hidden_from_catalog !== true &&
+      // WC standard: catalog_visibility="hidden" or "search" → not in catalog
+      p?.catalog_visibility !== "hidden",
   );
-  visible.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
+  visible.sort((a: any, b: any) =>
+    Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1,
+  );
   // Hydrate categories on read so the catalog filter pills show real names
   // even for products synced before the hydrate fix.
   for (const p of visible) {
-    if (Array.isArray(p?.categories) && p.categories.some((c: any) => !c?.name)) {
+    if (
+      Array.isArray(p?.categories) &&
+      p.categories.some((c: any) => !c?.name)
+    ) {
       p.categories = await hydrateProductCategories(p.categories);
     }
   }
@@ -1021,7 +1167,7 @@ app.get(`${PUBLIC}/products`, async (c) => {
 // PromoModal fetch live config; the admin endpoints allow editing via the
 // dashboard without a redeploy.
 
-const PROMO_KV_KEY = 'promo:current';
+const PROMO_KV_KEY = "promo:current";
 
 type PromoConfig = {
   id: string;
@@ -1055,31 +1201,33 @@ app.put(`${ADMIN}/promo`, requireAdmin, async (c) => {
   try {
     const body = await c.req.json();
     const config: PromoConfig = {
-      id: String(body.id ?? 'promo'),
+      id: String(body.id ?? "promo"),
       isActive: body.isActive === true,
-      badge: String(body.badge ?? ''),
-      eyebrow: String(body.eyebrow ?? ''),
-      title: String(body.title ?? ''),
-      titleSuffix: String(body.titleSuffix ?? ''),
-      description: String(body.description ?? ''),
-      dates: String(body.dates ?? ''),
-      location: String(body.location ?? ''),
-      locationDetail: String(body.locationDetail ?? ''),
-      ctaText: String(body.ctaText ?? ''),
+      badge: String(body.badge ?? ""),
+      eyebrow: String(body.eyebrow ?? ""),
+      title: String(body.title ?? ""),
+      titleSuffix: String(body.titleSuffix ?? ""),
+      description: String(body.description ?? ""),
+      dates: String(body.dates ?? ""),
+      location: String(body.location ?? ""),
+      locationDetail: String(body.locationDetail ?? ""),
+      ctaText: String(body.ctaText ?? ""),
       // Whitelist URL schemes — only http(s), mailto:, tel:, or in-app paths.
       // Blocks javascript:, data:, vbscript:, file:, etc. that could XSS.
       ctaUrl: (() => {
-        const raw = String(body.ctaUrl ?? '').trim().slice(0, 500);
-        if (!raw) return '';
-        return /^(https?:\/\/|mailto:|tel:|\/)/i.test(raw) ? raw : '';
+        const raw = String(body.ctaUrl ?? "")
+          .trim()
+          .slice(0, 500);
+        if (!raw) return "";
+        return /^(https?:\/\/|mailto:|tel:|\/)/i.test(raw) ? raw : "";
       })(),
-      image: String(body.image ?? ''),
+      image: String(body.image ?? ""),
       updatedAt: new Date().toISOString(),
     };
     await kv.set(PROMO_KV_KEY, config);
     return c.json(config);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
@@ -1089,8 +1237,9 @@ app.put(`${ADMIN}/promo`, requireAdmin, async (c) => {
 // carries marketing metadata (tagline, expandable description, technical
 // specs, gallery URLs, brochure links).
 
-const FEATURED_KV_PREFIX = 'featured:';
-const featuredKey = (productId: string | number) => `${FEATURED_KV_PREFIX}${productId}`;
+const FEATURED_KV_PREFIX = "featured:";
+const featuredKey = (productId: string | number) =>
+  `${FEATURED_KV_PREFIX}${productId}`;
 
 type Translatable = { fr: string; en?: string; ar?: string };
 type FeaturedSpec = { label: Translatable; value: Translatable };
@@ -1109,17 +1258,19 @@ type FeaturedProduct = {
 
 function sanitizeTranslatable(raw: any, max = 1000): Translatable {
   return {
-    fr: String(raw?.fr ?? '').slice(0, max),
-    en: raw?.en != null ? String(raw.en).slice(0, max) : '',
-    ar: raw?.ar != null ? String(raw.ar).slice(0, max) : '',
+    fr: String(raw?.fr ?? "").slice(0, max),
+    en: raw?.en != null ? String(raw.en).slice(0, max) : "",
+    ar: raw?.ar != null ? String(raw.ar).slice(0, max) : "",
   };
 }
 
 function sanitizeFeaturedUrl(raw: any, maxLen = 1000): string {
-  const s = String(raw ?? '').trim().slice(0, maxLen);
-  if (!s) return '';
+  const s = String(raw ?? "")
+    .trim()
+    .slice(0, maxLen);
+  if (!s) return "";
   // Only http(s) or in-app absolute paths — blocks javascript:/data:/vbscript:
-  return /^(https?:\/\/|\/)/i.test(s) ? s : '';
+  return /^(https?:\/\/|\/)/i.test(s) ? s : "";
 }
 
 function sanitizeFeatured(body: any, productId: number): FeaturedProduct {
@@ -1159,13 +1310,14 @@ function sanitizeFeatured(body: any, productId: number): FeaturedProduct {
 app.get(`${PUBLIC}/featured`, async (c) => {
   const items = (await kv.getByPrefix(FEATURED_KV_PREFIX)) as FeaturedProduct[];
   const enabled = items.filter((f) => f?.enabled !== false);
-  enabled.sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
+  enabled.sort(
+    (a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0),
+  );
   const hydrated = await Promise.all(
     enabled.map(async (f) => {
       const product = (await kv.get(k.product(f.product_id))) as any | null;
       if (!product) return null;
-      if (PUBLIC_HIDDEN_STATUSES.has(String(product.status ?? 'publish'))) return null;
-      if (product.hidden_from_catalog === true || product.catalog_visibility === 'hidden')
+      if (PUBLIC_HIDDEN_STATUSES.has(String(product.status ?? "publish")))
         return null;
       return { ...f, product: wcProductShape(product) };
     }),
@@ -1190,46 +1342,74 @@ app.post(`${ADMIN}/featured`, requireAdmin, async (c) => {
     const body = await c.req.json();
     const productId = Number(body?.product_id);
     if (!Number.isFinite(productId) || productId <= 0) {
-      return c.json({ code: 'rest_invalid_payload', message: 'product_id required' }, 400);
+      return c.json(
+        { code: "rest_invalid_payload", message: "product_id required" },
+        400,
+      );
     }
     const product = await kv.get(k.product(productId));
     if (!product) {
       return c.json(
-        { code: 'rest_product_not_found', message: 'Product does not exist' },
+        { code: "rest_product_not_found", message: "Product does not exist" },
         404,
       );
     }
     const config = sanitizeFeatured(body, productId);
     await kv.set(featuredKey(productId), config);
+    if (config.enabled !== false) {
+      const prod = (await kv.get(k.product(productId))) as any;
+      if (prod?.hidden_from_catalog === true) {
+        await kv.set(k.product(productId), {
+          ...prod,
+          hidden_from_catalog: false,
+          date_modified: new Date().toISOString(),
+        });
+      }
+    }
     return c.json(config);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.put(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
   try {
-    const productId = Number(c.req.param('id'));
+    const productId = Number(c.req.param("id"));
     if (!Number.isFinite(productId) || productId <= 0) {
-      return c.json({ code: 'rest_invalid_id', message: 'invalid id' }, 400);
+      return c.json({ code: "rest_invalid_id", message: "invalid id" }, 400);
     }
-    const existing = (await kv.get(featuredKey(productId))) as FeaturedProduct | null;
+    const existing = (await kv.get(
+      featuredKey(productId),
+    )) as FeaturedProduct | null;
     if (!existing) {
-      return c.json({ code: 'rest_not_found', message: 'Featured entry not found' }, 404);
+      return c.json(
+        { code: "rest_not_found", message: "Featured entry not found" },
+        404,
+      );
     }
     const body = await c.req.json();
     const config = sanitizeFeatured({ ...existing, ...body }, productId);
     await kv.set(featuredKey(productId), config);
+    if (config.enabled !== false) {
+      const prod = (await kv.get(k.product(productId))) as any;
+      if (prod?.hidden_from_catalog === true) {
+        await kv.set(k.product(productId), {
+          ...prod,
+          hidden_from_catalog: false,
+          date_modified: new Date().toISOString(),
+        });
+      }
+    }
     return c.json(config);
   } catch (e) {
-    return c.json({ code: 'rest_invalid_payload', message: String(e) }, 400);
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
 });
 
 app.delete(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
-  const productId = Number(c.req.param('id'));
+  const productId = Number(c.req.param("id"));
   if (!Number.isFinite(productId) || productId <= 0) {
-    return c.json({ code: 'rest_invalid_id', message: 'invalid id' }, 400);
+    return c.json({ code: "rest_invalid_id", message: "invalid id" }, 400);
   }
   await kv.del(featuredKey(productId));
   return c.json({ deleted: true, id: productId });
@@ -1240,8 +1420,11 @@ app.delete(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
 // the WooCommerce/WordPress response shape. If the shape doesn't match,
 // they fail to detect existing records and re-create them in a loop.
 
-const SUPABASE_URL_ENV = Deno.env.get('SUPABASE_URL') ?? '';
-const PUBLIC_HOST = SUPABASE_URL_ENV.replace(/^https?:\/\//, '').replace(/\/$/, '');
+const SUPABASE_URL_ENV = Deno.env.get("SUPABASE_URL") ?? "";
+const PUBLIC_HOST = SUPABASE_URL_ENV.replace(/^https?:\/\//, "").replace(
+  /\/$/,
+  "",
+);
 const API_ROOT_ABS = `${SUPABASE_URL_ENV}/functions/v1/make-server-0c561120`;
 
 // Sequential ID counter — WooCommerce uses small auto-increment integers,
@@ -1253,13 +1436,13 @@ const API_ROOT_ABS = `${SUPABASE_URL_ENV}/functions/v1/make-server-0c561120`;
 // table, breaks the local id→remote-id mapping, and causes infinite POST
 // retry loops. NEVER use Date.now() for sync-visible IDs.
 type IdKind =
-  | 'product'
-  | 'media'
-  | 'category'
-  | 'attribute'
-  | 'attribute_term'
-  | 'customer'
-  | 'order';
+  | "product"
+  | "media"
+  | "category"
+  | "attribute"
+  | "attribute_term"
+  | "customer"
+  | "order";
 
 async function nextId(kind: IdKind): Promise<number> {
   const key = `counter:${kind}`;
@@ -1268,14 +1451,14 @@ async function nextId(kind: IdKind): Promise<number> {
   // between e.g. category-id 15 and product-id 15 in Logicom's lookup tables.
   const start: Record<string, number> = {
     media: 1000,
-    category: 14,    // next will be 15 — matches WC default "Uncategorized" id
+    category: 14, // next will be 15 — matches WC default "Uncategorized" id
     customer: 1,
     order: 1,
     attribute: 0,
     attribute_term: 0,
     product: 0,
   };
-  const next = (cur ?? (start[kind] ?? 0)) + 1;
+  const next = (cur ?? start[kind] ?? 0) + 1;
   await kv.set(key, next);
   return next;
 }
@@ -1294,7 +1477,12 @@ const MAX_SAFE_WC_ID_GLOBAL = 2_147_483_647;
 // resource type later automatically inherits the protection.
 async function safeIncomingId(kind: IdKind, providedId: any): Promise<number> {
   const n = providedId != null ? Number(providedId) : NaN;
-  if (Number.isFinite(n) && n > 0 && Math.floor(n) === n && n <= MAX_SAFE_WC_ID_GLOBAL) {
+  if (
+    Number.isFinite(n) &&
+    n > 0 &&
+    Math.floor(n) === n &&
+    n <= MAX_SAFE_WC_ID_GLOBAL
+  ) {
     return n;
   }
   return await nextId(kind);
@@ -1315,13 +1503,16 @@ async function migrateOversizedId<T extends { id: number | string }>(
   secondaryUpdates?: (newId: number, oldId: number) => Promise<void>,
 ): Promise<T> {
   const oldId = Number(existing.id);
-  if (!Number.isFinite(oldId) || oldId <= MAX_SAFE_WC_ID_GLOBAL) return existing;
+  if (!Number.isFinite(oldId) || oldId <= MAX_SAFE_WC_ID_GLOBAL)
+    return existing;
   const newId = await nextId(kind);
   const migrated: T = { ...existing, id: newId };
   await kv.set(kvKeyFor(newId), migrated);
   await kv.del(kvKeyFor(oldId));
   if (secondaryUpdates) await secondaryUpdates(newId, oldId);
-  console.log(`[wc-id-migrate] ${kind} ${oldId} → ${newId} (int32 overflow fix)`);
+  console.log(
+    `[wc-id-migrate] ${kind} ${oldId} → ${newId} (int32 overflow fix)`,
+  );
   return migrated;
 }
 
@@ -1329,69 +1520,77 @@ async function migrateOversizedId<T extends { id: number | string }>(
 // to "outofstock" automatically once stock_quantity reaches 0 (when stock is
 // managed). Logicom often leaves stock_status as "instock" no matter what,
 // so we enforce the rule here on every read AND every write.
-function deriveStockStatus(p: any): 'instock' | 'outofstock' {
+function deriveStockStatus(p: any): "instock" | "outofstock" {
   // Universal rule: if a quantity is present and it's 0 or negative, the
   // product is out of stock — regardless of whether `manage_stock` is on.
   // Logicom often sends `stock_quantity: 0` with `manage_stock: false` and
   // `stock_status: "instock"` (stale), so we always recompute from quantity.
-  const hasQty = p?.stock_quantity != null && p?.stock_quantity !== '';
+  const hasQty = p?.stock_quantity != null && p?.stock_quantity !== "";
   if (hasQty) {
     const qty = Number(p.stock_quantity);
-    if (!Number.isFinite(qty) || qty <= 0) return 'outofstock';
-    return 'instock';
+    if (!Number.isFinite(qty) || qty <= 0) return "outofstock";
+    return "instock";
   }
   // No quantity supplied at all → trust the stored status (defaults instock).
-  return p?.stock_status === 'outofstock' ? 'outofstock' : 'instock';
+  return p?.stock_status === "outofstock" ? "outofstock" : "instock";
 }
 
 // ISO date without trailing Z — matches WordPress format ("2026-05-03T14:09:58")
 function wpDate(d?: string | Date): string {
   const date = d ? new Date(d) : new Date();
-  return date.toISOString().replace(/\.\d+Z$/, '').replace('Z', '');
+  return date
+    .toISOString()
+    .replace(/\.\d+Z$/, "")
+    .replace("Z", "");
 }
 
 function wcProductShape(p: any): any {
   const id = Number(p.id);
   const created = wpDate(p.date_created);
   const modified = wpDate(p.date_modified ?? p.date_created);
-  const name = String(p.name ?? '');
+  const name = String(p.name ?? "");
   const slug = p.slug ?? (slugify(name) || `product-${id}`);
-  const regular = String(p.regular_price ?? '');
-  const sale = String(p.sale_price ?? '');
+  const regular = String(p.regular_price ?? "");
+  const sale = String(p.sale_price ?? "");
   const price = sale || regular;
   const onSale = !!sale && sale !== regular;
 
   // Normalize images to WC shape
-  const images = (Array.isArray(p.images) && p.images.length > 0)
-    ? p.images.map((img: any, idx: number) => ({
-        id: Number(img.id ?? idx + 1),
-        date_created: created,
-        date_created_gmt: created,
-        date_modified: modified,
-        date_modified_gmt: modified,
-        src: String(img.src ?? img.source_url ?? ''),
-        name: String(img.name ?? ''),
-        alt: String(img.alt ?? ''),
-      }))
-    : (p.image
-        ? [{
-            id: 0,
-            date_created: created,
-            date_created_gmt: created,
-            date_modified: modified,
-            date_modified_gmt: modified,
-            src: String(p.image),
-            name: '',
-            alt: '',
-          }]
-        : []);
+  const images =
+    Array.isArray(p.images) && p.images.length > 0
+      ? p.images.map((img: any, idx: number) => ({
+          id: Number(img.id ?? idx + 1),
+          date_created: created,
+          date_created_gmt: created,
+          date_modified: modified,
+          date_modified_gmt: modified,
+          src: String(img.src ?? img.source_url ?? ""),
+          name: String(img.name ?? ""),
+          alt: String(img.alt ?? ""),
+        }))
+      : p.image
+        ? [
+            {
+              id: 0,
+              date_created: created,
+              date_created_gmt: created,
+              date_modified: modified,
+              date_modified_gmt: modified,
+              src: String(p.image),
+              name: "",
+              alt: "",
+            },
+          ]
+        : [];
 
   // Normalize categories
-  const categories = (Array.isArray(p.categories) ? p.categories : []).map((c: any) => ({
-    id: Number(c.id ?? 0),
-    name: String(c.name ?? ''),
-    slug: String(c.slug ?? slugify(c.name ?? '')),
-  }));
+  const categories = (Array.isArray(p.categories) ? p.categories : []).map(
+    (c: any) => ({
+      id: Number(c.id ?? 0),
+      name: String(c.name ?? ""),
+      slug: String(c.slug ?? slugify(c.name ?? "")),
+    }),
+  );
 
   return {
     id,
@@ -1402,13 +1601,13 @@ function wcProductShape(p: any): any {
     date_created_gmt: created,
     date_modified: modified,
     date_modified_gmt: modified,
-    type: String(p.type ?? 'simple'),
-    status: String(p.status ?? 'publish'),
+    type: String(p.type ?? "simple"),
+    status: String(p.status ?? "publish"),
     featured: p.featured === true,
-    catalog_visibility: String(p.catalog_visibility ?? 'visible'),
-    description: String(p.description ?? ''),
-    short_description: String(p.short_description ?? ''),
-    sku: String(p.sku ?? ''),
+    catalog_visibility: String(p.catalog_visibility ?? "visible"),
+    description: String(p.description ?? ""),
+    short_description: String(p.short_description ?? ""),
+    sku: String(p.sku ?? ""),
     price,
     regular_price: regular,
     sale_price: sale,
@@ -1424,31 +1623,31 @@ function wcProductShape(p: any): any {
     downloads: [],
     download_limit: -1,
     download_expiry: -1,
-    external_url: '',
-    button_text: '',
-    tax_status: 'taxable',
-    tax_class: '',
+    external_url: "",
+    button_text: "",
+    tax_status: "taxable",
+    tax_class: "",
     manage_stock: p.manage_stock === true,
     stock_quantity: p.manage_stock ? Number(p.stock_quantity ?? 0) : null,
     stock_status: deriveStockStatus(p),
-    backorders: 'no',
+    backorders: "no",
     backorders_allowed: false,
     backordered: false,
     sold_individually: false,
-    weight: String(p.weight ?? ''),
-    dimensions: { length: '', width: '', height: '' },
+    weight: String(p.weight ?? ""),
+    dimensions: { length: "", width: "", height: "" },
     shipping_required: true,
     shipping_taxable: true,
-    shipping_class: '',
+    shipping_class: "",
     shipping_class_id: 0,
     reviews_allowed: true,
-    average_rating: '0.00',
+    average_rating: "0.00",
     rating_count: 0,
     related_ids: [],
     upsell_ids: [],
     cross_sell_ids: [],
     parent_id: 0,
-    purchase_note: '',
+    purchase_note: "",
     categories,
     tags: [],
     images,
@@ -1457,7 +1656,9 @@ function wcProductShape(p: any): any {
     variations: [],
     grouped_products: [],
     menu_order: 0,
-    price_html: price ? `<span class="woocommerce-Price-amount amount">${price}</span>` : '',
+    price_html: price
+      ? `<span class="woocommerce-Price-amount amount">${price}</span>`
+      : "",
     meta_data: Array.isArray(p.meta_data) ? p.meta_data : [],
     _links: {
       self: [{ href: `${API_ROOT_ABS}/wp-json/wc/v3/products/${id}` }],
@@ -1469,11 +1670,11 @@ function wcProductShape(p: any): any {
 function wpMediaShape(m: any): any {
   const id = Number(m.id);
   const date = wpDate(m.date_created ?? m.date);
-  const sourceUrl = String(m.source_url ?? '');
+  const sourceUrl = String(m.source_url ?? "");
   const filename = String(m.filename ?? m.title ?? `media-${id}.jpg`);
-  const baseName = filename.replace(/\.[^/.]+$/, '');
+  const baseName = filename.replace(/\.[^/.]+$/, "");
   const slug = (m.slug ?? (slugify(baseName) || `media-${id}`)) as string;
-  const mimeType = String(m.mime_type ?? 'image/jpeg');
+  const mimeType = String(m.mime_type ?? "image/jpeg");
   const filesize = Number(m.filesize ?? 0);
   const width = Number(m.width ?? 0);
   const height = Number(m.height ?? 0);
@@ -1487,23 +1688,29 @@ function wpMediaShape(m: any): any {
     modified: date,
     modified_gmt: date,
     slug,
-    status: 'inherit',
-    type: 'attachment',
+    status: "inherit",
+    type: "attachment",
     link: sourceUrl,
     title: { raw: titleText, rendered: titleText },
     author: 1,
     featured_media: 0,
-    comment_status: 'open',
-    ping_status: 'closed',
-    template: '',
+    comment_status: "open",
+    ping_status: "closed",
+    template: "",
     meta: [],
     permalink_template: `${API_ROOT_ABS}/?attachment_id=${id}`,
     generated_slug: slug,
-    class_list: [`post-${id}`, 'attachment', 'type-attachment', 'status-inherit', 'hentry'],
-    description: { raw: '', rendered: '' },
-    caption: { raw: '', rendered: '' },
-    alt_text: String(m.alt_text ?? ''),
-    media_type: 'image',
+    class_list: [
+      `post-${id}`,
+      "attachment",
+      "type-attachment",
+      "status-inherit",
+      "hentry",
+    ],
+    description: { raw: "", rendered: "" },
+    caption: { raw: "", rendered: "" },
+    alt_text: String(m.alt_text ?? ""),
+    media_type: "image",
     mime_type: mimeType,
     media_details: {
       width,
@@ -1520,17 +1727,17 @@ function wpMediaShape(m: any): any {
         },
       },
       image_meta: {
-        aperture: '0',
-        credit: '',
-        camera: '',
-        caption: '',
-        created_timestamp: '0',
-        copyright: '',
-        focal_length: '0',
-        iso: '0',
-        shutter_speed: '0',
-        title: '',
-        orientation: '1',
+        aperture: "0",
+        credit: "",
+        camera: "",
+        caption: "",
+        created_timestamp: "0",
+        copyright: "",
+        focal_length: "0",
+        iso: "0",
+        shutter_speed: "0",
+        title: "",
+        orientation: "1",
         keywords: [],
       },
     },
@@ -1538,20 +1745,26 @@ function wpMediaShape(m: any): any {
     source_url: sourceUrl,
     missing_image_sizes: [],
     _links: {
-      self: [{
-        href: `${API_ROOT_ABS}/wp-json/wp/v2/media/${id}`,
-        targetHints: { allow: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
-      }],
+      self: [
+        {
+          href: `${API_ROOT_ABS}/wp-json/wp/v2/media/${id}`,
+          targetHints: { allow: ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+        },
+      ],
       collection: [{ href: `${API_ROOT_ABS}/wp-json/wp/v2/media` }],
       about: [{ href: `${API_ROOT_ABS}/wp-json/wp/v2/types/attachment` }],
-      author: [{
-        embeddable: true,
-        href: `${API_ROOT_ABS}/wp-json/wp/v2/users/1`,
-      }],
-      replies: [{
-        embeddable: true,
-        href: `${API_ROOT_ABS}/wp-json/wp/v2/comments?post=${id}`,
-      }],
+      author: [
+        {
+          embeddable: true,
+          href: `${API_ROOT_ABS}/wp-json/wp/v2/users/1`,
+        },
+      ],
+      replies: [
+        {
+          embeddable: true,
+          href: `${API_ROOT_ABS}/wp-json/wp/v2/comments?post=${id}`,
+        },
+      ],
     },
   };
 }
@@ -1576,8 +1789,8 @@ async function hydrateProductImages(images: any): Promise<any[]> {
         out.push({
           id: Number(img.id),
           src: media.source_url,
-          name: media.title ?? img.name ?? '',
-          alt: img.alt ?? media.alt_text ?? '',
+          name: media.title ?? img.name ?? "",
+          alt: img.alt ?? media.alt_text ?? "",
         });
         continue;
       }
@@ -1604,12 +1817,16 @@ async function hydrateProductCategories(categories: any): Promise<any[]> {
     if (stored) {
       out.push({
         id: idNum,
-        name: String(stored.name ?? cat.name ?? ''),
-        slug: String(stored.slug ?? cat.slug ?? ''),
+        name: String(stored.name ?? cat.name ?? ""),
+        slug: String(stored.slug ?? cat.slug ?? ""),
       });
     } else if (cat.name) {
       // Category not in our DB but Logicom sent a name — keep what they sent
-      out.push({ id: idNum, name: String(cat.name), slug: String(cat.slug ?? '') });
+      out.push({
+        id: idNum,
+        name: String(cat.name),
+        slug: String(cat.slug ?? ""),
+      });
     }
     // No name available and not in DB → drop entry (better than empty pill)
   }
@@ -1632,9 +1849,14 @@ function mergeImages(
   if (!merge) return incoming;
   const seen = new Map<string, any>();
   const keyOf = (img: any) =>
-    img?.id != null ? `id:${img.id}` : img?.src ? `src:${img.src}` : `?:${Math.random()}`;
+    img?.id != null
+      ? `id:${img.id}`
+      : img?.src
+        ? `src:${img.src}`
+        : `?:${Math.random()}`;
   for (const img of existing) seen.set(keyOf(img), img);
-  for (const img of incoming) seen.set(keyOf(img), { ...seen.get(keyOf(img)), ...img });
+  for (const img of incoming)
+    seen.set(keyOf(img), { ...seen.get(keyOf(img)), ...img });
   return Array.from(seen.values());
 }
 
@@ -1650,30 +1872,33 @@ function wcError(c: any, code: string, message: string, status: number) {
 async function uploadFileToStorage(
   filename: string,
   body: Uint8Array,
-  contentType: string
+  contentType: string,
 ): Promise<{ url: string; path: string; size: number }> {
-  const url = Deno.env.get('SUPABASE_URL') ?? '';
-  const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-  if (!url || !key) throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!url || !key)
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   const sb = createClient(url, key);
 
   // Ensure bucket exists (idempotent — error is harmless if it already exists)
   try {
-    await sb.storage.createBucket('media', { public: true });
-  } catch { /* already exists */ }
+    await sb.storage.createBucket("media", { public: true });
+  } catch {
+    /* already exists */
+  }
 
   const yyyy = new Date().getFullYear();
-  const mm = String(new Date().getMonth() + 1).padStart(2, '0');
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const mm = String(new Date().getMonth() + 1).padStart(2, "0");
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `${yyyy}/${mm}/${Date.now()}-${safeName}`;
 
-  const { error } = await sb.storage.from('media').upload(path, body, {
+  const { error } = await sb.storage.from("media").upload(path, body, {
     contentType,
     upsert: false,
   });
   if (error) throw error;
 
-  const { data } = sb.storage.from('media').getPublicUrl(path);
+  const { data } = sb.storage.from("media").getPublicUrl(path);
   return { url: data.publicUrl, path, size: body.byteLength };
 }
 
@@ -1704,21 +1929,23 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 function checkApiKey(c: any): boolean {
-  const expected = Deno.env.get('AGROESPACE_API_KEY') ?? '';
-  if (!expected || expected === 'changeme-set-AGROESPACE_API_KEY') return false;
+  const expected = Deno.env.get("AGROESPACE_API_KEY") ?? "";
+  if (!expected || expected === "changeme-set-AGROESPACE_API_KEY") return false;
 
-  const headerKey = c.req.header('X-API-KEY') ?? c.req.header('x-api-key') ?? '';
+  const headerKey =
+    c.req.header("X-API-KEY") ?? c.req.header("x-api-key") ?? "";
   if (headerKey && timingSafeEqual(headerKey, expected)) return true;
 
-  const auth = c.req.header('Authorization') ?? c.req.header('authorization') ?? '';
+  const auth =
+    c.req.header("Authorization") ?? c.req.header("authorization") ?? "";
   if (auth) {
     const lower = auth.toLowerCase();
-    if (lower.startsWith('bearer ')) {
+    if (lower.startsWith("bearer ")) {
       if (timingSafeEqual(auth.slice(7).trim(), expected)) return true;
-    } else if (lower.startsWith('basic ')) {
+    } else if (lower.startsWith("basic ")) {
       try {
         const decoded = atob(auth.slice(6).trim());
-        const idx = decoded.indexOf(':');
+        const idx = decoded.indexOf(":");
         const secret = idx === -1 ? decoded : decoded.slice(idx + 1);
         if (timingSafeEqual(secret, expected)) return true;
       } catch {
@@ -1727,7 +1954,7 @@ function checkApiKey(c: any): boolean {
     }
   }
 
-  const cs = c.req.query('consumer_secret');
+  const cs = c.req.query("consumer_secret");
   if (cs && timingSafeEqual(cs, expected)) return true;
   return false;
 }
@@ -1735,8 +1962,11 @@ function checkApiKey(c: any): boolean {
 function requireApiKey(c: any, next: any) {
   if (!checkApiKey(c)) {
     return c.json(
-      { code: 'woocommerce_rest_authentication_error', message: 'Invalid or missing API key' },
-      401
+      {
+        code: "woocommerce_rest_authentication_error",
+        message: "Invalid or missing API key",
+      },
+      401,
     );
   }
   return next();
@@ -1746,13 +1976,16 @@ function requireApiKey(c: any, next: any) {
 // caps per_page at 100 (matches WC default), and writes X-WP-Total and
 // X-WP-TotalPages headers so Logicom knows when to stop paging.
 function paginate<T>(c: any, items: T[]): T[] {
-  const page = Math.max(1, Number(c.req.query('page') ?? '1') || 1);
-  const perPage = Math.min(100, Math.max(1, Number(c.req.query('per_page') ?? '20') || 20));
+  const page = Math.max(1, Number(c.req.query("page") ?? "1") || 1);
+  const perPage = Math.min(
+    100,
+    Math.max(1, Number(c.req.query("per_page") ?? "20") || 20),
+  );
   const total = items.length;
   const totalPages = Math.max(1, Math.ceil(total / perPage));
   const start = (page - 1) * perPage;
-  c.header('X-WP-Total', String(total));
-  c.header('X-WP-TotalPages', String(totalPages));
+  c.header("X-WP-Total", String(total));
+  c.header("X-WP-TotalPages", String(totalPages));
   return items.slice(start, start + perPage);
 }
 
@@ -1761,7 +1994,8 @@ const k = {
   productSku: (sku: string) => `wc:product_sku:${sku}`,
   category: (id: string | number) => `wc:category:${id}`,
   attribute: (id: string | number) => `wc:attribute:${id}`,
-  attrTerm: (attrId: string | number, id: string | number) => `wc:attribute:${attrId}:term:${id}`,
+  attrTerm: (attrId: string | number, id: string | number) =>
+    `wc:attribute:${attrId}:term:${id}`,
   order: (id: string | number) => `wc:order:${id}`,
   customer: (id: string | number) => `wc:customer:${id}`,
   media: (id: string | number) => `wp:media:${id}`,
@@ -1779,40 +2013,44 @@ async function seedDefaultsOnce() {
   if (!existing) {
     await kv.set(k.category(15), {
       id: 15,
-      name: 'Uncategorized',
-      slug: 'uncategorized',
+      name: "Uncategorized",
+      slug: "uncategorized",
       parent: 0,
-      description: '',
-      display: 'default',
+      description: "",
+      display: "default",
       image: null,
       menu_order: 0,
       count: 0,
     });
     // Make sure the counter doesn't reuse 15
-    const cur = (await kv.get('counter:category')) as number | null;
-    if (!cur || cur < 15) await kv.set('counter:category', 15);
-    console.log('[wc-categories] seeded default Uncategorized id=15');
+    const cur = (await kv.get("counter:category")) as number | null;
+    if (!cur || cur < 15) await kv.set("counter:category", 15);
+    console.log("[wc-categories] seeded default Uncategorized id=15");
   }
 }
 
 app.get(`${WC}/products`, requireApiKey, async (c) => {
-  const sku = c.req.query('sku');
-  const fields = c.req.query('_fields');
-  const status = c.req.query('status'); // e.g. ?status=publish or ?status=trash
-  const items = (await kv.getByPrefix('wc:product:')) as any[];
+  const sku = c.req.query("sku");
+  const fields = c.req.query("_fields");
+  const status = c.req.query("status"); // e.g. ?status=publish or ?status=trash
+  const items = (await kv.getByPrefix("wc:product:")) as any[];
   let filtered = items;
   if (sku) filtered = filtered.filter((p: any) => p?.sku === sku);
   if (status) {
     // ?status=any → return everything (matches WC convention)
-    if (status !== 'any') {
-      filtered = filtered.filter((p: any) => String(p?.status ?? 'publish') === status);
+    if (status !== "any") {
+      filtered = filtered.filter(
+        (p: any) => String(p?.status ?? "publish") === status,
+      );
     }
   }
   // Newest first — keeps Logicom's incremental pulls deterministic.
-  filtered.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
+  filtered.sort((a: any, b: any) =>
+    Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1,
+  );
   let page = paginate(c, filtered).map((p) => wcProductShape(p));
   if (fields) {
-    const keep = fields.split(',').map((s) => s.trim());
+    const keep = fields.split(",").map((s) => s.trim());
     page = page.map((p: any) => {
       const out: Record<string, unknown> = {};
       keep.forEach((f) => {
@@ -1825,10 +2063,15 @@ app.get(`${WC}/products`, requireApiKey, async (c) => {
 });
 
 app.get(`${WC}/products/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.product(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_product_id', 'Invalid ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_product_id",
+      "Invalid ID.",
+      404,
+    );
   }
   return c.json(wcProductShape(existing));
 });
@@ -1836,15 +2079,22 @@ app.get(`${WC}/products/:id`, requireApiKey, async (c) => {
 app.post(`${WC}/products`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
-    console.log(`[wc-product-create] body=${JSON.stringify(body).slice(0, 500)}`);
+    console.log(
+      `[wc-product-create] body=${JSON.stringify(body).slice(0, 500)}`,
+    );
 
     if (body.images) body.images = await hydrateProductImages(body.images);
-    if (body.categories) body.categories = await hydrateProductCategories(body.categories);
+    if (body.categories)
+      body.categories = await hydrateProductCategories(body.categories);
 
     if (body.sku) {
-      const existingMap = (await kv.get(k.productSku(body.sku))) as { id: number } | null;
+      const existingMap = (await kv.get(k.productSku(body.sku))) as {
+        id: number;
+      } | null;
       if (existingMap?.id != null) {
-        const existing = (await kv.get(k.product(existingMap.id))) as any | null;
+        const existing = (await kv.get(k.product(existingMap.id))) as
+          | any
+          | null;
         if (existing) {
           // ── Recycled-SKU detection ────────────────────────────────────────
           // Logicom doesn't always call DELETE when a user deletes a product
@@ -1856,28 +2106,32 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
           // If the incoming POST has a different name (with a name set), or
           // the existing record was already trashed, treat it as a true
           // recreate: wipe stale fields, regenerate the picture slot.
-          const incomingName = String(body.name ?? '').trim();
-          const existingName = String(existing.name ?? '').trim();
+          const incomingName = String(body.name ?? "").trim();
+          const existingName = String(existing.name ?? "").trim();
           const isRecreation =
-            existing.status === 'trash' ||
-            (incomingName !== '' && existingName !== '' && incomingName !== existingName);
+            existing.status === "trash" ||
+            (incomingName !== "" &&
+              existingName !== "" &&
+              incomingName !== existingName);
 
           if (isRecreation) {
-            console.log(`[wc-product-create] RECYCLED SKU "${body.sku}" — old name="${existingName}" new name="${incomingName}" → resetting product`);
+            console.log(
+              `[wc-product-create] RECYCLED SKU "${body.sku}" — old name="${existingName}" new name="${incomingName}" → resetting product`,
+            );
             // Build a fresh product with default fields, only keeping the id+sku
             const reset = {
               id: existingMap.id,
               sku: body.sku,
-              name: '',
-              slug: '',
-              description: '',
-              short_description: '',
-              regular_price: '',
-              sale_price: '',
+              name: "",
+              slug: "",
+              description: "",
+              short_description: "",
+              regular_price: "",
+              sale_price: "",
               manage_stock: false,
               stock_quantity: 0,
-              stock_status: 'instock',
-              status: 'publish',
+              stock_status: "instock",
+              status: "publish",
               categories: [],
               attributes: [],
               images: [],
@@ -1904,26 +2158,28 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
             date_modified: new Date().toISOString(),
           };
           await kv.set(k.product(existingMap.id), merged);
-          console.log(`[wc-product-create] idempotent retry of sku="${body.sku}" → returning existing id=${existingMap.id}`);
+          console.log(
+            `[wc-product-create] idempotent retry of sku="${body.sku}" → returning existing id=${existingMap.id}`,
+          );
           return c.json(wcProductShape(merged), 200);
         }
       }
     }
 
-    const id = await safeIncomingId('product', body.id);
+    const id = await safeIncomingId("product", body.id);
     const now = new Date().toISOString();
     const product: any = {
       id,
-      sku: body.sku ?? '',
-      name: body.name ?? '',
+      sku: body.sku ?? "",
+      name: body.name ?? "",
       slug: body.slug ?? slugify(body.name ?? `product-${id}`),
-      description: body.description ?? '',
-      short_description: body.short_description ?? '',
-      regular_price: String(body.regular_price ?? ''),
-      sale_price: String(body.sale_price ?? ''),
+      description: body.description ?? "",
+      short_description: body.short_description ?? "",
+      regular_price: String(body.regular_price ?? ""),
+      sale_price: String(body.sale_price ?? ""),
       manage_stock: body.manage_stock === true,
       stock_quantity: Number(body.stock_quantity ?? 0),
-      stock_status: body.stock_status ?? 'instock',
+      stock_status: body.stock_status ?? "instock",
       categories: body.categories ?? [],
       attributes: body.attributes ?? [],
       images: body.images ?? [],
@@ -1938,30 +2194,45 @@ app.post(`${WC}/products`, requireApiKey, async (c) => {
     if (product.sku) await kv.set(k.productSku(product.sku), { id });
     return c.json(wcProductShape(product), 201);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.product(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_product_id', 'Invalid ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_product_id",
+      "Invalid ID.",
+      404,
+    );
   }
   try {
     const body = await c.req.json();
     // Log the full payload so we can diagnose issues like "Logicom isn't
     // actually sending the new price/image" — invaluable for debugging.
-    console.log(`[wc-product-update] id=${id} body=${JSON.stringify(body).slice(0, 800)}`);
-    if (body.categories) body.categories = await hydrateProductCategories(body.categories);
+    console.log(
+      `[wc-product-update] id=${id} body=${JSON.stringify(body).slice(0, 800)}`,
+    );
+    if (body.categories)
+      body.categories = await hydrateProductCategories(body.categories);
     let mergedImages: any[] | undefined;
     if (body.images !== undefined) {
       const hydrated = await hydrateProductImages(body.images);
       // Default = REPLACE (matches real WC). Pass `merge_images: true` if a
       // sync tool sends photos one at a time and expects them to accumulate.
-      const merge = body.merge_images === true || c.req.query('merge_images') === 'true';
-      mergedImages = mergeImages((existing as any).images ?? [], hydrated, merge);
-      console.log(`[wc-product-update] id=${existing.id} images: incoming=${hydrated.length} ${merge ? 'merge' : 'replace'} → final=${mergedImages.length}`);
+      const merge =
+        body.merge_images === true || c.req.query("merge_images") === "true";
+      mergedImages = mergeImages(
+        (existing as any).images ?? [],
+        hydrated,
+        merge,
+      );
+      console.log(
+        `[wc-product-update] id=${existing.id} images: incoming=${hydrated.length} ${merge ? "merge" : "replace"} → final=${mergedImages.length}`,
+      );
     }
     const next: any = {
       ...existing,
@@ -1980,7 +2251,7 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
     if (next.sku) await kv.set(k.productSku(next.sku), { id: Number(id) });
     return c.json(wcProductShape(next), 200);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
@@ -1989,8 +2260,8 @@ app.put(`${WC}/products/:id`, requireApiKey, async (c) => {
 //   DELETE /products/:id            → soft trash (status='trash', stays in DB)
 //   DELETE /products/:id?force=true → permanent delete (hard remove)
 function parseForceFlag(c: any): boolean {
-  const v = String(c.req.query('force') ?? '').toLowerCase();
-  return v === 'true' || v === '1' || v === 'yes';
+  const v = String(c.req.query("force") ?? "").toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
 }
 
 // Helper: trash or permanently delete a product. Used by both the ID-based
@@ -2001,9 +2272,12 @@ function parseForceFlag(c: any): boolean {
 // create logic finds the trashed/deleted record and merges old data (price,
 // images) into the "new" product, producing a Frankenstein record with the
 // new name but old price/photos.
-async function deleteProductInternal(existing: any, force: boolean): Promise<any> {
+async function deleteProductInternal(
+  existing: any,
+  force: boolean,
+): Promise<any> {
   const id = Number(existing.id);
-  const sku = existing.sku ? String(existing.sku) : '';
+  const sku = existing.sku ? String(existing.sku) : "";
   if (force) {
     await kv.del(k.product(id));
     if (sku) await kv.del(k.productSku(sku));
@@ -2015,13 +2289,15 @@ async function deleteProductInternal(existing: any, force: boolean): Promise<any
   const trashed = {
     ...existing,
     id,
-    status: 'trash',
+    status: "trash",
     date_modified: new Date().toISOString(),
   };
   await kv.set(k.product(id), trashed);
   if (sku) {
     await kv.del(k.productSku(sku));
-    console.log(`[wc-delete] trashed product id=${id} + cleared sku index "${sku}"`);
+    console.log(
+      `[wc-delete] trashed product id=${id} + cleared sku index "${sku}"`,
+    );
   } else {
     console.log(`[wc-delete] trashed product id=${id} (no sku)`);
   }
@@ -2029,10 +2305,15 @@ async function deleteProductInternal(existing: any, force: boolean): Promise<any
 }
 
 app.delete(`${WC}/products/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.product(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_product_id', 'Invalid ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_product_id",
+      "Invalid ID.",
+      404,
+    );
   }
   const result = await deleteProductInternal(existing, parseForceFlag(c));
   return c.json(result, 200);
@@ -2042,16 +2323,26 @@ app.delete(`${WC}/products/:id`, requireApiKey, async (c) => {
 // SKU, not the WC-assigned ID. Without this, deletes from Logicom that use
 // SKU-based reference would silently 404 and the product would stay live.
 app.delete(`${WC}/products/by-sku/:sku`, requireApiKey, async (c) => {
-  const sku = c.req.param('sku');
+  const sku = c.req.param("sku");
   const map = (await kv.get(k.productSku(sku))) as { id: number } | null;
   if (!map?.id) {
-    return wcError(c, 'woocommerce_rest_invalid_product_sku', 'No product with this SKU.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_product_sku",
+      "No product with this SKU.",
+      404,
+    );
   }
   const existing = await kv.get(k.product(map.id));
   if (!existing) {
     // Stale index entry — clean it up
     await kv.del(k.productSku(sku));
-    return wcError(c, 'woocommerce_rest_invalid_product_sku', 'Product missing.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_product_sku",
+      "Product missing.",
+      404,
+    );
   }
   const result = await deleteProductInternal(existing, parseForceFlag(c));
   return c.json(result, 200);
@@ -2063,7 +2354,11 @@ app.post(`${WC}/products/batch`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
     const force = parseForceFlag(c) || body.force === true;
-    const out: { deleted: any[]; create: any[]; update: any[] } = { deleted: [], create: [], update: [] };
+    const out: { deleted: any[]; create: any[]; update: any[] } = {
+      deleted: [],
+      create: [],
+      update: [],
+    };
     if (Array.isArray(body.delete)) {
       for (const rawId of body.delete) {
         const existing = await kv.get(k.product(rawId));
@@ -2074,7 +2369,7 @@ app.post(`${WC}/products/batch`, requireApiKey, async (c) => {
     }
     return c.json(out, 200);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
@@ -2095,11 +2390,11 @@ app.post(`${WC}/products/batch`, requireApiKey, async (c) => {
 // If we echo "PIVOT" back, Logicom never finds the category in subsequent
 // `GET ?slug=pivot` queries and POSTs again, looping forever.
 function canonicalSlug(s: string): string {
-  return String(s ?? '')
+  return String(s ?? "")
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9À-ſ]+/g, '-') // keep accented chars
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9À-ſ]+/g, "-") // keep accented chars
+    .replace(/^-+|-+$/g, "");
 }
 
 // Build WC-style _links so the response shape exactly matches a real
@@ -2110,7 +2405,7 @@ function canonicalSlug(s: string): string {
 // Logicom does a verification GET on that URL, it fails — and Logicom may
 // interpret that as "category not actually created" and retry the POST.
 function categoryLinks(_c: any, id: number) {
-  const host = 'jvmddidfxabdbtiscdop.supabase.co';
+  const host = "jvmddidfxabdbtiscdop.supabase.co";
   const root = `https://${host}/functions/v1/make-server-0c561120/wp-json/wc/v3`;
   return {
     self: [{ href: `${root}/products/categories/${id}` }],
@@ -2125,11 +2420,11 @@ function categoryShape(c: any, raw: any) {
   const id = Number(raw?.id ?? 0);
   return {
     id,
-    name: String(raw?.name ?? ''),
-    slug: String(raw?.slug ?? ''),
+    name: String(raw?.name ?? ""),
+    slug: String(raw?.slug ?? ""),
     parent: Number(raw?.parent ?? 0),
-    description: String(raw?.description ?? ''),
-    display: String(raw?.display ?? 'default'),
+    description: String(raw?.description ?? ""),
+    display: String(raw?.display ?? "default"),
     image: raw?.image ?? null,
     menu_order: Number(raw?.menu_order ?? 0),
     count: Number(raw?.count ?? 0),
@@ -2143,39 +2438,53 @@ function categoryShape(c: any, raw: any) {
 async function findCategoryBySlug(slug: string): Promise<any | null> {
   if (!slug) return null;
   const target = canonicalSlug(slug);
-  const all = (await kv.getByPrefix('wc:category:')) as any[];
-  return all.find((c: any) => canonicalSlug(c?.slug ?? '') === target) ?? null;
+  const all = (await kv.getByPrefix("wc:category:")) as any[];
+  return all.find((c: any) => canonicalSlug(c?.slug ?? "") === target) ?? null;
 }
 
 app.get(`${WC}/products/categories`, requireApiKey, async (c) => {
   await seedDefaultsOnce();
-  const all = (await kv.getByPrefix('wc:category:')) as any[];
-  const slug = c.req.query('slug');
-  const search = c.req.query('search');
+  const all = (await kv.getByPrefix("wc:category:")) as any[];
+  const slug = c.req.query("slug");
+  const search = c.req.query("search");
   let filtered = all;
   if (slug) {
     const target = canonicalSlug(slug);
-    filtered = filtered.filter((cat: any) => canonicalSlug(cat?.slug ?? '') === target);
+    filtered = filtered.filter(
+      (cat: any) => canonicalSlug(cat?.slug ?? "") === target,
+    );
   }
   if (search) {
     const q = search.toLowerCase();
-    filtered = filtered.filter((cat: any) =>
-      String(cat?.name ?? '').toLowerCase().includes(q) ||
-      String(cat?.slug ?? '').toLowerCase().includes(q)
+    filtered = filtered.filter(
+      (cat: any) =>
+        String(cat?.name ?? "")
+          .toLowerCase()
+          .includes(q) ||
+        String(cat?.slug ?? "")
+          .toLowerCase()
+          .includes(q),
     );
   }
   filtered.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
   const shaped = filtered.map((cat: any) => categoryShape(c, cat));
-  console.log(`[wc-categories] GET list slug=${slug ?? '-'} search=${search ?? '-'} → ${shaped.length} results`);
+  console.log(
+    `[wc-categories] GET list slug=${slug ?? "-"} search=${search ?? "-"} → ${shaped.length} results`,
+  );
   return c.json(paginate(c, shaped));
 });
 
 app.get(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const cat = await kv.get(k.category(id));
   if (!cat) {
     console.log(`[wc-categories] GET id=${id} → 404`);
-    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_term_invalid",
+      "Resource does not exist.",
+      404,
+    );
   }
   console.log(`[wc-categories] GET id=${id} → 200`);
   return c.json(categoryShape(c, cat));
@@ -2185,16 +2494,21 @@ app.get(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
 // All new code should use MAX_SAFE_WC_ID_GLOBAL + migrateOversizedId() above.
 const MAX_SAFE_WC_ID = MAX_SAFE_WC_ID_GLOBAL;
 const migrateOversizedCategoryId = (existing: any) =>
-  migrateOversizedId(existing, 'category', (id) => k.category(id));
+  migrateOversizedId(existing, "category", (id) => k.category(id));
 
 app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
   try {
     await seedDefaultsOnce();
     const body = await c.req.json();
     console.log(`[wc-categories] POST body=${JSON.stringify(body)}`);
-    const name = String(body.name ?? '').trim();
+    const name = String(body.name ?? "").trim();
     if (!name) {
-      return wcError(c, 'woocommerce_rest_category_invalid_name', 'Name is required.', 400);
+      return wcError(
+        c,
+        "woocommerce_rest_category_invalid_name",
+        "Name is required.",
+        400,
+      );
     }
     const slug = canonicalSlug(body.slug ?? name);
 
@@ -2204,12 +2518,13 @@ app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
       // First, fix any oversized id from before this migration
       dup = await migrateOversizedCategoryId(dup);
 
-      const strict = String(c.req.query('strict') ?? '').toLowerCase();
-      if (strict === 'true' || strict === '1') {
+      const strict = String(c.req.query("strict") ?? "").toLowerCase();
+      if (strict === "true" || strict === "1") {
         c.status(400);
         return c.json({
-          code: 'term_exists',
-          message: 'A term with the name provided already exists with this parent.',
+          code: "term_exists",
+          message:
+            "A term with the name provided already exists with this parent.",
           data: { status: 400, resource_id: dup.id },
         });
       }
@@ -2217,21 +2532,25 @@ app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
       const fixed = { ...dup, slug, name: dup.name || name };
       if (dup.slug !== slug) {
         await kv.set(k.category(Number(dup.id)), fixed);
-        console.log(`[wc-categories] migrated slug "${dup.slug}" → "${slug}" for id=${dup.id}`);
+        console.log(
+          `[wc-categories] migrated slug "${dup.slug}" → "${slug}" for id=${dup.id}`,
+        );
       }
-      console.log(`[wc-categories] duplicate slug "${slug}" → returning existing id=${dup.id}`);
+      console.log(
+        `[wc-categories] duplicate slug "${slug}" → returning existing id=${dup.id}`,
+      );
       return c.json(categoryShape(c, fixed), 201);
     }
 
     // Use sequential int unless caller explicitly provided a small id
-    const id = await safeIncomingId('category', body.id);
+    const id = await safeIncomingId("category", body.id);
     const cat = {
       id,
       name,
       slug,
       parent: Number(body.parent ?? 0),
-      description: String(body.description ?? ''),
-      display: String(body.display ?? 'default'),
+      description: String(body.description ?? ""),
+      display: String(body.display ?? "default"),
       image: body.image ?? null,
       menu_order: Number(body.menu_order ?? 0),
       count: Number(body.count ?? 0),
@@ -2240,27 +2559,36 @@ app.post(`${WC}/products/categories`, requireApiKey, async (c) => {
     console.log(`[wc-categories] created id=${id} slug=${slug}`);
     return c.json(categoryShape(c, cat), 201);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.put(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.category(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_term_invalid",
+      "Resource does not exist.",
+      404,
+    );
   }
   try {
     const body = await c.req.json();
     // Normalise any slug coming in (lowercase + sanitise)
-    const incomingSlug = body.slug != null ? canonicalSlug(body.slug) : undefined;
-    if (incomingSlug && incomingSlug !== canonicalSlug((existing as any).slug ?? '')) {
+    const incomingSlug =
+      body.slug != null ? canonicalSlug(body.slug) : undefined;
+    if (
+      incomingSlug &&
+      incomingSlug !== canonicalSlug((existing as any).slug ?? "")
+    ) {
       const dup = await findCategoryBySlug(incomingSlug);
       if (dup && Number(dup.id) !== Number(id)) {
         c.status(400);
         return c.json({
-          code: 'term_exists',
-          message: 'A term with this slug already exists.',
+          code: "term_exists",
+          message: "A term with this slug already exists.",
           data: { status: 400, resource_id: dup.id },
         });
       }
@@ -2275,15 +2603,20 @@ app.put(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
     console.log(`[wc-categories] PUT id=${id} slug=${(next as any).slug}`);
     return c.json(categoryShape(c, next), 200);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.delete(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.category(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_term_invalid', 'Resource does not exist.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_term_invalid",
+      "Resource does not exist.",
+      404,
+    );
   }
   await kv.del(k.category(id));
   console.log(`[wc-categories] DELETE id=${id}`);
@@ -2293,51 +2626,67 @@ app.delete(`${WC}/products/categories/:id`, requireApiKey, async (c) => {
 // List attributes — needed by Logicom's "characteristics" sync option which
 // fetches the full list before deciding whether to create a new attribute.
 app.get(`${WC}/products/attributes`, requireApiKey, async (c) => {
-  const items = (await kv.getByPrefix('wc:attribute:')) as any[];
+  const items = (await kv.getByPrefix("wc:attribute:")) as any[];
   // Filter out term entries (key shape `wc:attribute:<aid>:term:<tid>`)
-  const attrs = items.filter((x: any) => x && x.id != null && !('term' in x === false && false));
+  const attrs = items.filter(
+    (x: any) => x && x.id != null && !("term" in x === false && false),
+  );
   // Simpler: by-prefix returns everything; tag terms with a marker so we can
   // skip them. We instead identify attributes by checking the stored shape:
   // attributes have `slug` + `type`, terms don't have `type`.
-  const onlyAttrs = items.filter((x: any) => x && typeof x === 'object' && 'type' in x);
+  const onlyAttrs = items.filter(
+    (x: any) => x && typeof x === "object" && "type" in x,
+  );
   onlyAttrs.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
   return c.json(onlyAttrs);
 });
 
 app.get(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.attribute(id));
   if (!existing) {
-    return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
+    return c.json(
+      {
+        code: "woocommerce_rest_taxonomy_invalid",
+        message: "Invalid attribute.",
+      },
+      404,
+    );
   }
   return c.json(existing);
 });
 
 app.post(`${WC}/products/attributes`, requireApiKey, async (c) => {
   const body = await c.req.json();
-  console.log(`[wc-attributes] POST body=${JSON.stringify(body).slice(0, 400)}`);
+  console.log(
+    `[wc-attributes] POST body=${JSON.stringify(body).slice(0, 400)}`,
+  );
   // Idempotent: if an attribute with the same slug already exists, return it.
   // This stops Logicom's "characteristics" loop that would otherwise re-POST
   // the same attribute with a fresh huge timestamp id every time.
-  const slug = canonicalSlug(body.slug ?? body.name ?? '');
+  const slug = canonicalSlug(body.slug ?? body.name ?? "");
   if (slug) {
-    const all = (await kv.getByPrefix('wc:attribute:')) as any[];
-    let dup = all.find((x: any) => x && 'type' in x && canonicalSlug(x.slug ?? '') === slug);
+    const all = (await kv.getByPrefix("wc:attribute:")) as any[];
+    let dup = all.find(
+      (x: any) => x && "type" in x && canonicalSlug(x.slug ?? "") === slug,
+    );
     if (dup) {
       // Heal any pre-existing oversized id before returning.
-      dup = await migrateOversizedId(dup, 'attribute', (id) => k.attribute(id));
-      console.log(`[wc-attributes] duplicate slug "${slug}" → returning existing id=${dup.id}`);
+      dup = await migrateOversizedId(dup, "attribute", (id) => k.attribute(id));
+      console.log(
+        `[wc-attributes] duplicate slug "${slug}" → returning existing id=${dup.id}`,
+      );
       return c.json(dup, 201);
     }
   }
-  const id = await safeIncomingId('attribute', body.id);
+  const id = await safeIncomingId("attribute", body.id);
   const attr = {
     ...body,
     id,
-    name: body.name ?? '',
+    name: body.name ?? "",
     slug: slug || canonicalSlug(`attribute-${id}`),
-    type: body.type ?? 'select',
-    order_by: body.order_by ?? 'menu_order',
+    type: body.type ?? "select",
+    order_by: body.order_by ?? "menu_order",
     has_archives: body.has_archives === true,
   };
   await kv.set(k.attribute(id), attr);
@@ -2346,13 +2695,21 @@ app.post(`${WC}/products/attributes`, requireApiKey, async (c) => {
 });
 
 app.put(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   let existing = await kv.get(k.attribute(id));
   if (!existing) {
-    return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
+    return c.json(
+      {
+        code: "woocommerce_rest_taxonomy_invalid",
+        message: "Invalid attribute.",
+      },
+      404,
+    );
   }
   // Heal oversized id transparently
-  existing = await migrateOversizedId(existing as any, 'attribute', (i) => k.attribute(i));
+  existing = await migrateOversizedId(existing as any, "attribute", (i) =>
+    k.attribute(i),
+  );
   const body = await c.req.json();
   const next = { ...existing, ...body, id: Number((existing as any).id) };
   await kv.set(k.attribute((existing as any).id), next);
@@ -2360,88 +2717,125 @@ app.put(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
 });
 
 app.delete(`${WC}/products/attributes/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.attribute(id));
   if (!existing) {
-    return c.json({ code: 'woocommerce_rest_taxonomy_invalid', message: 'Invalid attribute.' }, 404);
+    return c.json(
+      {
+        code: "woocommerce_rest_taxonomy_invalid",
+        message: "Invalid attribute.",
+      },
+      404,
+    );
   }
   await kv.del(k.attribute(id));
   return c.json({ ...(existing as any), deleted: true });
 });
 
 app.get(`${WC}/products/attributes/:attrId/terms`, requireApiKey, async (c) => {
-  const attrId = c.req.param('attrId');
+  const attrId = c.req.param("attrId");
   const items = (await kv.getByPrefix(`wc:attribute:${attrId}:term:`)) as any[];
   items.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
   return c.json(items);
 });
 
-app.post(`${WC}/products/attributes/:attrId/terms`, requireApiKey, async (c) => {
-  const attrId = c.req.param('attrId');
-  const body = await c.req.json();
-  console.log(`[wc-attr-terms] POST attrId=${attrId} body=${JSON.stringify(body).slice(0, 400)}`);
-  const slug = canonicalSlug(body.slug ?? body.name ?? '');
-  if (slug) {
-    const all = (await kv.getByPrefix(`wc:attribute:${attrId}:term:`)) as any[];
-    let dup = all.find((x: any) => x && canonicalSlug(x.slug ?? '') === slug);
-    if (dup) {
-      dup = await migrateOversizedId(dup, 'attribute_term', (id) => k.attrTerm(attrId, id));
-      console.log(`[wc-attr-terms] duplicate slug "${slug}" → returning existing id=${dup.id}`);
-      return c.json(dup, 201);
+app.post(
+  `${WC}/products/attributes/:attrId/terms`,
+  requireApiKey,
+  async (c) => {
+    const attrId = c.req.param("attrId");
+    const body = await c.req.json();
+    console.log(
+      `[wc-attr-terms] POST attrId=${attrId} body=${JSON.stringify(body).slice(0, 400)}`,
+    );
+    const slug = canonicalSlug(body.slug ?? body.name ?? "");
+    if (slug) {
+      const all = (await kv.getByPrefix(
+        `wc:attribute:${attrId}:term:`,
+      )) as any[];
+      let dup = all.find((x: any) => x && canonicalSlug(x.slug ?? "") === slug);
+      if (dup) {
+        dup = await migrateOversizedId(dup, "attribute_term", (id) =>
+          k.attrTerm(attrId, id),
+        );
+        console.log(
+          `[wc-attr-terms] duplicate slug "${slug}" → returning existing id=${dup.id}`,
+        );
+        return c.json(dup, 201);
+      }
     }
-  }
-  const id = await safeIncomingId('attribute_term', body.id);
-  const term = {
-    ...body,
-    id,
-    name: body.name ?? '',
-    slug: slug || canonicalSlug(`term-${id}`),
-  };
-  await kv.set(k.attrTerm(attrId, id), term);
-  console.log(`[wc-attr-terms] created id=${id} slug=${term.slug}`);
-  return c.json(term, 201);
-});
+    const id = await safeIncomingId("attribute_term", body.id);
+    const term = {
+      ...body,
+      id,
+      name: body.name ?? "",
+      slug: slug || canonicalSlug(`term-${id}`),
+    };
+    await kv.set(k.attrTerm(attrId, id), term);
+    console.log(`[wc-attr-terms] created id=${id} slug=${term.slug}`);
+    return c.json(term, 201);
+  },
+);
 
-app.put(`${WC}/products/attributes/:attrId/terms/:id`, requireApiKey, async (c) => {
-  const attrId = c.req.param('attrId');
-  const id = c.req.param('id');
-  let existing = await kv.get(k.attrTerm(attrId, id));
-  if (!existing) {
-    return c.json({ code: 'woocommerce_rest_term_invalid', message: 'Invalid term ID.' }, 404);
-  }
-  existing = await migrateOversizedId(
-    existing as any,
-    'attribute_term',
-    (i) => k.attrTerm(attrId, i),
-  );
-  const body = await c.req.json();
-  const next = { ...existing, ...body, id: Number((existing as any).id) };
-  await kv.set(k.attrTerm(attrId, (existing as any).id), next);
-  return c.json(next, 200);
-});
+app.put(
+  `${WC}/products/attributes/:attrId/terms/:id`,
+  requireApiKey,
+  async (c) => {
+    const attrId = c.req.param("attrId");
+    const id = c.req.param("id");
+    let existing = await kv.get(k.attrTerm(attrId, id));
+    if (!existing) {
+      return c.json(
+        { code: "woocommerce_rest_term_invalid", message: "Invalid term ID." },
+        404,
+      );
+    }
+    existing = await migrateOversizedId(
+      existing as any,
+      "attribute_term",
+      (i) => k.attrTerm(attrId, i),
+    );
+    const body = await c.req.json();
+    const next = { ...existing, ...body, id: Number((existing as any).id) };
+    await kv.set(k.attrTerm(attrId, (existing as any).id), next);
+    return c.json(next, 200);
+  },
+);
 
-app.delete(`${WC}/products/attributes/:attrId/terms/:id`, requireApiKey, async (c) => {
-  const attrId = c.req.param('attrId');
-  const id = c.req.param('id');
-  const existing = await kv.get(k.attrTerm(attrId, id));
-  if (!existing) {
-    return c.json({ code: 'woocommerce_rest_term_invalid', message: 'Invalid term ID.' }, 404);
-  }
-  await kv.del(k.attrTerm(attrId, id));
-  return c.json({ ...(existing as any), deleted: true });
-});
+app.delete(
+  `${WC}/products/attributes/:attrId/terms/:id`,
+  requireApiKey,
+  async (c) => {
+    const attrId = c.req.param("attrId");
+    const id = c.req.param("id");
+    const existing = await kv.get(k.attrTerm(attrId, id));
+    if (!existing) {
+      return c.json(
+        { code: "woocommerce_rest_term_invalid", message: "Invalid term ID." },
+        404,
+      );
+    }
+    await kv.del(k.attrTerm(attrId, id));
+    return c.json({ ...(existing as any), deleted: true });
+  },
+);
 
 app.get(`${WC}/orders`, requireApiKey, async (c) => {
-  const items = (await kv.getByPrefix('wc:order:')) as any[];
-  items.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
+  const items = (await kv.getByPrefix("wc:order:")) as any[];
+  items.sort((a: any, b: any) =>
+    Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1,
+  );
   return c.json(paginate(c, items));
 });
 
 app.put(`${WC}/orders/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.order(id));
   if (!existing) {
-    return c.json({ code: 'woocommerce_rest_invalid_order_id', message: 'Invalid order.' }, 404);
+    return c.json(
+      { code: "woocommerce_rest_invalid_order_id", message: "Invalid order." },
+      404,
+    );
   }
   const body = await c.req.json();
   const next = { ...existing, ...body, id };
@@ -2455,53 +2849,68 @@ app.put(`${WC}/orders/:id`, requireApiKey, async (c) => {
 
 function wcCustomerShape(c: any) {
   const empty = {
-    first_name: '', last_name: '', company: '',
-    address_1: '', address_2: '',
-    city: '', state: '', postcode: '', country: '',
-    phone: '',
+    first_name: "",
+    last_name: "",
+    company: "",
+    address_1: "",
+    address_2: "",
+    city: "",
+    state: "",
+    postcode: "",
+    country: "",
+    phone: "",
   };
   return {
     id: Number(c?.id ?? 0),
     date_created: c?.date_created ?? new Date().toISOString(),
     date_created_gmt: c?.date_created ?? new Date().toISOString(),
-    date_modified: c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
-    date_modified_gmt: c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
-    email: String(c?.email ?? ''),
-    first_name: String(c?.first_name ?? ''),
-    last_name: String(c?.last_name ?? ''),
-    role: String(c?.role ?? 'customer'),
+    date_modified:
+      c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
+    date_modified_gmt:
+      c?.date_modified ?? c?.date_created ?? new Date().toISOString(),
+    email: String(c?.email ?? ""),
+    first_name: String(c?.first_name ?? ""),
+    last_name: String(c?.last_name ?? ""),
+    role: String(c?.role ?? "customer"),
     username: String(c?.username ?? c?.email ?? `customer-${c?.id}`),
     billing: { ...empty, ...(c?.billing ?? {}) },
     shipping: { ...empty, ...(c?.shipping ?? {}) },
     is_paying_customer: Boolean(c?.is_paying_customer ?? false),
-    avatar_url: String(c?.avatar_url ?? ''),
+    avatar_url: String(c?.avatar_url ?? ""),
     meta_data: Array.isArray(c?.meta_data) ? c.meta_data : [],
     _links: {
-      self: [{ href: `${(c?._links?.self?.[0]?.href) ?? ''}` }],
-      collection: [{ href: '' }],
+      self: [{ href: `${c?._links?.self?.[0]?.href ?? ""}` }],
+      collection: [{ href: "" }],
     },
   };
 }
 
 async function findCustomerByEmail(email: string): Promise<any | null> {
   if (!email) return null;
-  const all = (await kv.getByPrefix('wc:customer:')) as any[];
+  const all = (await kv.getByPrefix("wc:customer:")) as any[];
   const target = email.trim().toLowerCase();
-  return all.find((cus: any) => String(cus?.email ?? '').toLowerCase() === target) ?? null;
+  return (
+    all.find((cus: any) => String(cus?.email ?? "").toLowerCase() === target) ??
+    null
+  );
 }
 
 app.get(`${WC}/customers`, requireApiKey, async (c) => {
-  const all = (await kv.getByPrefix('wc:customer:')) as any[];
-  const email = c.req.query('email');
-  const search = c.req.query('search');
+  const all = (await kv.getByPrefix("wc:customer:")) as any[];
+  const email = c.req.query("email");
+  const search = c.req.query("search");
   let filtered = all;
-  if (email) filtered = filtered.filter((cu: any) => String(cu?.email ?? '').toLowerCase() === email.toLowerCase());
+  if (email)
+    filtered = filtered.filter(
+      (cu: any) =>
+        String(cu?.email ?? "").toLowerCase() === email.toLowerCase(),
+    );
   if (search) {
     const q = search.toLowerCase();
     filtered = filtered.filter((cu: any) =>
       [cu?.email, cu?.first_name, cu?.last_name, cu?.company]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q))
+        .some((v) => String(v).toLowerCase().includes(q)),
     );
   }
   filtered.sort((a: any, b: any) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
@@ -2509,10 +2918,15 @@ app.get(`${WC}/customers`, requireApiKey, async (c) => {
 });
 
 app.get(`${WC}/customers/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const cus = await kv.get(k.customer(id));
   if (!cus) {
-    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_id",
+      "Invalid resource ID.",
+      404,
+    );
   }
   return c.json(wcCustomerShape(cus));
 });
@@ -2520,7 +2934,7 @@ app.get(`${WC}/customers/:id`, requireApiKey, async (c) => {
 app.post(`${WC}/customers`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
-    const email = String(body.email ?? '').trim();
+    const email = String(body.email ?? "").trim();
 
     // Idempotent create — Logicom doesn't parse `resource_id` from the
     // standard 400 `registration-error-email-exists` error, so we return
@@ -2529,28 +2943,31 @@ app.post(`${WC}/customers`, requireApiKey, async (c) => {
     if (email) {
       const dup = await findCustomerByEmail(email);
       if (dup) {
-        const strict = String(c.req.query('strict') ?? '').toLowerCase();
-        if (strict === 'true' || strict === '1') {
+        const strict = String(c.req.query("strict") ?? "").toLowerCase();
+        if (strict === "true" || strict === "1") {
           c.status(400);
           return c.json({
-            code: 'registration-error-email-exists',
-            message: 'An account is already registered with this email address.',
+            code: "registration-error-email-exists",
+            message:
+              "An account is already registered with this email address.",
             data: { status: 400, resource_id: dup.id },
           });
         }
-        console.log(`[wc-customers] duplicate email "${email}" → returning existing id=${dup.id}`);
+        console.log(
+          `[wc-customers] duplicate email "${email}" → returning existing id=${dup.id}`,
+        );
         return c.json(wcCustomerShape(dup), 201);
       }
     }
 
-    const id = await safeIncomingId('customer', body.id);
+    const id = await safeIncomingId("customer", body.id);
     const now = new Date().toISOString();
     const customer = {
       id,
       email,
-      first_name: String(body.first_name ?? ''),
-      last_name: String(body.last_name ?? ''),
-      role: String(body.role ?? 'customer'),
+      first_name: String(body.first_name ?? ""),
+      last_name: String(body.last_name ?? ""),
+      role: String(body.role ?? "customer"),
       username: String(body.username ?? email ?? `customer-${id}`),
       billing: body.billing ?? {},
       shipping: body.shipping ?? {},
@@ -2562,15 +2979,20 @@ app.post(`${WC}/customers`, requireApiKey, async (c) => {
     await kv.set(k.customer(id), customer);
     return c.json(wcCustomerShape(customer), 201);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.put(`${WC}/customers/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.customer(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_id",
+      "Invalid resource ID.",
+      404,
+    );
   }
   try {
     const body = await c.req.json();
@@ -2580,8 +3002,8 @@ app.put(`${WC}/customers/:id`, requireApiKey, async (c) => {
       if (dup && Number(dup.id) !== Number(id)) {
         c.status(400);
         return c.json({
-          code: 'registration-error-email-exists',
-          message: 'Another account is already registered with this email.',
+          code: "registration-error-email-exists",
+          message: "Another account is already registered with this email.",
           data: { status: 400, resource_id: dup.id },
         });
       }
@@ -2595,15 +3017,20 @@ app.put(`${WC}/customers/:id`, requireApiKey, async (c) => {
     await kv.set(k.customer(id), next);
     return c.json(wcCustomerShape(next), 200);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.delete(`${WC}/customers/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.customer(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_id', 'Invalid resource ID.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_id",
+      "Invalid resource ID.",
+      404,
+    );
   }
   await kv.del(k.customer(id));
   return c.json({ ...wcCustomerShape(existing), deleted: true }, 200);
@@ -2613,10 +3040,15 @@ app.delete(`${WC}/customers/:id`, requireApiKey, async (c) => {
 // `GET /orders` already exists. Add POST/GET-by-id/DELETE so Logicom can
 // push real orders once customers are in place.
 app.get(`${WC}/orders/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const order = await kv.get(k.order(id));
   if (!order) {
-    return wcError(c, 'woocommerce_rest_invalid_order_id', 'Invalid order.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_order_id",
+      "Invalid order.",
+      404,
+    );
   }
   return c.json(order);
 });
@@ -2624,24 +3056,24 @@ app.get(`${WC}/orders/:id`, requireApiKey, async (c) => {
 app.post(`${WC}/orders`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
-    const id = await safeIncomingId('order', body.id);
+    const id = await safeIncomingId("order", body.id);
     const now = new Date().toISOString();
     const order = {
       id,
       number: String(id),
-      status: String(body.status ?? 'pending'),
-      currency: String(body.currency ?? 'DZD'),
+      status: String(body.status ?? "pending"),
+      currency: String(body.currency ?? "DZD"),
       customer_id: Number(body.customer_id ?? 0),
       billing: body.billing ?? {},
       shipping: body.shipping ?? {},
-      payment_method: String(body.payment_method ?? ''),
-      payment_method_title: String(body.payment_method_title ?? ''),
-      transaction_id: String(body.transaction_id ?? ''),
+      payment_method: String(body.payment_method ?? ""),
+      payment_method_title: String(body.payment_method_title ?? ""),
+      transaction_id: String(body.transaction_id ?? ""),
       line_items: Array.isArray(body.line_items) ? body.line_items : [],
-      total: String(body.total ?? '0'),
-      subtotal: String(body.subtotal ?? body.total ?? '0'),
-      total_tax: String(body.total_tax ?? '0'),
-      shipping_total: String(body.shipping_total ?? '0'),
+      total: String(body.total ?? "0"),
+      subtotal: String(body.subtotal ?? body.total ?? "0"),
+      total_tax: String(body.total_tax ?? "0"),
+      shipping_total: String(body.shipping_total ?? "0"),
       meta_data: Array.isArray(body.meta_data) ? body.meta_data : [],
       date_created: now,
       date_modified: now,
@@ -2649,15 +3081,20 @@ app.post(`${WC}/orders`, requireApiKey, async (c) => {
     await kv.set(k.order(id), order);
     return c.json(order, 201);
   } catch (e) {
-    return wcError(c, 'woocommerce_rest_invalid_payload', String(e), 400);
+    return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
 });
 
 app.delete(`${WC}/orders/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.order(id));
   if (!existing) {
-    return wcError(c, 'woocommerce_rest_invalid_order_id', 'Invalid order.', 404);
+    return wcError(
+      c,
+      "woocommerce_rest_invalid_order_id",
+      "Invalid order.",
+      404,
+    );
   }
   await kv.del(k.order(id));
   return c.json({ ...existing, deleted: true }, 200);
@@ -2675,60 +3112,78 @@ app.delete(`${WC}/orders/:id`, requireApiKey, async (c) => {
 // guid, media_details, _links, etc.
 // Allowed media MIME types (defence-in-depth — also applies to multipart files)
 const ALLOWED_MEDIA_MIME = new Set([
-  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml',
-  'video/mp4', 'video/webm', 'video/quicktime',
-  'application/pdf',
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/svg+xml",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+  "application/pdf",
 ]);
 const MAX_MEDIA_BYTES = 10 * 1024 * 1024; // 10 MB
 
 app.post(`${WP}/media`, requireApiKey, async (c) => {
   try {
-    const contentType = (c.req.header('Content-Type') ?? '').toLowerCase();
-    const dispoHeader = c.req.header('Content-Disposition') ?? '';
-    const filenameMatch = dispoHeader.match(/filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)["']?/i);
-    let filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : '';
+    const contentType = (c.req.header("Content-Type") ?? "").toLowerCase();
+    const dispoHeader = c.req.header("Content-Disposition") ?? "";
+    const filenameMatch = dispoHeader.match(
+      /filename\*?=(?:UTF-8'')?["']?([^"';\r\n]+)["']?/i,
+    );
+    let filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : "";
 
-    let sourceUrl = '';
-    let mimeType = '';
+    let sourceUrl = "";
+    let mimeType = "";
     let filesize = 0;
 
-    if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes("multipart/form-data")) {
       // Multipart form upload
       const formData = await c.req.formData();
-      const file = formData.get('file') as File | null;
+      const file = formData.get("file") as File | null;
       if (!file) {
-        return wcError(c, 'rest_upload_no_data', 'No data supplied.', 400);
+        return wcError(c, "rest_upload_no_data", "No data supplied.", 400);
       }
       filename = filename || file.name || `upload-${Date.now()}.bin`;
-      mimeType = file.type || 'application/octet-stream';
+      mimeType = file.type || "application/octet-stream";
       if (!ALLOWED_MEDIA_MIME.has(mimeType)) {
-        return wcError(c, 'rest_upload_invalid_type', `MIME ${mimeType} not allowed`, 415);
+        return wcError(
+          c,
+          "rest_upload_invalid_type",
+          `MIME ${mimeType} not allowed`,
+          415,
+        );
       }
       const bytes = new Uint8Array(await file.arrayBuffer());
       filesize = bytes.byteLength;
       if (filesize > MAX_MEDIA_BYTES) {
-        return wcError(c, 'rest_upload_too_large', 'File exceeds 10MB', 413);
+        return wcError(c, "rest_upload_too_large", "File exceeds 10MB", 413);
       }
       const up = await uploadFileToStorage(filename, bytes, mimeType);
       sourceUrl = up.url;
     } else if (
-      contentType.startsWith('image/') ||
-      contentType.startsWith('video/') ||
-      contentType.startsWith('audio/') ||
-      contentType === 'application/pdf'
+      contentType.startsWith("image/") ||
+      contentType.startsWith("video/") ||
+      contentType.startsWith("audio/") ||
+      contentType === "application/pdf"
     ) {
       // Raw binary upload (the WordPress REST canonical way)
-      mimeType = contentType.split(';')[0].trim();
+      mimeType = contentType.split(";")[0].trim();
       if (!ALLOWED_MEDIA_MIME.has(mimeType)) {
-        return wcError(c, 'rest_upload_invalid_type', `MIME ${mimeType} not allowed`, 415);
+        return wcError(
+          c,
+          "rest_upload_invalid_type",
+          `MIME ${mimeType} not allowed`,
+          415,
+        );
       }
       const buf = await c.req.arrayBuffer();
       const bytes = new Uint8Array(buf);
       filesize = bytes.byteLength;
       if (filesize > MAX_MEDIA_BYTES) {
-        return wcError(c, 'rest_upload_too_large', 'File exceeds 10MB', 413);
+        return wcError(c, "rest_upload_too_large", "File exceeds 10MB", 413);
       }
-      const ext = mimeType.split('/')[1] || 'bin';
+      const ext = mimeType.split("/")[1] || "bin";
       filename = filename || `upload-${Date.now()}.${ext}`;
       const up = await uploadFileToStorage(filename, bytes, mimeType);
       sourceUrl = up.url;
@@ -2738,60 +3193,68 @@ app.post(`${WP}/media`, requireApiKey, async (c) => {
       try {
         body = await c.req.json();
       } catch {
-        return wcError(c, 'rest_upload_no_data', 'No data supplied.', 400);
+        return wcError(c, "rest_upload_no_data", "No data supplied.", 400);
       }
-      sourceUrl = String(body.source_url ?? body.url ?? '');
+      sourceUrl = String(body.source_url ?? body.url ?? "");
       if (!sourceUrl) {
-        return wcError(c, 'rest_upload_no_data', 'No source_url provided.', 400);
+        return wcError(
+          c,
+          "rest_upload_no_data",
+          "No source_url provided.",
+          400,
+        );
       }
-      filename = filename || body.filename || body.title || `media-${Date.now()}.jpg`;
-      mimeType = String(body.mime_type ?? 'image/jpeg');
+      filename =
+        filename || body.filename || body.title || `media-${Date.now()}.jpg`;
+      mimeType = String(body.mime_type ?? "image/jpeg");
     }
 
-    const id = await nextId('media');
+    const id = await nextId("media");
     const now = new Date().toISOString();
     const stored = {
       id,
       filename,
-      slug: slugify(filename.replace(/\.[^/.]+$/, '')) || `media-${id}`,
+      slug: slugify(filename.replace(/\.[^/.]+$/, "")) || `media-${id}`,
       source_url: sourceUrl,
       mime_type: mimeType,
       filesize,
       width: 0,
       height: 0,
-      alt_text: '',
-      title: filename.replace(/\.[^/.]+$/, ''),
-      title_rendered: filename.replace(/\.[^/.]+$/, ''),
+      alt_text: "",
+      title: filename.replace(/\.[^/.]+$/, ""),
+      title_rendered: filename.replace(/\.[^/.]+$/, ""),
       date_created: now,
     };
     await kv.set(k.media(id), stored);
     return c.json(wpMediaShape(stored), 201);
   } catch (e) {
-    return wcError(c, 'rest_upload_sideload_error', String(e), 500);
+    return wcError(c, "rest_upload_sideload_error", String(e), 500);
   }
 });
 
 app.get(`${WP}/media`, requireApiKey, async (c) => {
-  const items = (await kv.getByPrefix('wp:media:')) as any[];
-  items.sort((a: any, b: any) => (Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1));
+  const items = (await kv.getByPrefix("wp:media:")) as any[];
+  items.sort((a: any, b: any) =>
+    Number(a?.id ?? 0) < Number(b?.id ?? 0) ? 1 : -1,
+  );
   const page = paginate(c, items).map((m) => wpMediaShape(m));
   return c.json(page);
 });
 
 app.get(`${WP}/media/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.media(id));
   if (!existing) {
-    return wcError(c, 'rest_post_invalid_id', 'Invalid attachment ID.', 404);
+    return wcError(c, "rest_post_invalid_id", "Invalid attachment ID.", 404);
   }
   return c.json(wpMediaShape(existing));
 });
 
 app.put(`${WP}/media/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.media(id));
   if (!existing) {
-    return wcError(c, 'rest_post_invalid_id', 'Invalid attachment ID.', 404);
+    return wcError(c, "rest_post_invalid_id", "Invalid attachment ID.", 404);
   }
   try {
     const body = await c.req.json();
@@ -2806,22 +3269,25 @@ app.put(`${WP}/media/:id`, requireApiKey, async (c) => {
     await kv.set(k.media(id), next);
     return c.json(wpMediaShape(next));
   } catch (e) {
-    return wcError(c, 'rest_invalid_payload', String(e), 400);
+    return wcError(c, "rest_invalid_payload", String(e), 400);
   }
 });
 
 app.delete(`${WP}/media/:id`, requireApiKey, async (c) => {
-  const id = c.req.param('id');
+  const id = c.req.param("id");
   const existing = await kv.get(k.media(id));
   if (!existing) {
-    return wcError(c, 'rest_post_invalid_id', 'Invalid attachment ID.', 404);
+    return wcError(c, "rest_post_invalid_id", "Invalid attachment ID.", 404);
   }
   await kv.del(k.media(id));
   return c.json({ deleted: true, previous: wpMediaShape(existing) });
 });
 
 app.all(`${WC}/*`, (c) =>
-  c.json({ code: 'rest_no_route', message: 'No route was found matching the URL.' }, 404)
+  c.json(
+    { code: "rest_no_route", message: "No route was found matching the URL." },
+    404,
+  ),
 );
 
 Deno.serve(app.fetch);
