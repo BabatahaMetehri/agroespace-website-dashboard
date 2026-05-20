@@ -1441,6 +1441,157 @@ function buildDisplayId(
     : `${String(num).padStart(5, "0")}/${yy}`;
 }
 
+// GET counters -> next number that WOULD be allocated for each type.
+app.get(`${ADMIN}/doccounters`, requireAdmin, async (c) => {
+  const p = ((await kv.get("counter:proforma")) as number | null) ?? 0;
+  const f = ((await kv.get("counter:facture")) as number | null) ?? 0;
+  return c.json({ proforma_next: p + 1, facture_next: f + 1 });
+});
+
+// PUT a counter (seed the sequence). Body: { value: number } where `value`
+// is the LAST used number (next allocation = value + 1).
+app.put(`${ADMIN}/doccounters/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (kind !== "proforma" && kind !== "facture") {
+    return c.json({ code: "rest_invalid_kind", message: "invalid counter" }, 400);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const value = Number(body?.value);
+  if (!Number.isInteger(value) || value < 0) {
+    return c.json({ code: "rest_invalid_payload", message: "value must be a non-negative integer" }, 400);
+  }
+  await kv.set(`counter:${kind}`, value);
+  return c.json({ kind, value, next: value + 1 });
+});
+
+// LIST documents (admin pagination contract).
+app.get(`${ADMIN}/documents`, requireAdmin, async (c) => {
+  const items = (await kv.getByPrefix(DOC_PREFIX)) as any[];
+
+  const counts = {
+    all: items.length,
+    proforma: items.filter((d) => d?.type === "proforma").length,
+    facture: items.filter((d) => d?.type === "facture").length,
+    cancelled: items.filter((d) => d?.status === "cancelled").length,
+  };
+
+  const type = (c.req.query("type") ?? "all").toLowerCase();
+  const status = (c.req.query("status") ?? "all").toLowerCase();
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
+
+  let filtered = items;
+  if (type === "proforma" || type === "facture")
+    filtered = filtered.filter((d) => d?.type === type);
+  if (status === "finalized" || status === "cancelled")
+    filtered = filtered.filter((d) => d?.status === status);
+  if (search) {
+    filtered = filtered.filter((d) =>
+      [d?.displayId, d?.client?.name, d?.client?.wilaya]
+        .filter((v) => v != null)
+        .some((v: any) => String(v).toLowerCase().includes(search)),
+    );
+  }
+
+  filtered.sort((a: any, b: any) =>
+    String(b?.created_at ?? "").localeCompare(String(a?.created_at ?? "")),
+  );
+
+  if (c.req.query("all") === "true") return c.json(filtered);
+
+  const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
+  const perPage = Math.min(200, Math.max(1, Number(c.req.query("per_page") ?? 25) || 25));
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * perPage;
+
+  return c.json({
+    items: filtered.slice(start, start + perPage),
+    total,
+    page: safePage,
+    per_page: perPage,
+    total_pages: totalPages,
+    counts,
+  });
+});
+
+// GET a single document.
+app.get(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  const doc = await kv.get(docKey(c.req.param("id")));
+  if (!doc) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+  return c.json(doc);
+});
+
+// CREATE (finalize) a document — allocates the human number atomically.
+app.post(`${ADMIN}/documents`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const type = body?.type === "facture" ? "facture" : "proforma";
+    const date = typeof body?.date === "string" ? body.date : new Date().toISOString();
+
+    const id = await nextId("document");
+    const number = await nextId(type); // increments counter:proforma / counter:facture
+    const displayId = buildDisplayId(type, number, date);
+
+    const now = new Date().toISOString();
+    const doc = {
+      ...body,
+      id,
+      type,
+      number,
+      year: Number(twoDigitYear(date)),
+      displayId,
+      status: "finalized",
+      created_at: now,
+      updated_at: now,
+    };
+    await kv.set(docKey(id), doc);
+    return c.json(doc);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// UPDATE a document (does NOT change its number/displayId).
+app.put(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  try {
+    const existing = (await kv.get(docKey(c.req.param("id")))) as any | null;
+    if (!existing) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+    const body = await c.req.json();
+    const merged = {
+      ...existing,
+      ...body,
+      id: existing.id,
+      type: existing.type,
+      number: existing.number,
+      year: existing.year,
+      displayId: existing.displayId,
+      created_at: existing.created_at,
+      updated_at: new Date().toISOString(),
+    };
+    await kv.set(docKey(existing.id), merged);
+    return c.json(merged);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// CANCEL a document (keeps its number — no gaps in the invoice sequence).
+app.post(`${ADMIN}/documents/:id/cancel`, requireAdmin, async (c) => {
+  const existing = (await kv.get(docKey(c.req.param("id")))) as any | null;
+  if (!existing) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+  existing.status = "cancelled";
+  existing.updated_at = new Date().toISOString();
+  await kv.set(docKey(existing.id), existing);
+  return c.json(existing);
+});
+
+// DELETE a document (hard delete — for mistaken drafts only).
+app.delete(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  await kv.del(docKey(c.req.param("id")));
+  return c.json({ deleted: true, id: c.req.param("id") });
+});
+
 // ─── Shape helpers (match WC/WP REST API exactly) ────────────────────────
 // Logicom and other ERP sync tools recognise existing products by parsing
 // the WooCommerce/WordPress response shape. If the shape doesn't match,
