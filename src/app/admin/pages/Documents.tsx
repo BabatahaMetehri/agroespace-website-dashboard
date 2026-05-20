@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, FileText, Copy, Printer, Ban, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, FileText, Copy, Ban, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';

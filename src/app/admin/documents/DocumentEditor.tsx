@@ -72,8 +72,12 @@ export function DocumentEditor({
         manualValidity.current = true;
         setDraft({ ...existing });
       } else if (seedDraft) {
-        manualValidity.current = true;
-        setDraft({ ...seedDraft, companySnapshot: comp });
+        manualValidity.current = false;
+        setDraft({
+          ...seedDraft,
+          companySnapshot: comp,
+          validUntil: addDaysIso(new Date(seedDraft.date), 15),
+        });
       } else {
         setDraft(emptyDraft(comp));
       }
@@ -185,10 +189,10 @@ export function DocumentEditor({
                 <input className={field} value={draft.wilayaCity} onChange={(e) => set('wilayaCity', e.target.value)} /></div>
               <div><label className={label}>Date</label>
                 <input type="date" className={field} value={toInputDate(draft.date)}
-                  onChange={(e) => onDateChange(new Date(e.target.value).toISOString())} /></div>
+                  onChange={(e) => { if (e.target.value) onDateChange(new Date(e.target.value).toISOString()); }} /></div>
               <div><label className={label}>Valable jusqu'au</label>
                 <input type="date" className={field} value={toInputDate(draft.validUntil)}
-                  onChange={(e) => { manualValidity.current = true; set('validUntil', new Date(e.target.value).toISOString()); }} /></div>
+                  onChange={(e) => { if (e.target.value) { manualValidity.current = true; set('validUntil', new Date(e.target.value).toISOString()); } }} /></div>
             </div>
           </div>
 
@@ -228,7 +232,7 @@ export function DocumentEditor({
           <div className={section}>
             <div className={h}>Banque</div>
             <select className={field} defaultValue=""
-              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) set('bank', { bankName: p.bankName, accountLine: p.accountLine }); }}>
+              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) { set('bank', { bankName: p.bankName, accountLine: p.accountLine }); e.target.value = ''; } }}>
               <option value="">Choisir un préréglage…</option>
               {presets.bank.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
@@ -250,13 +254,13 @@ export function DocumentEditor({
           <div className={section}>
             <div className={h}>Pied de page & cachet</div>
             <select className={field} defaultValue=""
-              onChange={(e) => { const p = presets.footer.find((f) => f.id === Number(e.target.value)); if (p) set('footerHtml', p.html); }}>
+              onChange={(e) => { const p = presets.footer.find((f) => f.id === Number(e.target.value)); if (p) { set('footerHtml', p.html); e.target.value = ''; } }}>
               <option value="">Choisir un pied de page…</option>
               {presets.footer.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
             </select>
             <RichTextEditor value={draft.footerHtml} onChange={(html) => set('footerHtml', html)} placeholder="Notes de bas de page…" />
             <select className={field} defaultValue=""
-              onChange={(e) => { const p = presets.stamp.find((s) => s.id === Number(e.target.value)); if (p) set('stampUrl', p.imageUrl); }}>
+              onChange={(e) => { const p = presets.stamp.find((s) => s.id === Number(e.target.value)); if (p) { set('stampUrl', p.imageUrl); e.target.value = ''; } }}>
               <option value="">Choisir un cachet…</option>
               {presets.stamp.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>

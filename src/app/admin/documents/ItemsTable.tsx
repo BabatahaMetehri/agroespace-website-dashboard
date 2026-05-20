@@ -23,7 +23,7 @@ export function ItemsTable({ items }: { items: ItemRow[] }) {
               {it.ref && <div style={{ fontWeight: 700 }}>{it.ref}</div>}
               <div
                 className="desc"
-                // designationHtml is sanitized on save (sanitizeRichHtml)
+                // designationHtml is sanitized by RichTextEditor on edit and on finalize
                 dangerouslySetInnerHTML={{ __html: it.designationHtml }}
               />
             </td>
