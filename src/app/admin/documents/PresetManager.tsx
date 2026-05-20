@@ -22,6 +22,7 @@ async function uploadToImgBB(file: File): Promise<string> {
 
 const TABS: { kind: PresetKind; label: string }[] = [
   { kind: 'bank', label: 'Banques' },
+  { kind: 'identity', label: 'Identifiants' },
   { kind: 'footer', label: 'Pieds de page' },
   { kind: 'product', label: 'Produits' },
   { kind: 'stamp', label: 'Cachets' },
@@ -46,6 +47,7 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
 
   const blank = (kind: PresetKind): any => ({
     bank: { label: '', bankName: '', accountLine: '' },
+    identity: { label: '', rc: '', artImp: '', nif: '', nis: '' },
     footer: { label: '', html: '' },
     product: { label: '', ref: '', designationHtml: '', um: 'U', defaultPU: 0 },
     stamp: { label: '', imageUrl: '' },
@@ -118,6 +120,19 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
                   <div><label className={label}>N° de compte</label>
                     <input className={field} value={r.accountLine} onChange={(e) => patch(i, { accountLine: e.target.value })} /></div>
                 </>)}
+
+                {tab === 'identity' && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className={label}>R.C</label>
+                      <input className={field} value={r.rc} onChange={(e) => patch(i, { rc: e.target.value })} /></div>
+                    <div><label className={label}>ART.IMP</label>
+                      <input className={field} value={r.artImp} onChange={(e) => patch(i, { artImp: e.target.value })} /></div>
+                    <div><label className={label}>NIF</label>
+                      <input className={field} value={r.nif} onChange={(e) => patch(i, { nif: e.target.value })} /></div>
+                    <div><label className={label}>NIS</label>
+                      <input className={field} value={r.nis} onChange={(e) => patch(i, { nis: e.target.value })} /></div>
+                  </div>
+                )}
 
                 {tab === 'footer' && (
                   <div><label className={label}>Texte du pied de page</label>

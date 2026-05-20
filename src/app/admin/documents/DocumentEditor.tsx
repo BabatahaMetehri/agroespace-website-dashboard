@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ArrowLeft, Printer, Save, Settings as SettingsIcon, Layers, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DocApi } from './lib/docApi';
 import type {
   DocumentDraft, DocumentRecord, DocType,
-  BankPreset, FooterPreset, ProductPreset, StampPreset, CompanySettings,
+  BankPreset, FooterPreset, ProductPreset, StampPreset, IdentityPreset, CompanySettings,
 } from './types';
 import { DEFAULT_COMPANY, emptyDraft, addDaysIso } from './defaults';
 import { computeTotals } from './lib/calc';
@@ -47,8 +48,8 @@ export function DocumentEditor({
   const [draft, setDraft] = useState<DocumentDraft>(() => emptyDraft(DEFAULT_COMPANY));
   const [counters, setCounters] = useState({ proforma_next: 1, facture_next: 1 });
   const [presets, setPresets] = useState<{
-    bank: BankPreset[]; footer: FooterPreset[]; product: ProductPreset[]; stamp: StampPreset[];
-  }>({ bank: [], footer: [], product: [], stamp: [] });
+    bank: BankPreset[]; footer: FooterPreset[]; product: ProductPreset[]; stamp: StampPreset[]; identity: IdentityPreset[];
+  }>({ bank: [], footer: [], product: [], stamp: [], identity: [] });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
@@ -59,18 +60,19 @@ export function DocumentEditor({
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [c, ct, bank, footer, product, stamp] = await Promise.all([
+      const [c, ct, bank, footer, product, stamp, identity] = await Promise.all([
         docApi.getCompany(),
         docApi.getCounters(),
         docApi.listPresets<BankPreset>('bank'),
         docApi.listPresets<FooterPreset>('footer'),
         docApi.listPresets<ProductPreset>('product'),
         docApi.listPresets<StampPreset>('stamp'),
+        docApi.listPresets<IdentityPreset>('identity'),
       ]);
       const comp = (c && Object.keys(c).length ? { ...DEFAULT_COMPANY, ...(c as CompanySettings) } : DEFAULT_COMPANY);
       setCompany(comp);
       setCounters(ct);
-      setPresets({ bank, footer, product, stamp });
+      setPresets({ bank, footer, product, stamp, identity });
       if (existing) {
         manualValidity.current = true;
         setDraft({ ...existing });
@@ -189,7 +191,33 @@ export function DocumentEditor({
                 </button>
               ))}
             </div>
-            <div className="text-white/40 text-xs">N° {displayId}{!existing && ' (provisoire)'}</div>
+            <div className="text-white/40 text-xs">N° {displayId}</div>
+          </div>
+
+          {/* Company identifiers (preset-switchable) */}
+          <div className={section}>
+            <div className={h}>Identifiants entreprise</div>
+            <select className={field} defaultValue=""
+              onChange={(e) => {
+                const p = presets.identity.find((x) => x.id === Number(e.target.value));
+                if (p) {
+                  setCompany((c) => ({ ...c, rc: p.rc, artImp: p.artImp, nif: p.nif, nis: p.nis }));
+                  e.target.value = '';
+                }
+              }}>
+              <option value="">Choisir un préréglage d'identifiants…</option>
+              {presets.identity.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className={label}>R.C</label>
+                <input className={field} value={company.rc} onChange={(e) => setCompany((c) => ({ ...c, rc: e.target.value }))} /></div>
+              <div><label className={label}>ART.IMP</label>
+                <input className={field} value={company.artImp} onChange={(e) => setCompany((c) => ({ ...c, artImp: e.target.value }))} /></div>
+              <div><label className={label}>NIF</label>
+                <input className={field} value={company.nif} onChange={(e) => setCompany((c) => ({ ...c, nif: e.target.value }))} /></div>
+              <div><label className={label}>NIS</label>
+                <input className={field} value={company.nis} onChange={(e) => setCompany((c) => ({ ...c, nis: e.target.value }))} /></div>
+            </div>
           </div>
 
           {/* Document */}
@@ -213,7 +241,7 @@ export function DocumentEditor({
             <div className="grid grid-cols-2 gap-2">
               {([
                 ['name', 'Nom'], ['adresse', 'Adresse'], ['wilaya', 'Wilaya'], ['rc', 'R.C'],
-                ['nif', 'NIF'], ['nis', 'NIS'], ['art', 'ART'], ['ia', 'IA'],
+                ['nif', 'NIF'], ['nis', 'NIS'], ['art', 'ART'], ['cf', 'CF'],
               ] as Array<[keyof DocumentDraft['client'], string]>).map(([k, l]) => (
                 <div key={k}><label className={label}>{l}</label>
                   <input className={field} value={draft.client[k]} onChange={(e) => setClient(k, e.target.value)} /></div>
@@ -278,15 +306,25 @@ export function DocumentEditor({
           </div>
         </div>
 
-        {/* ── Preview ── */}
+        {/* ── Preview (screen, scaled to fit) ── */}
         <div className="xl:sticky xl:top-20 self-start">
           <div className="preview-pane rounded-xl bg-white/5 p-3" style={{ maxHeight: 'calc(100vh - 7rem)' }}>
             <div className="preview-scale">
-              <DocumentPreview draft={{ ...draft, companySnapshot: company }} displayId={displayId} provisional={!existing} />
+              <DocumentPreview draft={{ ...draft, companySnapshot: company }} displayId={displayId} />
             </div>
           </div>
         </div>
       </div>
+
+      {/* ── Print copy: a body-level, full-size, normal-flow copy that the print
+          stylesheet reveals (and hides #root). Normal flow + @page margins let
+          long documents paginate across multiple A4 pages without clipping. ── */}
+      {createPortal(
+        <div className="print-only">
+          <DocumentPreview draft={{ ...draft, companySnapshot: company }} displayId={displayId} />
+        </div>,
+        document.body,
+      )}
 
       {showPresets && <PresetManager docApi={docApi} onClose={() => { setShowPresets(false); loadAll(); }} />}
       {showSettings && (

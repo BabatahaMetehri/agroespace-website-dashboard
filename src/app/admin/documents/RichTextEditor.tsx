@@ -15,11 +15,15 @@ export function RichTextEditor({
 }) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Sync external value into the DOM only when it differs (avoids caret jumps).
+  // Sync external value into the DOM, but NEVER while the user is typing —
+  // rewriting innerHTML on each keystroke resets the caret to the start (e.g.
+  // when the sanitizer trims a trailing space). Only sync when the editor is
+  // blurred, i.e. the value changed from the outside (loading a preset, reset).
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== value) {
-      ref.current.innerHTML = value;
-    }
+    const el = ref.current;
+    if (!el) return;
+    if (document.activeElement === el) return;
+    if (el.innerHTML !== value) el.innerHTML = value;
   }, [value]);
 
   const emit = () => {

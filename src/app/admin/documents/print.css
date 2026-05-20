@@ -1,58 +1,73 @@
 /* ── Document (screen preview + print) ─────────────────────────────────── */
 .doc {
   background: #fff;
-  color: #1f2a24;
+  color: #16221c;
   width: 210mm;
   min-height: 297mm;
   margin: 0 auto;
   padding: 14mm 14mm 12mm;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 12px;
-  line-height: 1.4;
+  font-size: 12.5px;
+  line-height: 1.45;
   box-sizing: border-box;
+  /* Force background colors (green rule, total box, table header) to print. */
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
 }
 .doc .sans { font-family: Arial, Helvetica, sans-serif; }
 .doc-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
-.doc-hd .logo-agro { height: 46px; width: auto; object-fit: contain; }
-.doc-hd .logo-western { height: 34px; width: auto; object-fit: contain; display: block; margin-left: auto; }
-.doc-hd .logo-senninger { height: 18px; width: auto; object-fit: contain; display: block; margin: 4px 0 0 auto; }
+.doc-hd .logo-agro { height: 48px; width: auto; object-fit: contain; }
+.doc-hd .logo-western { height: 36px; width: auto; object-fit: contain; display: block; margin-left: auto; }
 .brand-name { font-size: 24px; font-weight: 700; color: #1d6b3a; letter-spacing: .5px; line-height: 1; }
-.brand-sub { font-size: 11px; color: #3a4a40; margin-top: 3px; }
-.brand-lines { font-size: 10px; color: #4a564d; margin-top: 6px; line-height: 1.5; }
-.brand-ids { color: #6b7770; }
+.brand-sub { font-size: 11.5px; color: #34433a; margin-top: 3px; }
+.brand-lines { font-size: 10.5px; color: #42504a; margin-top: 6px; line-height: 1.55; }
+.brand-ids { color: #5f6b62; }
 .rule { height: 3px; background: linear-gradient(90deg, #114232, #87A922); border-radius: 2px; margin: 12px 0 14px; }
 .id-row { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
-.doc-title { font-size: 18px; font-weight: 700; color: #114232; }
-.doc-title .accent { display: block; height: 3px; width: 120px; background: #87A922; border-radius: 2px; margin-top: 6px; }
-.doc-title .provisional { font-size: 10px; color: #b8862b; font-weight: 600; margin-left: 6px; }
-.doc-date { font-size: 12px; margin-top: 10px; }
-.facture-extras { font-size: 10.5px; margin-top: 8px; color: #2a3a30; max-width: 320px; }
-.client-box { border: 1.5px solid #c7d0c9; border-radius: 12px; padding: 12px 16px; min-width: 300px; position: relative; }
-.client-box .lbl { position: absolute; top: -9px; left: 14px; background: #fff; padding: 0 6px; font-size: 10px; color: #6b7770; }
-.client-box .crow { font-size: 11.5px; margin: 2px 0; }
-.client-box b { color: #1f2a24; }
-.page-no { text-align: right; font-size: 10px; color: #6b7770; margin: 8px 0 4px; }
-table.items { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; }
-table.items th { background: #f3f6f1; color: #2a3a30; font-size: 10.5px; font-weight: 700; border: 1px solid #cdd6cf; padding: 7px 8px; text-align: center; }
-table.items td { border: 1px solid #dde3dd; padding: 9px; vertical-align: top; font-size: 11px; }
+/* Document number — clean professional sans, not the body serif. */
+.doc-title {
+  font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 19px;
+  font-weight: 700;
+  color: #114232;
+  letter-spacing: .2px;
+}
+.doc-title .accent { display: block; height: 3px; width: 130px; background: #87A922; border-radius: 2px; margin-top: 7px; }
+.doc-date { font-size: 12.5px; margin-top: 10px; }
+.facture-extras { font-size: 11px; margin-top: 8px; color: #2a3a30; max-width: 320px; overflow-wrap: anywhere; }
+.client-box { border: 1.5px solid #c7d0c9; border-radius: 12px; padding: 12px 16px; width: 320px; max-width: 320px; box-sizing: border-box; position: relative; }
+.client-box .lbl { position: absolute; top: -9px; left: 14px; background: #fff; padding: 0 6px; font-size: 10.5px; color: #6b7770; }
+.client-box .crow { font-size: 12px; margin: 2px 0; overflow-wrap: anywhere; word-break: break-word; }
+.client-box b { color: #16221c; }
+table.items { width: 100%; border-collapse: collapse; font-family: Arial, Helvetica, sans-serif; table-layout: fixed; }
+table.items th { background: #f3f6f1; color: #2a3a30; font-size: 11px; font-weight: 700; border: 1px solid #cdd6cf; padding: 7px 8px; text-align: center; }
+table.items td { border: 1px solid #dde3dd; padding: 9px; vertical-align: top; font-size: 12px; overflow-wrap: anywhere; }
 table.items tr { break-inside: avoid; page-break-inside: avoid; }
 .desc :where(b, strong) { font-weight: 700; }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ctr { text-align: center; }
 .totals-wrap { display: flex; justify-content: space-between; gap: 24px; margin-top: 18px; align-items: flex-start; break-inside: avoid; page-break-inside: avoid; }
-.words { font-size: 11.5px; max-width: 430px; font-family: Arial, Helvetica, sans-serif; }
-.words .cap { font-weight: 700; font-size: 10.5px; color: #3a4a40; }
+.words { font-size: 12px; max-width: 430px; font-family: Arial, Helvetica, sans-serif; overflow-wrap: anywhere; }
+.words .cap { font-weight: 700; font-size: 11px; color: #34433a; }
 .totals { font-family: Arial, Helvetica, sans-serif; min-width: 250px; }
-.totals .tline { display: flex; justify-content: space-between; padding: 5px 2px; font-size: 11.5px; border-bottom: 1px solid #eef0ed; }
-.totals .grand { background: #114232; color: #fff; padding: 9px 12px; border-radius: 8px; margin-top: 6px; font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; }
+.totals .tline { display: flex; justify-content: space-between; padding: 5px 2px; font-size: 12px; border-bottom: 1px solid #eef0ed; }
+.totals .grand {
+  background: #114232; color: #fff; padding: 9px 12px; border-radius: 8px; margin-top: 6px;
+  font-weight: 700; font-size: 13.5px; display: flex; justify-content: space-between;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
 .totals .retenue { margin-top: 6px; border: 1px solid #cdd6cf; border-radius: 8px; overflow: hidden; }
 .totals .retenue .tline { padding: 6px 10px; border-bottom: 1px solid #eef0ed; }
 .sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 24px; break-inside: avoid; page-break-inside: avoid; }
-.stamp-img { width: 130px; height: auto; object-fit: contain; }
-.stamp-ph { width: 120px; height: 120px; border-radius: 50%; border: 2px dashed #b9c4bc; display: flex; align-items: center; justify-content: center; color: #9aa89f; font-size: 10px; font-family: Arial; text-align: center; }
-.sign-label { font-family: Arial; font-size: 11px; color: #3a4a40; margin-top: 4px; }
-.validity { font-family: Arial; font-size: 11.5px; font-weight: 700; color: #114232; border: 1.5px solid #87A922; border-radius: 8px; padding: 6px 12px; }
-.foot-notes { border-top: 1px solid #e3e6e2; margin-top: 18px; padding-top: 10px; font-size: 9.5px; color: #5a655c; font-family: Arial; line-height: 1.5; break-inside: avoid; page-break-inside: avoid; }
+.stamp-img { width: 160px; height: auto; object-fit: contain; }
+.stamp-ph { width: 140px; height: 140px; border-radius: 50%; border: 2px dashed #b9c4bc; display: flex; align-items: center; justify-content: center; color: #9aa89f; font-size: 10px; font-family: Arial; text-align: center; }
+.sign-label { font-family: Arial; font-size: 11.5px; color: #34433a; margin-top: 4px; }
+.validity {
+  font-family: Arial; font-size: 12px; font-weight: 700; color: #114232;
+  border: 1.5px solid #87A922; border-radius: 8px; padding: 6px 12px;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.foot-notes { border-top: 1px solid #e3e6e2; margin-top: 18px; padding-top: 10px; font-size: 10px; color: #54605a; font-family: Arial; line-height: 1.55; break-inside: avoid; page-break-inside: avoid; }
 .foot-notes b { color: #2a3a30; }
 
 /* ── Screen-only preview scaling (the editor scales the A4 doc to fit) ──── */
@@ -60,18 +75,32 @@ table.items tr { break-inside: avoid; page-break-inside: avoid; }
 .preview-scale { transform: scale(0.62); transform-origin: top center; }
 .doc { box-shadow: 0 10px 40px rgba(0, 0, 0, .35); border: 1px solid #e3e6e2; }
 
+/* The dedicated print copy (rendered into a body-level portal) is hidden on
+   screen and only revealed for printing — see DocumentEditor. */
+.print-only { display: none; }
+
 /* ── Print ─────────────────────────────────────────────────────────────── */
 @media print {
-  @page { size: A4; margin: 0; }
-  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  body * { visibility: hidden !important; }
-  .print-root, .print-root * { visibility: visible !important; }
-  .print-root { position: absolute; left: 0; top: 0; width: 100%; }
-  /* Neutralize the screen preview transform/clipping so print is full-size A4.
-     !important beats the inline/screen transform on the ancestor wrapper. */
-  .preview-scale { transform: none !important; }
-  .preview-pane { overflow: visible !important; max-height: none !important; padding: 0 !important; background: #fff !important; }
-  .doc { box-shadow: none !important; border: none !important; width: 210mm; margin: 0; }
+  /* @page margins give every page (including continuation pages) consistent
+     whitespace, so multi-page documents don't run into the sheet edges. */
+  @page { size: A4; margin: 14mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; height: auto !important; overflow: visible !important; }
+
+  /* Hide the whole app; show only the body-level print copy, in normal flow
+     (no position:absolute) so long content paginates across pages. */
+  #root { display: none !important; }
+  .print-only { display: block !important; }
   .no-print { display: none !important; }
-  table.items thead { display: table-header-group; } /* repeat header per page */
+
+  /* In print the doc fills the @page content box; padding/min-height come from
+     @page margins, not the element, so each page is spaced correctly. */
+  .doc {
+    width: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  table.items thead { display: table-header-group; } /* repeat header on each page */
 }

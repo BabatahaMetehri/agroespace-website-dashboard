@@ -1,9 +1,9 @@
 import agroLogo from '../../../imports/logo-with-shadow.png';
 import westernLogo from '../../../imports/partners/western-logo.png';
-import senningerLogo from '../../../imports/partners/senninger.png';
-import type { CompanySettings } from './types';
+import type { CompanySettings, BankInfo } from './types';
 
-export function DocHeader({ company }: { company: CompanySettings }) {
+export function DocHeader({ company, bank }: { company: CompanySettings; bank: BankInfo }) {
+  const bankLine = [bank?.bankName, bank?.accountLine].filter(Boolean).join(' : ');
   return (
     <>
       <div className="doc-hd">
@@ -18,6 +18,7 @@ export function DocHeader({ company }: { company: CompanySettings }) {
           <div className="brand-lines sans">
             CAPITAL SOCIAL : {company.capital} &nbsp;·&nbsp; Siège : {company.siege}<br />
             Tél : {company.tel} &nbsp; FAX : {company.fax} &nbsp; Email : {company.email}<br />
+            {bankLine && <>{bankLine}<br /></>}
             <span className="brand-ids">
               R.C. {company.rc} · ART.IMP {company.artImp} · NIF {company.nif} · NIS {company.nis}
             </span>
@@ -25,7 +26,6 @@ export function DocHeader({ company }: { company: CompanySettings }) {
         </div>
         <div style={{ minWidth: 120 }}>
           <img className="logo-western" src={westernLogo} alt="Western" />
-          <img className="logo-senninger" src={senningerLogo} alt="Senninger" />
         </div>
       </div>
       <div className="rule" />
