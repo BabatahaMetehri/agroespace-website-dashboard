@@ -25,4 +25,19 @@ describe('sanitizeRichHtml', () => {
     expect(sanitizeRichHtml('')).toBe('');
     expect(sanitizeRichHtml(null as unknown as string)).toBe('');
   });
+  it('emits font-size when value matches allowlist pattern', () => {
+    expect(sanitizeRichHtml('<span style="font-size:18px">big</span>')).toBe(
+      '<span style="font-size:18px">big</span>',
+    );
+  });
+  it('strips font-size when value contains expression (invalid pattern)', () => {
+    expect(
+      sanitizeRichHtml('<span style="font-size:expression(alert(1))">x</span>'),
+    ).toBe('<span>x</span>');
+  });
+  it('drops meta tag entirely but keeps surrounding text', () => {
+    expect(
+      sanitizeRichHtml('<meta http-equiv="refresh" content="0">text'),
+    ).toBe('text');
+  });
 });

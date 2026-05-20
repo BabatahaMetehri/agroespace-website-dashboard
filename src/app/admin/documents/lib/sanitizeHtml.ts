@@ -2,7 +2,7 @@ const ALLOWED_TAGS = new Set([
   'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'SPAN',
 ]);
 
-const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED']);
+const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE']);
 
 /** Serialize a node's allowed children to a sanitized HTML string. */
 function serializeChildren(node: Node): string {
@@ -37,8 +37,8 @@ function serializeNode(node: Node): string {
   // Only SPAN keeps a single allowed style: font-size.
   let attrs = '';
   if (lower === 'span') {
-    const size = (el as HTMLElement).style?.fontSize;
-    if (size) attrs = ` style="font-size:${size.replace(/\s+/g, '')}"`;
+    const raw = (el as HTMLElement).style?.fontSize?.replace(/\s+/g, '') ?? '';
+    if (/^[\d.]+(px|em|rem|%|pt)$/.test(raw)) attrs = ` style="font-size:${raw}"`;
   }
   return `<${lower}${attrs}>${serializeChildren(el)}</${lower}>`;
 }
