@@ -1415,6 +1415,32 @@ app.delete(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
   return c.json({ deleted: true, id: productId });
 });
 
+// ─── Documents (Proforma / Facture) ─────────────────────────────────────────
+const DOC_PREFIX = "doc:";
+const docKey = (id: number | string) => `${DOC_PREFIX}${id}`;
+const docPresetPrefix = (kind: string) => `docpreset:${kind}:`;
+const docPresetKey = (kind: string, id: number | string) =>
+  `${docPresetPrefix(kind)}${id}`;
+const COMPANY_SETTINGS_KEY = "docsettings:company";
+const PRESET_KINDS = new Set(["bank", "footer", "product", "stamp"]);
+
+function twoDigitYear(isoDate: string): string {
+  const d = new Date(isoDate);
+  const yy = (Number.isNaN(d.getTime()) ? new Date() : d).getFullYear() % 100;
+  return String(yy).padStart(2, "0");
+}
+
+function buildDisplayId(
+  type: "proforma" | "facture",
+  num: number,
+  isoDate: string,
+): string {
+  const yy = twoDigitYear(isoDate);
+  return type === "proforma"
+    ? `P${String(num).padStart(4, "0")}/${yy}`
+    : `${String(num).padStart(5, "0")}/${yy}`;
+}
+
 // ─── Shape helpers (match WC/WP REST API exactly) ────────────────────────
 // Logicom and other ERP sync tools recognise existing products by parsing
 // the WooCommerce/WordPress response shape. If the shape doesn't match,
@@ -1442,7 +1468,11 @@ type IdKind =
   | "attribute"
   | "attribute_term"
   | "customer"
-  | "order";
+  | "order"
+  | "document"
+  | "docpreset"
+  | "proforma"
+  | "facture";
 
 async function nextId(kind: IdKind): Promise<number> {
   const key = `counter:${kind}`;
@@ -1457,6 +1487,10 @@ async function nextId(kind: IdKind): Promise<number> {
     attribute: 0,
     attribute_term: 0,
     product: 0,
+    document: 0,     // internal document record id
+    docpreset: 0,    // internal preset id
+    proforma: 0,     // human proforma number (seedable by admin)
+    facture: 0,      // human facture number (seedable by admin)
   };
   const next = (cur ?? start[kind] ?? 0) + 1;
   await kv.set(key, next);
