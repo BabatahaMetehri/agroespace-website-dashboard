@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Search, FileText, Copy, Ban, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Search, FileText, Copy, Ban, Trash2, Printer, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';
@@ -10,7 +10,7 @@ import { DocumentEditor } from '../documents/DocumentEditor';
 
 type View =
   | { mode: 'list' }
-  | { mode: 'edit'; doc: DocumentRecord }
+  | { mode: 'edit'; doc: DocumentRecord; autoPrint?: boolean }
   | { mode: 'new'; seed: DocumentDraft | null };
 
 const formatFrDate = (iso: string) => {
@@ -43,6 +43,10 @@ export const Documents = () => {
     try { setView({ mode: 'edit', doc: await docApi.getDocument(id) }); }
     catch (e) { toast.error((e as Error).message); }
   };
+  const printDoc = async (id: number) => {
+    try { setView({ mode: 'edit', doc: await docApi.getDocument(id), autoPrint: true }); }
+    catch (e) { toast.error((e as Error).message); }
+  };
   const duplicate = async (id: number) => {
     try {
       const d = await docApi.getDocument(id);
@@ -69,6 +73,7 @@ export const Documents = () => {
         seedDraft={view.mode === 'new' ? view.seed : null}
         onBack={() => setView({ mode: 'list' })}
         onSaved={() => setView({ mode: 'list' })}
+        autoPrint={view.mode === 'edit' ? view.autoPrint : undefined}
       />
     );
   }
@@ -130,11 +135,14 @@ export const Documents = () => {
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button title="Ouvrir" onClick={() => openEdit(d.id)} className="p-1.5 rounded hover:bg-white/10 text-white/60 hover:text-white"><FileText className="w-4 h-4" /></button>
+                        <button title="Imprimer" onClick={() => printDoc(d.id)} className="p-1.5 rounded hover:bg-white/10 text-white/60 hover:text-white"><Printer className="w-4 h-4" /></button>
                         <button title="Dupliquer" onClick={() => duplicate(d.id)} className="p-1.5 rounded hover:bg-white/10 text-white/60 hover:text-white"><Copy className="w-4 h-4" /></button>
                         {d.status !== 'cancelled' && (
                           <button title="Annuler" onClick={() => cancel(d.id)} className="p-1.5 rounded hover:bg-white/10 text-amber-300/70 hover:text-amber-300"><Ban className="w-4 h-4" /></button>
                         )}
-                        <button title="Supprimer" onClick={() => remove(d.id)} className="p-1.5 rounded hover:bg-white/10 text-red-300/70 hover:text-red-300"><Trash2 className="w-4 h-4" /></button>
+                        {d.status === 'cancelled' && (
+                          <button title="Supprimer" onClick={() => remove(d.id)} className="p-1.5 rounded hover:bg-white/10 text-red-300/70 hover:text-red-300"><Trash2 className="w-4 h-4" /></button>
+                        )}
                       </div>
                     </td>
                   </tr>

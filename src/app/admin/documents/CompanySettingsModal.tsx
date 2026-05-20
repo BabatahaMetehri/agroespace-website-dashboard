@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X, Save, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DocApi } from './lib/docApi';
@@ -22,6 +22,8 @@ export function CompanySettingsModal({
   const [factureNext, setFactureNext] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const loadedProformaNext = useRef(1);
+  const loadedFactureNext = useRef(1);
 
   useEffect(() => {
     (async () => {
@@ -30,6 +32,8 @@ export function CompanySettingsModal({
         if (c && Object.keys(c).length) setCompany({ ...DEFAULT_COMPANY, ...(c as CompanySettings) });
         setProformaNext(counters.proforma_next);
         setFactureNext(counters.facture_next);
+        loadedProformaNext.current = counters.proforma_next;
+        loadedFactureNext.current = counters.facture_next;
       } catch (e) { toast.error((e as Error).message); }
       finally { setLoading(false); }
     })();
@@ -38,6 +42,11 @@ export function CompanySettingsModal({
   const set = (k: keyof CompanySettings, v: string) => setCompany({ ...company, [k]: v });
 
   const save = async () => {
+    if (proformaNext < loadedProformaNext.current || factureNext < loadedFactureNext.current) {
+      if (!confirm('Un numéro saisi est inférieur au prochain numéro actuel. Des numéros déjà utilisés pourraient être réattribués. Continuer ?')) {
+        return; // abort without saving anything
+      }
+    }
     setBusy(true);
     try {
       const saved = await docApi.saveCompany(company);

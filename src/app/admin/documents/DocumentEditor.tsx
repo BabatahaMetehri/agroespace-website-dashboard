@@ -34,12 +34,14 @@ export function DocumentEditor({
   seedDraft,
   onBack,
   onSaved,
+  autoPrint,
 }: {
   docApi: DocApi;
   existing: DocumentRecord | null;
   seedDraft?: DocumentDraft | null; // for "duplicate": pre-fill a NEW draft
   onBack: () => void;
   onSaved: () => void;
+  autoPrint?: boolean;
 }) {
   const [company, setCompany] = useState<CompanySettings>(DEFAULT_COMPANY);
   const [draft, setDraft] = useState<DocumentDraft>(() => emptyDraft(DEFAULT_COMPANY));
@@ -52,6 +54,7 @@ export function DocumentEditor({
   const [showPresets, setShowPresets] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const manualValidity = useRef(false);
+  const didAutoPrint = useRef(false);
 
   const loadAll = async () => {
     setLoading(true);
@@ -85,6 +88,14 @@ export function DocumentEditor({
     finally { setLoading(false); }
   };
   useEffect(() => { loadAll(); /* eslint-disable-line */ }, [existing, seedDraft]);
+
+  // Auto-print: once loading finishes and we have an existing doc, fire window.print() once.
+  useEffect(() => {
+    if (!loading && autoPrint && existing && !didAutoPrint.current) {
+      didAutoPrint.current = true;
+      window.print();
+    }
+  }, [loading, autoPrint, existing]);
 
   const set = <K extends keyof DocumentDraft>(k: K, v: DocumentDraft[K]) =>
     setDraft((d) => ({ ...d, [k]: v }));
@@ -189,10 +200,10 @@ export function DocumentEditor({
                 <input className={field} value={draft.wilayaCity} onChange={(e) => set('wilayaCity', e.target.value)} /></div>
               <div><label className={label}>Date</label>
                 <input type="date" className={field} value={toInputDate(draft.date)}
-                  onChange={(e) => { if (e.target.value) onDateChange(new Date(e.target.value).toISOString()); }} /></div>
+                  onChange={(e) => { if (e.target.value) onDateChange(new Date(e.target.value + 'T12:00:00').toISOString()); }} /></div>
               <div><label className={label}>Valable jusqu'au</label>
                 <input type="date" className={field} value={toInputDate(draft.validUntil)}
-                  onChange={(e) => { if (e.target.value) { manualValidity.current = true; set('validUntil', new Date(e.target.value).toISOString()); } }} /></div>
+                  onChange={(e) => { if (e.target.value) { manualValidity.current = true; set('validUntil', new Date(e.target.value + 'T12:00:00').toISOString()); } }} /></div>
             </div>
           </div>
 
