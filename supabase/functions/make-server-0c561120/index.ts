@@ -55,12 +55,16 @@ app.use(
   }),
 );
 
-// ─── Body size cap (50 KB default; 10 MB on media upload routes) ──────────
+// ─── Body size cap (50 KB default; 1 MB on document/preset admin routes; 10 MB on media upload routes) ──────────
 app.use("*", async (c, next) => {
   const cl = Number(c.req.header("Content-Length") ?? 0);
   const path = new URL(c.req.url).pathname;
   const isMedia = path.includes("/wp-json/wp/v2/media");
-  const max = isMedia ? 10 * 1024 * 1024 : 50 * 1024;
+  // Document and preset admin endpoints can carry many line items with rich-text
+  // HTML (designationHtml), a footer, and a company snapshot — allow up to 1 MB.
+  const isAdminDoc =
+    path.includes("/admin/documents") || path.includes("/admin/docpresets");
+  const max = isMedia ? 10 * 1024 * 1024 : isAdminDoc ? 1_000_000 : 50 * 1024;
   if (cl > max) {
     return c.json(
       { code: "payload_too_large", message: `Body exceeds ${max} bytes` },
