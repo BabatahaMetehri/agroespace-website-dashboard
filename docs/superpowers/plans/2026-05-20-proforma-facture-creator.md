@@ -514,6 +514,12 @@ const ALLOWED_TAGS = new Set([
   'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'SPAN',
 ]);
 
+// Dangerous elements: drop the element AND all of its contents (otherwise
+// e.g. <script>alert(1)</script> text would leak through the unwrap path).
+const DROP_TAGS = new Set([
+  'SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
+]);
+
 /** Serialize a node's allowed children to a sanitized HTML string. */
 function serializeChildren(node: Node): string {
   let out = '';
@@ -535,8 +541,9 @@ function serializeNode(node: Node): string {
 
   const el = node as Element;
   const tag = el.tagName.toUpperCase();
+  if (DROP_TAGS.has(tag)) return ''; // drop element AND its contents (XSS)
   if (!ALLOWED_TAGS.has(tag)) {
-    // Disallowed element: drop the tag, keep sanitized children.
+    // Disallowed but safe element: drop the tag, keep sanitized children.
     return serializeChildren(el);
   }
 
