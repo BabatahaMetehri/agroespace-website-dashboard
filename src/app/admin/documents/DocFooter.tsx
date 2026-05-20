@@ -18,7 +18,7 @@ export function DocFooter({
   return (
     <>
       <div className="sign-row">
-        <div>
+        <div className="stamp-wrap">
           {stampUrl
             ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
             : <div className="stamp-ph">Cachet &<br />signature</div>}
