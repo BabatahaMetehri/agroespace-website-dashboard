@@ -101,6 +101,11 @@ document at save time, so editing presets later never alters historical document
 - Server allocates the number atomically (`nextId`) — concurrent staff cannot collide.
 - Cancelling a facture keeps its number (no gaps — correct for invoices); status →
   `cancelled`. Documents are not hard-deleted once finalized.
+- **Manual counter seeding:** the settings modal exposes an editable "next number" for
+  each counter (proforma, facture) so staff can sync the sequence to wherever Logicom left
+  off. Setting it writes `counter:<kind>` directly; the displayed IDs in the spec
+  (`P0133/26`, `00003/26`) are illustrative only. Guard against accidentally lowering the
+  counter below an already-used number with a confirm prompt.
 
 ## Calculations & formatting
 
@@ -148,6 +153,8 @@ Test vectors: `16 200 000.00 → "Seize millions deux cent mille dinars algérie
 
 - **Company header** (logos, identifiers, capital, siège, contacts, R.C/ART.IMP/NIF/NIS)
   in the settings modal, collapsed by default.
+- **Counter seeding** controls (editable next-number for proforma & facture) in the
+  settings modal — see "ID generation & increment timing".
 - **Preset pickers** for Bank, Footer, Product, Stamp: dropdown ("select preset…") +
   "manage" to add/edit/delete. Selecting a product preset appends a pre-filled row
   (rich-text designation, UM, default P.U) that remains inline-editable; manual rows also
