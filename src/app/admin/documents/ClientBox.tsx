@@ -7,7 +7,7 @@ export function ClientBox({ client }: { client: ClientInfo }) {
     ['NIF', client.nif],
     ['NIS', client.nis],
     ['ART', client.art],
-    ['IA', client.ia],
+    ['CF', client.cf],
   ];
   return (
     <div className="client-box sans">

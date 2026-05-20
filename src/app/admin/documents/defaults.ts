@@ -15,7 +15,7 @@ export const DEFAULT_COMPANY: CompanySettings = {
 };
 
 export const EMPTY_CLIENT: ClientInfo = {
-  name: '', adresse: '', wilaya: '', rc: '', nif: '', nis: '', art: '', ia: '',
+  name: '', adresse: '', wilaya: '', rc: '', nif: '', nis: '', art: '', cf: '',
 };
 
 /** ISO date N days from `from`. */

@@ -9,7 +9,7 @@ export interface ClientInfo {
   nif: string;
   nis: string;
   art: string;
-  ia: string;
+  cf: string;
 }
 
 export interface ItemRow {
@@ -85,7 +85,7 @@ export type DocumentDraft = Omit<
   id?: number; // present when editing an existing finalized doc
 };
 
-export type PresetKind = 'bank' | 'footer' | 'product' | 'stamp';
+export type PresetKind = 'bank' | 'footer' | 'product' | 'stamp' | 'identity';
 
 export interface BankPreset { id: number; label: string; bankName: string; accountLine: string; }
 export interface FooterPreset { id: number; label: string; html: string; }
@@ -93,6 +93,10 @@ export interface ProductPreset {
   id: number; label: string; ref: string; designationHtml: string; um: string; defaultPU: number;
 }
 export interface StampPreset { id: number; label: string; imageUrl: string; }
+/** Company registration identifiers — these change occasionally, so they are presettable. */
+export interface IdentityPreset {
+  id: number; label: string; rc: string; artImp: string; nif: string; nis: string;
+}
 
 export interface CountersInfo { proforma_next: number; facture_next: number; }
 

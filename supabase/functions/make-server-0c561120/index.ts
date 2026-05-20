@@ -1426,7 +1426,7 @@ const docPresetPrefix = (kind: string) => `docpreset:${kind}:`;
 const docPresetKey = (kind: string, id: number | string) =>
   `${docPresetPrefix(kind)}${id}`;
 const COMPANY_SETTINGS_KEY = "docsettings:company";
-const PRESET_KINDS = new Set(["bank", "footer", "product", "stamp"]);
+const PRESET_KINDS = new Set(["bank", "footer", "product", "stamp", "identity"]);
 
 function twoDigitYear(isoDate: string): string {
   const d = new Date(isoDate);

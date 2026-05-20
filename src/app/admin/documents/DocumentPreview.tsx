@@ -17,11 +17,9 @@ function formatFrDate(iso: string): string {
 export function DocumentPreview({
   draft,
   displayId,
-  provisional,
 }: {
   draft: DocumentDraft;
   displayId: string;
-  provisional: boolean; // show "(provisoire)" next to id while not yet finalized
 }) {
   const title = draft.type === 'proforma' ? 'Facture Proforma' : 'Facture';
   const proformaWord = draft.type === 'proforma' ? 'proforma' : 'facture';
@@ -30,13 +28,12 @@ export function DocumentPreview({
   return (
     <div className="print-root">
       <div className="doc">
-        <DocHeader company={draft.companySnapshot} />
+        <DocHeader company={draft.companySnapshot} bank={draft.bank} />
 
         <div className="id-row">
           <div>
             <div className="doc-title">
               {title} N° : {displayId}
-              {provisional && <span className="provisional">(provisoire)</span>}
               <span className="accent" />
             </div>
             <div className="doc-date sans">
@@ -52,8 +49,6 @@ export function DocumentPreview({
           </div>
           <ClientBox client={draft.client} />
         </div>
-
-        <div className="page-no sans">Page 1 / 1</div>
 
         <ItemsTable items={draft.items} />
 

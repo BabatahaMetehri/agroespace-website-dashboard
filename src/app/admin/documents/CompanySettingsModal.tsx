@@ -101,9 +101,6 @@ export function CompanySettingsModal({
                     onChange={(e) => setFactureNext(Number(e.target.value))} />
                 </div>
               </div>
-              <p className="text-white/40 text-[11px] mt-2">
-                Définissez le prochain numéro pour synchroniser la suite avec Logicom.
-              </p>
             </div>
           </div>
         )}
