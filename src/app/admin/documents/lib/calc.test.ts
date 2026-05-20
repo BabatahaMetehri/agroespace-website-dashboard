@@ -23,6 +23,12 @@ describe('lineMontantHT', () => {
   });
 });
 
+describe('TVA_RATE', () => {
+  it('TVA_RATE is 0.19', () => {
+    expect(TVA_RATE).toBe(0.19);
+  });
+});
+
 describe('computeTotals', () => {
   it('sums lines, applies 19% TVA, totals TTC', () => {
     const t = computeTotals([{ qty: 2, puHT: 8100000 }]);
@@ -39,8 +45,8 @@ describe('computeTotals', () => {
     expect(t.tva).toBe(38.19);
     expect(t.totalTTC).toBe(239.19);
   });
-  it('TVA_RATE is 0.19', () => {
-    expect(TVA_RATE).toBe(0.19);
+  it('returns zero totals for empty items array', () => {
+    expect(computeTotals([])).toEqual({ sousTotalHT: 0, tva: 0, totalTTC: 0 });
   });
 });
 
@@ -58,5 +64,10 @@ describe('formatMoneyFr', () => {
     expect(formatMoneyFr(19278000)).toBe('19 278 000.00');
     expect(formatMoneyFr(0)).toBe('0.00');
     expect(formatMoneyFr(1234.5)).toBe('1 234.50');
+  });
+  it('returns "0.00" for non-finite inputs', () => {
+    expect(formatMoneyFr(NaN)).toBe('0.00');
+    expect(formatMoneyFr(Infinity)).toBe('0.00');
+    expect(formatMoneyFr(-Infinity)).toBe('0.00');
   });
 });

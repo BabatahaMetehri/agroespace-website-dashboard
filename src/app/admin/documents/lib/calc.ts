@@ -36,6 +36,7 @@ export function retenueGarantie(
 
 /** Format a number as "16 200 000.00" — space thousands separator, dot decimal. */
 export function formatMoneyFr(n: number): string {
+  if (!Number.isFinite(n)) return '0.00';
   const [int, dec] = round2(n).toFixed(2).split('.');
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
   return `${grouped}.${dec}`;
