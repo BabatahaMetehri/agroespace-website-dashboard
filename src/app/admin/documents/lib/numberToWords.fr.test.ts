@@ -38,6 +38,18 @@ describe('numberToFrenchWords — French grammar edge cases', () => {
   });
 });
 
+describe('numberToFrenchWords — edge cases', () => {
+  it('1000 uses invariable "mille" with plural suffix', () => {
+    expect(numberToFrenchWords(1000)).toBe('Mille dinars algériens');
+  });
+  it('negative numbers clamp to zero', () => {
+    expect(numberToFrenchWords(-500)).toBe('Zéro dinar algérien');
+  });
+  it('NaN clamps to zero', () => {
+    expect(numberToFrenchWords(NaN)).toBe('Zéro dinar algérien');
+  });
+});
+
 describe('numberToFrenchWords — centimes and currency option', () => {
   it('appends centimes when present', () => {
     expect(numberToFrenchWords(1234.56)).toBe(

@@ -7,7 +7,7 @@ const TENS = [
   '', '', 'vingt', 'trente', 'quarante', 'cinquante', 'soixante', '', 'quatre-vingt', '',
 ];
 
-/** Spell an integer 0..999 in French. `isFinalGroup` controls cents pluralization. */
+/** Spell an integer 0..999 in French. `pluralizeTrailingCent` controls cents pluralization. */
 function spellBelowThousand(n: number, pluralizeTrailingCent: boolean): string {
   if (n === 0) return '';
   const parts: string[] = [];
@@ -61,7 +61,7 @@ function spellInteger(n: number): string {
     rem = Math.floor(rem / 1000);
   }
   // groups[0] = units, [1] = thousands, [2] = millions, [3] = billions
-  const scaleNames = ['', 'mille', 'million', 'milliard'];
+  const scaleNames = ['', 'mille', 'million', 'milliard', 'billion'];
   const out: string[] = [];
   for (let i = groups.length - 1; i >= 0; i--) {
     const g = groups[i];
