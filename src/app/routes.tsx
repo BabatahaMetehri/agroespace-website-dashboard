@@ -23,6 +23,7 @@ import { Products } from "./admin/pages/Products";
 import { Featured } from "./admin/pages/Featured";
 import { Settings } from "./admin/pages/Settings";
 import { Promo } from "./admin/pages/Promo";
+import { Documents } from "./admin/pages/Documents";
 
 export const router = createBrowserRouter([
   {
@@ -58,6 +59,7 @@ export const router = createBrowserRouter([
     children: [
       { index: true, Component: Dashboard },
       { path: "quotes", Component: Quotes },
+      { path: "documents", Component: Documents },
       { path: "blog", Component: BlogList },
       { path: "blog/new", Component: BlogEditor },
       { path: "blog/:slug", Component: BlogEditor },
