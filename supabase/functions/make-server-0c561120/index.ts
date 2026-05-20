@@ -1592,6 +1592,71 @@ app.delete(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
   return c.json({ deleted: true, id: c.req.param("id") });
 });
 
+// LIST presets of a kind (bank | footer | product | stamp).
+app.get(`${ADMIN}/docpresets/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  const items = (await kv.getByPrefix(docPresetPrefix(kind))) as any[];
+  items.sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(items);
+});
+
+// CREATE a preset.
+app.post(`${ADMIN}/docpresets/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  try {
+    const body = await c.req.json();
+    const id = await nextId("docpreset");
+    const preset = { ...body, id, kind };
+    await kv.set(docPresetKey(kind, id), preset);
+    return c.json(preset);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// UPDATE a preset.
+app.put(`${ADMIN}/docpresets/:kind/:id`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  const existing = (await kv.get(docPresetKey(kind, c.req.param("id")))) as any | null;
+  if (!existing) return c.json({ code: "rest_not_found", message: "Preset not found" }, 404);
+  try {
+    const body = await c.req.json();
+    const merged = { ...existing, ...body, id: existing.id, kind };
+    await kv.set(docPresetKey(kind, existing.id), merged);
+    return c.json(merged);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// DELETE a preset.
+app.delete(`${ADMIN}/docpresets/:kind/:id`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  await kv.del(docPresetKey(kind, c.req.param("id")));
+  return c.json({ deleted: true, id: c.req.param("id") });
+});
+
+// GET company settings (header identity). Returns {} if never set.
+app.get(`${ADMIN}/docsettings/company`, requireAdmin, async (c) => {
+  const settings = (await kv.get(COMPANY_SETTINGS_KEY)) as any | null;
+  return c.json(settings ?? {});
+});
+
+// PUT company settings (full replace).
+app.put(`${ADMIN}/docsettings/company`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    await kv.set(COMPANY_SETTINGS_KEY, { ...body, updated_at: new Date().toISOString() });
+    return c.json(await kv.get(COMPANY_SETTINGS_KEY));
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
 // ─── Shape helpers (match WC/WP REST API exactly) ────────────────────────
 // Logicom and other ERP sync tools recognise existing products by parsing
 // the WooCommerce/WordPress response shape. If the shape doesn't match,
