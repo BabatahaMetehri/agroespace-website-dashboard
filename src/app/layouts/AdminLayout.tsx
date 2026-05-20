@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Star,
+  ReceiptText,
 } from 'lucide-react';
 import logoImg from '../../imports/logo-with-shadow.png';
 import { AdminAuthProvider, useAdminAuth } from '../admin/auth/AuthProvider';
@@ -30,6 +31,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { name: 'Tableau de bord', path: '/admin', icon: LayoutDashboard, end: true },
   { name: 'Devis en attente', path: '/admin/quotes', icon: Inbox },
+  { name: 'Factures & Proformas', path: '/admin/documents', icon: ReceiptText },
   { name: 'Articles Blog', path: '/admin/blog', icon: FileText },
   { name: 'Produits', path: '/admin/products', icon: Package },
   { name: 'Produits Phares', path: '/admin/featured', icon: Star },

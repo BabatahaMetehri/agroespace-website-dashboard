@@ -514,6 +514,13 @@ const ALLOWED_TAGS = new Set([
   'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'SPAN',
 ]);
 
+// Dangerous elements: drop the element AND all of its contents (otherwise
+// e.g. <script>alert(1)</script> text would leak through the unwrap path).
+const DROP_TAGS = new Set([
+  'SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED',
+  'LINK', 'META', 'BASE',
+]);
+
 /** Serialize a node's allowed children to a sanitized HTML string. */
 function serializeChildren(node: Node): string {
   let out = '';
@@ -535,8 +542,9 @@ function serializeNode(node: Node): string {
 
   const el = node as Element;
   const tag = el.tagName.toUpperCase();
+  if (DROP_TAGS.has(tag)) return ''; // drop element AND its contents (XSS)
   if (!ALLOWED_TAGS.has(tag)) {
-    // Disallowed element: drop the tag, keep sanitized children.
+    // Disallowed but safe element: drop the tag, keep sanitized children.
     return serializeChildren(el);
   }
 
@@ -546,8 +554,8 @@ function serializeNode(node: Node): string {
   // Only SPAN keeps a single allowed style: font-size.
   let attrs = '';
   if (lower === 'span') {
-    const size = (el as HTMLElement).style?.fontSize;
-    if (size) attrs = ` style="font-size:${size.replace(/\s+/g, '')}"`;
+    const raw = (el as HTMLElement).style?.fontSize?.replace(/\s+/g, '') ?? '';
+    if (/^[\d.]+(px|em|rem|%|pt)$/.test(raw)) attrs = ` style="font-size:${raw}"`;
   }
   return `<${lower}${attrs}>${serializeChildren(el)}</${lower}>`;
 }
@@ -1577,8 +1585,8 @@ export function DocumentPreview({
             <div className="doc-title">
               {title} N° : {displayId}
               {provisional && <span className="provisional">(provisoire)</span>}
+              <span className="accent" />
             </div>
-            <span className="accent" />
             <div className="doc-date sans">
               {draft.wilayaCity} le : {formatFrDate(draft.date)}
             </div>
@@ -1640,12 +1648,6 @@ import { useEffect, useRef } from 'react';
 import { Bold, List, Eraser } from 'lucide-react';
 import { sanitizeRichHtml } from './lib/sanitizeHtml';
 
-/** execCommand is deprecated but is still the simplest cross-browser inline editor. */
-function exec(cmd: string, value?: string) {
-  document.execCommand('styleWithCSS', false, 'true');
-  document.execCommand(cmd, false, value);
-}
-
 export function RichTextEditor({
   value,
   onChange,
@@ -1668,21 +1670,56 @@ export function RichTextEditor({
     if (ref.current) onChange(sanitizeRichHtml(ref.current.innerHTML));
   };
 
+  // Bold/list/clear: styleWithCSS=false emits tag-based markup (<b>, <ul><li>) the
+  // sanitizer keeps. (styleWithCSS=true would emit styled spans that get stripped.)
+  const applyCmd = (cmd: string) => {
+    ref.current?.focus();
+    document.execCommand('styleWithCSS', false, 'false');
+    document.execCommand(cmd, false);
+    emit();
+  };
+
+  // Font size: wrap the selection in <span style="font-size:Npx"> manually —
+  // execCommand 'fontSize' only produces <font size>, which the sanitizer drops.
+  const applySize = (size: string) => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return; // nothing selected → no-op
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) return; // selection must be in this editor
+    const span = document.createElement('span');
+    span.style.fontSize = size;
+    try {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      sel.removeAllRanges();
+      const after = document.createRange();
+      after.selectNodeContents(span);
+      after.collapse(false);
+      sel.addRange(after);
+    } catch {
+      document.execCommand('insertHTML', false, `<span style="font-size:${size}">${sel.toString()}</span>`);
+    }
+    emit();
+  };
+
   const btn = 'px-2 py-1 rounded text-white/80 hover:bg-white/10 text-sm';
 
   return (
     <div className="rounded-lg border border-white/10 bg-[#0f2618]">
       <div className="flex items-center gap-1 border-b border-white/10 px-1 py-1 no-print">
-        <button type="button" className={btn} title="Gras" onClick={() => { exec('bold'); emit(); }}>
+        <button type="button" className={btn} title="Gras" onClick={() => applyCmd('bold')}>
           <Bold className="w-4 h-4" />
         </button>
-        <button type="button" className={btn} title="Petit" onClick={() => { exec('fontSize', '2'); emit(); }}>A−</button>
-        <button type="button" className={btn} title="Normal" onClick={() => { exec('fontSize', '4'); emit(); }}>A</button>
-        <button type="button" className={btn} title="Grand" onClick={() => { exec('fontSize', '6'); emit(); }}>A+</button>
-        <button type="button" className={btn} title="Liste" onClick={() => { exec('insertUnorderedList'); emit(); }}>
+        <button type="button" className={btn} title="Petit" onClick={() => applySize('11px')}>A−</button>
+        <button type="button" className={btn} title="Normal" onClick={() => applySize('14px')}>A</button>
+        <button type="button" className={btn} title="Grand" onClick={() => applySize('18px')}>A+</button>
+        <button type="button" className={btn} title="Liste" onClick={() => applyCmd('insertUnorderedList')}>
           <List className="w-4 h-4" />
         </button>
-        <button type="button" className={btn} title="Effacer le format" onClick={() => { exec('removeFormat'); emit(); }}>
+        <button type="button" className={btn} title="Effacer le format" onClick={() => applyCmd('removeFormat')}>
           <Eraser className="w-4 h-4" />
         </button>
       </div>

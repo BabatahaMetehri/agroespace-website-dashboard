@@ -55,12 +55,16 @@ app.use(
   }),
 );
 
-// ─── Body size cap (50 KB default; 10 MB on media upload routes) ──────────
+// ─── Body size cap (50 KB default; 1 MB on document/preset admin routes; 10 MB on media upload routes) ──────────
 app.use("*", async (c, next) => {
   const cl = Number(c.req.header("Content-Length") ?? 0);
   const path = new URL(c.req.url).pathname;
   const isMedia = path.includes("/wp-json/wp/v2/media");
-  const max = isMedia ? 10 * 1024 * 1024 : 50 * 1024;
+  // Document and preset admin endpoints can carry many line items with rich-text
+  // HTML (designationHtml), a footer, and a company snapshot — allow up to 1 MB.
+  const isAdminDoc =
+    path.includes("/admin/documents") || path.includes("/admin/docpresets");
+  const max = isMedia ? 10 * 1024 * 1024 : isAdminDoc ? 1_000_000 : 50 * 1024;
   if (cl > max) {
     return c.json(
       { code: "payload_too_large", message: `Body exceeds ${max} bytes` },
@@ -1415,6 +1419,248 @@ app.delete(`${ADMIN}/featured/:id`, requireAdmin, async (c) => {
   return c.json({ deleted: true, id: productId });
 });
 
+// ─── Documents (Proforma / Facture) ─────────────────────────────────────────
+const DOC_PREFIX = "doc:";
+const docKey = (id: number | string) => `${DOC_PREFIX}${id}`;
+const docPresetPrefix = (kind: string) => `docpreset:${kind}:`;
+const docPresetKey = (kind: string, id: number | string) =>
+  `${docPresetPrefix(kind)}${id}`;
+const COMPANY_SETTINGS_KEY = "docsettings:company";
+const PRESET_KINDS = new Set(["bank", "footer", "product", "stamp"]);
+
+function twoDigitYear(isoDate: string): string {
+  const d = new Date(isoDate);
+  const yy = (Number.isNaN(d.getTime()) ? new Date() : d).getFullYear() % 100;
+  return String(yy).padStart(2, "0");
+}
+
+function buildDisplayId(
+  type: "proforma" | "facture",
+  num: number,
+  isoDate: string,
+): string {
+  const yy = twoDigitYear(isoDate);
+  return type === "proforma"
+    ? `P${String(num).padStart(4, "0")}/${yy}`
+    : `${String(num).padStart(5, "0")}/${yy}`;
+}
+
+// GET counters -> next number that WOULD be allocated for each type.
+app.get(`${ADMIN}/doccounters`, requireAdmin, async (c) => {
+  const p = ((await kv.get("counter:proforma")) as number | null) ?? 0;
+  const f = ((await kv.get("counter:facture")) as number | null) ?? 0;
+  return c.json({ proforma_next: p + 1, facture_next: f + 1 });
+});
+
+// PUT a counter (seed the sequence). Body: { value: number } where `value`
+// is the LAST used number (next allocation = value + 1).
+app.put(`${ADMIN}/doccounters/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (kind !== "proforma" && kind !== "facture") {
+    return c.json({ code: "rest_invalid_kind", message: "invalid counter" }, 400);
+  }
+  const body = await c.req.json().catch(() => ({}));
+  const value = Number(body?.value);
+  if (!Number.isInteger(value) || value < 0) {
+    return c.json({ code: "rest_invalid_payload", message: "value must be a non-negative integer" }, 400);
+  }
+  await kv.set(`counter:${kind}`, value);
+  return c.json({ kind, value, next: value + 1 });
+});
+
+// LIST documents (admin pagination contract).
+app.get(`${ADMIN}/documents`, requireAdmin, async (c) => {
+  const items = (await kv.getByPrefix(DOC_PREFIX)) as any[];
+
+  const counts = {
+    all: items.length,
+    proforma: items.filter((d) => d?.type === "proforma").length,
+    facture: items.filter((d) => d?.type === "facture").length,
+    cancelled: items.filter((d) => d?.status === "cancelled").length,
+  };
+
+  const type = (c.req.query("type") ?? "all").toLowerCase();
+  const status = (c.req.query("status") ?? "all").toLowerCase();
+  const search = (c.req.query("search") ?? "").trim().toLowerCase();
+
+  let filtered = items;
+  if (type === "proforma" || type === "facture")
+    filtered = filtered.filter((d) => d?.type === type);
+  if (status === "finalized" || status === "cancelled")
+    filtered = filtered.filter((d) => d?.status === status);
+  if (search) {
+    filtered = filtered.filter((d) =>
+      [d?.displayId, d?.client?.name, d?.client?.wilaya]
+        .filter((v) => v != null)
+        .some((v: any) => String(v).toLowerCase().includes(search)),
+    );
+  }
+
+  filtered.sort((a: any, b: any) =>
+    String(b?.created_at ?? "").localeCompare(String(a?.created_at ?? "")),
+  );
+
+  if (c.req.query("all") === "true") return c.json(filtered);
+
+  const page = Math.max(1, Number(c.req.query("page") ?? 1) || 1);
+  const perPage = Math.min(200, Math.max(1, Number(c.req.query("per_page") ?? 25) || 25));
+  const total = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, totalPages);
+  const start = (safePage - 1) * perPage;
+
+  return c.json({
+    items: filtered.slice(start, start + perPage),
+    total,
+    page: safePage,
+    per_page: perPage,
+    total_pages: totalPages,
+    counts,
+  });
+});
+
+// GET a single document.
+app.get(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  const doc = await kv.get(docKey(c.req.param("id")));
+  if (!doc) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+  return c.json(doc);
+});
+
+// CREATE (finalize) a document — allocates the human number atomically.
+app.post(`${ADMIN}/documents`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    const type = body?.type === "facture" ? "facture" : "proforma";
+    const date = typeof body?.date === "string" ? body.date : new Date().toISOString();
+
+    const id = await nextId("document");
+    const number = await nextId(type); // increments counter:proforma / counter:facture
+    const displayId = buildDisplayId(type, number, date);
+
+    const now = new Date().toISOString();
+    const doc = {
+      ...body,
+      id,
+      type,
+      number,
+      year: Number(twoDigitYear(date)),
+      displayId,
+      status: "finalized",
+      created_at: now,
+      updated_at: now,
+    };
+    await kv.set(docKey(id), doc);
+    return c.json(doc);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// UPDATE a document (does NOT change its number/displayId).
+app.put(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  try {
+    const existing = (await kv.get(docKey(c.req.param("id")))) as any | null;
+    if (!existing) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+    const body = await c.req.json();
+    const merged = {
+      ...existing,
+      ...body,
+      id: existing.id,
+      type: existing.type,
+      number: existing.number,
+      year: existing.year,
+      displayId: existing.displayId,
+      created_at: existing.created_at,
+      updated_at: new Date().toISOString(),
+    };
+    await kv.set(docKey(existing.id), merged);
+    return c.json(merged);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// CANCEL a document (keeps its number — no gaps in the invoice sequence).
+app.post(`${ADMIN}/documents/:id/cancel`, requireAdmin, async (c) => {
+  const existing = (await kv.get(docKey(c.req.param("id")))) as any | null;
+  if (!existing) return c.json({ code: "rest_not_found", message: "Document not found" }, 404);
+  existing.status = "cancelled";
+  existing.updated_at = new Date().toISOString();
+  await kv.set(docKey(existing.id), existing);
+  return c.json(existing);
+});
+
+// DELETE a document (hard delete — for mistaken drafts only).
+app.delete(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
+  await kv.del(docKey(c.req.param("id")));
+  return c.json({ deleted: true, id: c.req.param("id") });
+});
+
+// LIST presets of a kind (bank | footer | product | stamp).
+app.get(`${ADMIN}/docpresets/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  const items = (await kv.getByPrefix(docPresetPrefix(kind))) as any[];
+  items.sort((a, b) => Number(a?.id ?? 0) - Number(b?.id ?? 0));
+  return c.json(items);
+});
+
+// CREATE a preset.
+app.post(`${ADMIN}/docpresets/:kind`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  try {
+    const body = await c.req.json();
+    const id = await nextId("docpreset");
+    const preset = { ...body, id, kind };
+    await kv.set(docPresetKey(kind, id), preset);
+    return c.json(preset);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// UPDATE a preset.
+app.put(`${ADMIN}/docpresets/:kind/:id`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  const existing = (await kv.get(docPresetKey(kind, c.req.param("id")))) as any | null;
+  if (!existing) return c.json({ code: "rest_not_found", message: "Preset not found" }, 404);
+  try {
+    const body = await c.req.json();
+    const merged = { ...existing, ...body, id: existing.id, kind };
+    await kv.set(docPresetKey(kind, existing.id), merged);
+    return c.json(merged);
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
+// DELETE a preset.
+app.delete(`${ADMIN}/docpresets/:kind/:id`, requireAdmin, async (c) => {
+  const kind = c.req.param("kind");
+  if (!PRESET_KINDS.has(kind)) return c.json({ code: "rest_invalid_kind", message: "invalid preset kind" }, 400);
+  await kv.del(docPresetKey(kind, c.req.param("id")));
+  return c.json({ deleted: true, id: c.req.param("id") });
+});
+
+// GET company settings (header identity). Returns {} if never set.
+app.get(`${ADMIN}/docsettings/company`, requireAdmin, async (c) => {
+  const settings = (await kv.get(COMPANY_SETTINGS_KEY)) as any | null;
+  return c.json(settings ?? {});
+});
+
+// PUT company settings (full replace).
+app.put(`${ADMIN}/docsettings/company`, requireAdmin, async (c) => {
+  try {
+    const body = await c.req.json();
+    await kv.set(COMPANY_SETTINGS_KEY, { ...body, updated_at: new Date().toISOString() });
+    return c.json(await kv.get(COMPANY_SETTINGS_KEY));
+  } catch (e) {
+    return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
+  }
+});
+
 // ─── Shape helpers (match WC/WP REST API exactly) ────────────────────────
 // Logicom and other ERP sync tools recognise existing products by parsing
 // the WooCommerce/WordPress response shape. If the shape doesn't match,
@@ -1442,7 +1688,11 @@ type IdKind =
   | "attribute"
   | "attribute_term"
   | "customer"
-  | "order";
+  | "order"
+  | "document"
+  | "docpreset"
+  | "proforma"
+  | "facture";
 
 async function nextId(kind: IdKind): Promise<number> {
   const key = `counter:${kind}`;
@@ -1457,6 +1707,10 @@ async function nextId(kind: IdKind): Promise<number> {
     attribute: 0,
     attribute_term: 0,
     product: 0,
+    document: 0,     // internal document record id
+    docpreset: 0,    // internal preset id
+    proforma: 0,     // human proforma number (seedable by admin)
+    facture: 0,      // human facture number (seedable by admin)
   };
   const next = (cur ?? start[kind] ?? 0) + 1;
   await kv.set(key, next);
