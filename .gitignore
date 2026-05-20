@@ -5,4 +5,5 @@ build/
 .env
 .env.local
 .claude/
+.superpowers/
 CONVERSATION.md
