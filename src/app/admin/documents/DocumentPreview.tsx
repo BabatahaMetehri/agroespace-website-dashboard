@@ -37,8 +37,8 @@ export function DocumentPreview({
             <div className="doc-title">
               {title} N° : {displayId}
               {provisional && <span className="provisional">(provisoire)</span>}
+              <span className="accent" />
             </div>
-            <span className="accent" />
             <div className="doc-date sans">
               {draft.wilayaCity} le : {formatFrDate(draft.date)}
             </div>
