@@ -28,7 +28,7 @@ export function ItemRowsEditor({
     if (!p) return;
     onChange([
       ...items,
-      { ref: p.ref, designationHtml: p.designationHtml, um: p.um || 'U', qty: 1, puHT: p.defaultPU || 0, tvaRate: 0.19 },
+      { ref: p.ref, designationHtml: p.designationHtml, um: p.um || 'U', qty: 1, puHT: p.defaultPU || 0, tvaRate: 0.19, label: p.label },
     ]);
   };
 
@@ -56,7 +56,7 @@ export function ItemRowsEditor({
             <label className={label}>Désignation</label>
             <RichTextEditor value={it.designationHtml} onChange={(html) => update(i, { designationHtml: html })} placeholder="Description du produit…" />
           </div>
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             <div>
               <label className={label}>UM</label>
               <input className={field} value={it.um} onChange={(e) => update(i, { um: e.target.value })} />

@@ -41,11 +41,16 @@ function htmlToText(html: string): string {
  * "Save as PDF" name). Format, uppercase:
  *   [TYPE] [NUMBER]-[YEAR] [CLIENT] [QTY] [FIRST ARTICLE]
  * e.g. "FACTURE PROFORMA 134-2026 LUSSAIL SERVICES 2 PIVOT 25 HA"
+ *
+ * The article uses the product preset's short "Libellé" (label) when available
+ * so the name stays concise; manual rows fall back to the (capped) designation.
  */
 function buildPdfName(draft: DocumentDraft, num: number, fullYear: number): string {
   const typeLabel = draft.type === 'proforma' ? 'FACTURE PROFORMA' : 'FACTURE';
   const first = draft.items[0];
-  const article = first ? (htmlToText(first.designationHtml) || first.ref) : '';
+  const article = first
+    ? (first.label?.trim() || htmlToText(first.designationHtml).slice(0, 40).trim() || first.ref)
+    : '';
   const parts = [
     typeLabel,
     `${num}-${fullYear}`,
@@ -269,7 +274,7 @@ export function DocumentEditor({
               <option value="">Choisir un préréglage d'identifiants…</option>
               {presets.identity.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
             </select>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div><label className={label}>R.C</label>
                 <input className={field} value={company.rc} onChange={(e) => setCompany((c) => ({ ...c, rc: e.target.value }))} /></div>
               <div><label className={label}>ART.IMP</label>
@@ -284,7 +289,7 @@ export function DocumentEditor({
           {/* Document */}
           <div className={section}>
             <div className={h}>Document</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               <div><label className={label}>Ville (Wilaya)</label>
                 <input className={field} value={draft.wilayaCity} onChange={(e) => set('wilayaCity', e.target.value)} /></div>
               <div><label className={label}>Date</label>
@@ -299,7 +304,7 @@ export function DocumentEditor({
           {/* Client */}
           <div className={section}>
             <div className={h}>Client</div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([
                 ['name', 'Nom'], ['adresse', 'Adresse'], ['wilaya', 'Wilaya'], ['rc', 'R.C'],
                 ['nif', 'NIF'], ['nis', 'NIS'], ['art', 'ART'], ['cf', 'CF'],
@@ -314,7 +319,7 @@ export function DocumentEditor({
           {draft.type === 'facture' && (
             <div className={section}>
               <div className={h}>Mentions facture (bas de page)</div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div><label className={label}>N° d'ordre</label>
                   <input className={field} value={draft.factureExtras?.orderNo ?? ''} onChange={(e) => setExtras('orderNo', e.target.value)} /></div>
                 <div><label className={label}>Contrat N°</label>
@@ -348,7 +353,7 @@ export function DocumentEditor({
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div><label className={label}>Nom de la banque</label>
                     <input className={field} value={b.bankName} onChange={(e) => updateBank(i, { bankName: e.target.value })} /></div>
                   <div><label className={label}>N° de compte</label>

@@ -20,6 +20,8 @@ export interface ItemRow {
   puHT: number;
   /** TVA rate as a fraction (0.19 = 19 %). Undefined → default 19 % (legacy rows). */
   tvaRate?: number;
+  /** Short label from the product preset ("Libellé") — used for a concise PDF filename. */
+  label?: string;
 }
 
 export interface FactureExtras {
