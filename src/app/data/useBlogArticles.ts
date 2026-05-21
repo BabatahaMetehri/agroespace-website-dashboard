@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { blogArticles as seed, type BlogArticle } from './blog';
-import { projectId } from '../../../utils/supabase/info';
+import { projectId, publicAnonKey } from '../../../utils/supabase/info';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-0c561120`;
+// The Supabase gateway verifies a JWT on every function request; the anon key
+// is a valid public JWT, so even these public endpoints must send it or the
+// gateway returns 401 before the function runs.
+const AUTH_HEADERS = { Authorization: `Bearer ${publicAnonKey}` };
 
 type RemotePost = Partial<BlogArticle> & {
   slug: string;
@@ -71,8 +75,8 @@ export const useBlogArticles = () => {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`${API_BASE}/public/blog`).then(async (r) => (r.ok ? ((await r.json()) as RemotePost[]) : [])),
-      fetch(`${API_BASE}/public/blog/counters`).then(async (r) =>
+      fetch(`${API_BASE}/public/blog`, { headers: AUTH_HEADERS }).then(async (r) => (r.ok ? ((await r.json()) as RemotePost[]) : [])),
+      fetch(`${API_BASE}/public/blog/counters`, { headers: AUTH_HEADERS }).then(async (r) =>
         r.ok ? ((await r.json()) as Counter[]) : []
       ),
     ])
@@ -98,7 +102,7 @@ export const useBlogArticles = () => {
 
 export const fetchArticle = async (slug: string): Promise<BlogArticle | null> => {
   try {
-    const res = await fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}`);
+    const res = await fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}`, { headers: AUTH_HEADERS });
     if (res.ok) {
       const r = (await res.json()) as RemotePost;
       const seedMatch = seed.find((s) => s.slug === slug);
@@ -124,7 +128,7 @@ export const fetchArticle = async (slug: string): Promise<BlogArticle | null> =>
   const seeded = seed.find((s) => s.slug === slug);
   if (!seeded) return null;
   try {
-    const res = await fetch(`${API_BASE}/public/blog/counters`);
+    const res = await fetch(`${API_BASE}/public/blog/counters`, { headers: AUTH_HEADERS });
     if (res.ok) {
       const counters = (await res.json()) as Counter[];
       const c = counters.find((x) => x.slug === slug);
@@ -139,11 +143,11 @@ export const fetchArticle = async (slug: string): Promise<BlogArticle | null> =>
 // View bumps are de-duped server-side per call but the frontend also
 // sessionStorages a flag so a refresh doesn't double-count from the same tab.
 export const bumpView = (slug: string) =>
-  fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}/view`, { method: 'POST' })
+  fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}/view`, { method: 'POST', headers: AUTH_HEADERS })
     .then(async (r) => (r.ok ? ((await r.json()) as { views: number }) : null))
     .catch(() => null);
 
 export const bumpLike = (slug: string, dir: 'up' | 'down') =>
-  fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}/like?dir=${dir}`, { method: 'POST' })
+  fetch(`${API_BASE}/public/blog/${encodeURIComponent(slug)}/like?dir=${dir}`, { method: 'POST', headers: AUTH_HEADERS })
     .then(async (r) => (r.ok ? ((await r.json()) as { likes: number }) : null))
     .catch(() => null);

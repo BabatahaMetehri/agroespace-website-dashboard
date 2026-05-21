@@ -7,7 +7,7 @@ import {
   FeaturedProductCard,
   type FeaturedRecord,
 } from "../components/FeaturedProductCard";
-import { FUNCTIONS_BASE } from "../admin/auth/supabase";
+import { FUNCTIONS_BASE, FUNCTIONS_HEADERS } from "../admin/auth/supabase";
 
 type WcProduct = {
   id: number;
@@ -73,13 +73,13 @@ export const Catalog = () => {
     // the rest of the catalog should still render even if the featured
     // endpoint is unavailable.
     Promise.all([
-      fetch(`${FUNCTIONS_BASE}/public/products`)
+      fetch(`${FUNCTIONS_BASE}/public/products`, { headers: FUNCTIONS_HEADERS })
         .then((r) => {
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           return r.json() as Promise<WcProduct[]>;
         })
         .then((data) => setProducts(data.map(mapProduct))),
-      fetch(`${FUNCTIONS_BASE}/public/featured`)
+      fetch(`${FUNCTIONS_BASE}/public/featured`, { headers: FUNCTIONS_HEADERS })
         .then((r) => (r.ok ? (r.json() as Promise<FeaturedRecord[]>) : []))
         .then((data) =>
           setFeatured(Array.isArray(data) ? data.filter(Boolean) : []),

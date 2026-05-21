@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Calendar, MapPin, ArrowRight } from "lucide-react";
-import { FUNCTIONS_BASE } from "../admin/auth/supabase";
+import { FUNCTIONS_BASE, FUNCTIONS_HEADERS } from "../admin/auth/supabase";
 
 type PromoConfig = {
   id: string;
@@ -28,7 +28,7 @@ export const PromoModal = () => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    fetch(`${FUNCTIONS_BASE}/public/promo`)
+    fetch(`${FUNCTIONS_BASE}/public/promo`, { headers: FUNCTIONS_HEADERS })
       .then((r) => (r.ok ? (r.json() as Promise<PromoConfig>) : Promise.resolve(null)))
       .then((data) => {
         if (cancelled || !data || !data.isActive) return;
