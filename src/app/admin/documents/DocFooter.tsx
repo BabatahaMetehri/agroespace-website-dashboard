@@ -9,19 +9,28 @@ function formatFrDate(iso: string): string {
 export function DocFooter({
   validUntil,
   stampUrl,
+  stampBlank,
   footerHtml,
 }: {
   validUntil: string;
   stampUrl: string;
+  stampBlank?: boolean;
   footerHtml: string;
 }) {
+  // Stamp area precedence: an uploaded image wins; otherwise either a blank
+  // reserved space (for a physical stamp applied after printing) or the
+  // dashed-circle placeholder.
+  const stampContent = stampUrl
+    ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
+    : stampBlank
+      ? <div className="stamp-blank" aria-hidden="true" />
+      : <div className="stamp-ph">Cachet &<br />signature</div>;
+
   return (
     <>
       <div className="sign-row">
         <div className="stamp-wrap">
-          {stampUrl
-            ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
-            : <div className="stamp-ph">Cachet &<br />signature</div>}
+          {stampContent}
           <div className="sign-label">Cachet et signature</div>
         </div>
         <div className="validity sans">Offre valable jusqu'au : {formatFrDate(validUntil)}</div>

@@ -1,6 +1,10 @@
-import { useEffect, useRef } from 'react';
-import { Bold, List, Eraser } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Bold, List, Eraser, Minus, Plus } from 'lucide-react';
 import { sanitizeRichHtml } from './lib/sanitizeHtml';
+
+const MIN_SIZE = 8;
+const MAX_SIZE = 48;
+const DEFAULT_SIZE = 14;
 
 /** execCommand is deprecated but is still the simplest cross-browser inline editor. */
 
@@ -14,6 +18,7 @@ export function RichTextEditor({
   placeholder?: string;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState(DEFAULT_SIZE);
 
   // Sync external value into the DOM, but NEVER while the user is typing —
   // rewriting innerHTML on each keystroke resets the caret to the start (e.g.
@@ -39,34 +44,32 @@ export function RichTextEditor({
     emit();
   };
 
-  // Font sizes: wrap the current selection in <span style="font-size:Npx"> manually.
-  // execCommand 'fontSize' cannot produce that format.
-  const applySize = (size: string) => {
+  // Font size: wrap the current selection in <span style="font-size:Npx"> via
+  // execCommand('insertHTML') so the change lands on the browser's undo stack
+  // (manual range surgery would not be undoable). We clone the selection's HTML
+  // — not just its text — so bold/italic/lists inside it are preserved.
+  const applySize = (px: number) => {
     const el = ref.current;
     if (!el) return;
     el.focus();
     const sel = window.getSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return; // nothing selected → no-op
     const range = sel.getRangeAt(0);
-    // only act if the selection is inside this editor
-    if (!el.contains(range.commonAncestorContainer)) return;
-    const span = document.createElement('span');
-    span.style.fontSize = size;
-    try {
-      span.appendChild(range.extractContents());
-      range.insertNode(span);
-      sel.removeAllRanges();
-      const after = document.createRange();
-      after.selectNodeContents(span);
-      after.collapse(false);
-      sel.addRange(after);
-    } catch {
-      document.execCommand('insertHTML', false, `<span style="font-size:${size}">${sel.toString()}</span>`);
-    }
+    if (!el.contains(range.commonAncestorContainer)) return; // selection outside this editor
+    const tmp = document.createElement('div');
+    tmp.appendChild(range.cloneContents());
+    document.execCommand('insertHTML', false, `<span style="font-size:${px}px">${tmp.innerHTML}</span>`);
     emit();
   };
 
+  const stepSize = (next: number) => {
+    const clamped = Math.min(MAX_SIZE, Math.max(MIN_SIZE, Math.round(next)));
+    setSize(clamped);
+    applySize(clamped);
+  };
+
   const btn = 'px-2 py-1 rounded text-white/80 hover:bg-white/10 text-sm';
+  const sizeBtn = 'p-1 rounded text-white/80 hover:bg-white/10 disabled:opacity-30';
 
   return (
     <div className="rounded-lg border border-white/10 bg-[#0f2618]">
@@ -74,9 +77,27 @@ export function RichTextEditor({
         <button type="button" className={btn} title="Gras" onClick={() => applyCmd('bold')}>
           <Bold className="w-4 h-4" />
         </button>
-        <button type="button" className={btn} title="Petit" onClick={() => applySize('11px')}>A−</button>
-        <button type="button" className={btn} title="Normal" onClick={() => applySize('14px')}>A</button>
-        <button type="button" className={btn} title="Grand" onClick={() => applySize('18px')}>A+</button>
+
+        {/* Font size for the selected text — type a px value or step it.
+            Useful to shrink a long désignation so the PDF stays on one page. */}
+        <div className="flex items-center gap-0.5 rounded border border-white/10 px-1" title="Taille du texte sélectionné (px)">
+          <button type="button" className={sizeBtn} title="Réduire" disabled={size <= MIN_SIZE}
+            onClick={() => stepSize(size - 1)}>
+            <Minus className="w-3.5 h-3.5" />
+          </button>
+          <input
+            type="number" min={MIN_SIZE} max={MAX_SIZE} value={size}
+            onChange={(e) => setSize(Number(e.target.value) || DEFAULT_SIZE)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); stepSize(size); } }}
+            title="Sélectionnez du texte, entrez une taille puis Entrée (ou utilisez − / +)"
+            className="w-9 bg-transparent text-center text-sm text-white/90 outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <button type="button" className={sizeBtn} title="Agrandir" disabled={size >= MAX_SIZE}
+            onClick={() => stepSize(size + 1)}>
+            <Plus className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <button type="button" className={btn} title="Liste" onClick={() => applyCmd('insertUnorderedList')}>
           <List className="w-4 h-4" />
         </button>

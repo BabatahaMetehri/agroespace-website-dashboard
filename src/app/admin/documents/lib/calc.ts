@@ -19,18 +19,35 @@ export interface TvaRateLine {
 }
 
 export interface Totals {
+  /** Sum of line montants before any remise. */
+  grossHT: number;
+  /** Fixed discount actually applied (clamped to [0, grossHT]). */
+  remise: number;
   sousTotalHT: number;
   tva: number;
   totalTTC: number;
   tvaByRate: TvaRateLine[];
 }
 
+/**
+ * Compute document totals. `remise` is a fixed agreed discount (DA) subtracted
+ * from the gross HT total; the result is the Sous total HT on which TVA is
+ * computed. When lines span several TVA rates, the remise is spread across the
+ * rate groups in proportion to each group's share of the gross HT, so per-rate
+ * TVA stays correct. With a single rate this equals subtracting it from the
+ * one base.
+ */
 export function computeTotals(
   items: Array<{ qty: number; puHT: number; tvaRate?: number }>,
+  remiseInput = 0,
 ): Totals {
-  const sousTotalHT = round2(
+  const grossHT = round2(
     items.reduce((sum, it) => sum + lineMontantHT(it.qty, it.puHT), 0),
   );
+
+  // Clamp the remise to a sensible range; never discount more than the total.
+  const remise = round2(Math.min(Math.max(Number(remiseInput) || 0, 0), grossHT));
+  const sousTotalHT = round2(grossHT - remise);
 
   // Group taxable HT by distinct rate so each rate gets its own TVA line.
   const baseByRate = new Map<number, number>();
@@ -38,13 +55,18 @@ export function computeTotals(
     const rate = lineTvaRate(it);
     baseByRate.set(rate, (baseByRate.get(rate) ?? 0) + lineMontantHT(it.qty, it.puHT));
   }
+  // Spread the remise across rate groups proportionally to their gross share.
   const tvaByRate: TvaRateLine[] = [...baseByRate.entries()]
-    .map(([rate, base]) => ({ rate, base: round2(base), amount: round2(base * rate) }))
+    .map(([rate, gross]) => {
+      const share = grossHT > 0 ? gross / grossHT : 0;
+      const base = round2(gross - remise * share);
+      return { rate, base, amount: round2(base * rate) };
+    })
     .sort((a, b) => b.rate - a.rate);
 
   const tva = round2(tvaByRate.reduce((sum, l) => sum + l.amount, 0));
   const totalTTC = round2(sousTotalHT + tva);
-  return { sousTotalHT, tva, totalTTC, tvaByRate };
+  return { grossHT, remise, sousTotalHT, tva, totalTTC, tvaByRate };
 }
 
 /** Facture-only: retenue de garantie (pct of HT) and resulting net HT. */

@@ -191,7 +191,7 @@ export function DocumentEditor({
   const finalize = async () => {
     setSaving(true);
     try {
-      const totals = computeTotals(draft.items);
+      const totals = computeTotals(draft.items, draft.remise);
       const amountInWords = numberToFrenchWords(totals.totalTTC);
       const payload: DocumentDraft = {
         ...draft,
@@ -327,9 +327,19 @@ export function DocumentEditor({
                 <div><label className={label}>Retenue garantie (%)</label>
                   <input type="number" min={0} className={field} value={draft.factureExtras?.retenueGarantiePct ?? ''}
                     onChange={(e) => setExtras('retenueGarantiePct', e.target.value === '' ? undefined : Number(e.target.value))} /></div>
+                <div><label className={label}>Mode de paiement</label>
+                  <input className={field} placeholder="Chèque bancaire N° 4095614…"
+                    value={draft.factureExtras?.paymentMode ?? ''} onChange={(e) => setExtras('paymentMode', e.target.value)} /></div>
+                <div><label className={label}>Date de paiement</label>
+                  <input type="date" className={field} value={toInputDate(draft.factureExtras?.paymentDate ?? '')}
+                    onChange={(e) => setExtras('paymentDate', e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : undefined)} /></div>
               </div>
               <div><label className={label}>Objet</label>
                 <textarea className={field} rows={2} value={draft.factureExtras?.objet ?? ''} onChange={(e) => setExtras('objet', e.target.value)} /></div>
+              <div><label className={label}>Franchise / exonération (à côté du cachet)</label>
+                <textarea className={field} rows={3}
+                  placeholder="Achat exonéré de la TVA avec autorisation acquisition en franchise N° … du … — Direction des impôts de la wilaya d' …"
+                  value={draft.factureExtras?.franchise ?? ''} onChange={(e) => setExtras('franchise', e.target.value)} /></div>
             </div>
           )}
 
@@ -367,6 +377,12 @@ export function DocumentEditor({
           <div className={section}>
             <div className={h}>Articles</div>
             <ItemRowsEditor items={draft.items} onChange={(items) => set('items', items)} productPresets={presets.product} />
+            <div className="border-t border-white/10 pt-3">
+              <label className={label}>Remise (DA) — montant fixe déduit du total HT (laisser 0 si aucune)</label>
+              <input type="number" min={0} step="0.01" className={`${field} sm:max-w-xs`}
+                value={draft.remise ?? 0}
+                onChange={(e) => set('remise', e.target.value === '' ? 0 : Number(e.target.value))} />
+            </div>
           </div>
 
           {/* Footer + stamp */}
@@ -383,6 +399,15 @@ export function DocumentEditor({
               <option value="">Choisir un cachet…</option>
               {presets.stamp.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
+            {draft.stampUrl && (
+              <button type="button" onClick={() => set('stampUrl', '')}
+                className="text-red-300/70 hover:text-red-300 text-xs">Retirer le cachet sélectionné</button>
+            )}
+            <label className="flex items-center gap-2 text-sm text-white/80">
+              <input type="checkbox" checked={!!draft.stampBlank}
+                onChange={(e) => set('stampBlank', e.target.checked)} />
+              Espace cachet vide (cachet manuel après impression)
+            </label>
           </div>
         </div>
 

@@ -46,7 +46,7 @@ describe('computeTotals', () => {
     expect(t.totalTTC).toBe(239.19);
   });
   it('returns zero totals for empty items array', () => {
-    expect(computeTotals([])).toEqual({ sousTotalHT: 0, tva: 0, totalTTC: 0, tvaByRate: [] });
+    expect(computeTotals([])).toEqual({ grossHT: 0, remise: 0, sousTotalHT: 0, tva: 0, totalTTC: 0, tvaByRate: [] });
   });
   it('defaults missing tvaRate to 19% and reports a single rate line', () => {
     const t = computeTotals([{ qty: 2, puHT: 8100000 }]);
@@ -64,6 +64,50 @@ describe('computeTotals', () => {
       { rate: 0.19, base: 1000, amount: 190 },
       { rate: 0.09, base: 1000, amount: 90 },
     ]);
+  });
+
+  it('applies a fixed remise before TVA (single rate — proforma example)', () => {
+    // 7 × 8 500 000 = 59 500 000 gross; remise 350 000 → 59 150 000 base.
+    const t = computeTotals([{ qty: 7, puHT: 8500000, tvaRate: 0.19 }], 350000);
+    expect(t.grossHT).toBe(59500000);
+    expect(t.remise).toBe(350000);
+    expect(t.sousTotalHT).toBe(59150000);
+    expect(t.tva).toBe(11238500);
+    expect(t.totalTTC).toBe(70388500);
+    expect(t.tvaByRate).toEqual([{ rate: 0.19, base: 59150000, amount: 11238500 }]);
+  });
+
+  it('treats remise of 0 / undefined as no discount', () => {
+    const a = computeTotals([{ qty: 2, puHT: 8100000 }]);
+    const b = computeTotals([{ qty: 2, puHT: 8100000 }], 0);
+    expect(a.grossHT).toBe(16200000);
+    expect(a.remise).toBe(0);
+    expect(a.sousTotalHT).toBe(16200000);
+    expect(b).toEqual(a);
+  });
+
+  it('clamps a remise larger than the gross total to the total', () => {
+    const t = computeTotals([{ qty: 1, puHT: 1000 }], 5000);
+    expect(t.remise).toBe(1000);
+    expect(t.sousTotalHT).toBe(0);
+    expect(t.tva).toBe(0);
+    expect(t.totalTTC).toBe(0);
+  });
+
+  it('spreads the remise across rate groups proportionally', () => {
+    // gross 2000 split 1000@19% + 1000@9%; remise 200 → 100 off each base.
+    const t = computeTotals([
+      { qty: 1, puHT: 1000, tvaRate: 0.19 },
+      { qty: 1, puHT: 1000, tvaRate: 0.09 },
+    ], 200);
+    expect(t.grossHT).toBe(2000);
+    expect(t.sousTotalHT).toBe(1800);
+    expect(t.tvaByRate).toEqual([
+      { rate: 0.19, base: 900, amount: 171 },
+      { rate: 0.09, base: 900, amount: 81 },
+    ]);
+    expect(t.tva).toBe(252);
+    expect(t.totalTTC).toBe(2052);
   });
 });
 

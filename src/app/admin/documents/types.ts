@@ -29,6 +29,12 @@ export interface FactureExtras {
   contractNo?: string;
   objet?: string;
   retenueGarantiePct?: number;
+  /** Free-text franchise / tax-exemption note printed near the stamp. */
+  franchise?: string;
+  /** Payment method, free text (may include a cheque number). */
+  paymentMode?: string;
+  /** Payment date — stored as ISO; printed dd/mm/yyyy. */
+  paymentDate?: string;
 }
 
 export interface BankInfo {
@@ -58,6 +64,10 @@ export interface TvaRateLine {
 }
 
 export interface DocTotals {
+  /** Gross HT = sum of line montants, before any remise. */
+  grossHT?: number;
+  /** Fixed discount applied to grossHT (0/undefined when none). */
+  remise?: number;
   sousTotalHT: number;
   tva: number;
   totalTTC: number;
@@ -84,6 +94,10 @@ export interface DocumentRecord {
   bank?: BankInfo;
   footerHtml: string;
   stampUrl: string;
+  /** Leave the stamp area blank (reserved space) for a physical stamp after printing. */
+  stampBlank?: boolean;
+  /** Fixed discount (DA) subtracted from the gross HT total. 0/undefined → none. */
+  remise?: number;
   companySnapshot: CompanySettings;
   totals: DocTotals;
   amountInWords: string;
