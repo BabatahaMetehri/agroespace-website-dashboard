@@ -70,16 +70,17 @@ table.items tr { break-inside: avoid; page-break-inside: avoid; }
 }
 .totals .retenue { margin-top: 6px; border: 1px solid #cdd6cf; border-radius: 8px; overflow: hidden; }
 .totals .retenue .tline { padding: 6px 10px; border-bottom: 1px solid #eef0ed; }
-.sign-row { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 6px; break-inside: avoid; page-break-inside: avoid; }
-/* Lift the stamp up into the whitespace above (over the amount-in-words) so it
-   reads as a real stamp and doesn't push the footer onto a second page.
-   The stamp PNG is transparent, so light overlap is fine. */
-.stamp-wrap { margin-top: -58px; }
+/* Stamp lives at the foot of the left (words) column and validity at the foot
+   of the right (totals) column — each follows the text directly above it,
+   instead of a full-width row stranded near the page bottom. */
+.stamp-wrap { margin-top: 10px; }
 .stamp-img { width: 200px; height: auto; object-fit: contain; }
 .stamp-ph { width: 150px; height: 150px; border-radius: 50%; border: 2px dashed #b9c4bc; display: flex; align-items: center; justify-content: center; color: #9aa89f; font-size: 10px; font-family: Arial; text-align: center; }
 /* Reserved empty space for a physical stamp applied after printing — no border. */
 .stamp-blank { width: 150px; height: 130px; }
 .sign-label { font-family: Arial; font-size: 11.5px; color: #34433a; margin-top: 4px; }
+/* Right-align the validity badge under the totals column. */
+.validity-row { display: flex; justify-content: flex-end; margin-top: 12px; }
 .validity {
   font-family: Arial; font-size: 12px; font-weight: 700; color: #114232;
   border: 1.5px solid #87A922; border-radius: 8px; padding: 6px 12px;
@@ -99,9 +100,13 @@ table.items tr { break-inside: avoid; page-break-inside: avoid; }
 
 /* ── Print ─────────────────────────────────────────────────────────────── */
 @media print {
-  /* margin:0 makes the browser drop its auto headers/footers (date, page title,
-     URL). The document's own padding provides the page-1 whitespace instead. */
-  @page { size: A4; margin: 0; }
+  /* Real page margins so EVERY page — including continuation pages — gets the
+     same top/bottom/side whitespace (the old margin:0 only padded page 1 via
+     the element's own padding, leaving page 2 flush against the edge).
+     Note: with page margins the browser can draw its auto header/footer (date,
+     URL, page number) if "Headers and footers" is enabled in the print dialog —
+     keep that option unchecked (the browser remembers it). */
+  @page { size: A4; margin: 12mm 14mm; }
   html, body { margin: 0 !important; padding: 0 !important; background: #fff !important; height: auto !important; overflow: visible !important; }
 
   /* Hide the whole app; show only the body-level print copy, in normal flow
@@ -111,10 +116,10 @@ table.items tr { break-inside: avoid; page-break-inside: avoid; }
   .no-print { display: none !important; }
 
   .doc {
-    width: 210mm !important;
-    min-height: 0 !important;   /* don't force a full sheet → no stray empty 2nd page */
+    width: auto !important;      /* fill the @page content box (margins now come from @page) */
+    min-height: 0 !important;    /* don't force a full sheet → no stray empty 2nd page */
     margin: 0 !important;
-    padding: 12mm 14mm 10mm !important;
+    padding: 0 !important;
     box-shadow: none !important;
     border: none !important;
   }

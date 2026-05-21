@@ -18,12 +18,18 @@ export function TotalsBlock({
   proformaWord,
   factureExtras,
   remise,
+  stampUrl,
+  stampBlank,
+  validUntil,
 }: {
   items: Array<{ qty: number; puHT: number; tvaRate?: number }>;
   docType: DocType;
   proformaWord: string; // "proforma" | "facture" for the "Arrêtée la présente ..." line
   factureExtras?: FactureExtras;
   remise?: number;
+  stampUrl: string;
+  stampBlank?: boolean;
+  validUntil: string;
 }) {
   const totals = computeTotals(items, remise);
   const longWords = numberToFrenchWords(totals.totalTTC, { currency: 'long' });
@@ -44,6 +50,17 @@ export function TotalsBlock({
   const showPayment = isFacture && fx && (fx.paymentMode || fx.paymentDate);
   const showFranchise = isFacture && fx && fx.franchise && fx.franchise.trim();
 
+  // Stamp area precedence: an uploaded image wins; otherwise either a blank
+  // reserved space (for a physical stamp applied after printing) or the
+  // dashed-circle placeholder. Sits at the foot of the left column, right after
+  // the amount-in-words / payment text — so it follows the content above
+  // instead of being stranded in a full-width row near the page bottom.
+  const stampContent = stampUrl
+    ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
+    : stampBlank
+      ? <div className="stamp-blank" aria-hidden="true" />
+      : <div className="stamp-ph">Cachet &<br />signature</div>;
+
   return (
     <div className="totals-wrap">
       <div className="words">
@@ -55,6 +72,10 @@ export function TotalsBlock({
             {fx!.paymentDate && <div><b>Le :</b> {formatFrDate(fx!.paymentDate)}</div>}
           </div>
         )}
+        <div className="stamp-wrap">
+          {stampContent}
+          <div className="sign-label">Cachet et signature</div>
+        </div>
       </div>
       <div className="totals-col">
         <div className="totals">
@@ -82,6 +103,9 @@ export function TotalsBlock({
         {showFranchise && (
           <div className="franchise sans">{fx!.franchise}</div>
         )}
+        <div className="validity-row">
+          <div className="validity sans">Offre valable jusqu'au : {formatFrDate(validUntil)}</div>
+        </div>
       </div>
     </div>
   );

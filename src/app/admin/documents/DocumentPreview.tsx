@@ -59,14 +59,12 @@ export function DocumentPreview({
           proformaWord={proformaWord}
           factureExtras={fx}
           remise={draft.remise}
-        />
-
-        <DocFooter
-          validUntil={draft.validUntil}
           stampUrl={draft.stampUrl}
           stampBlank={draft.stampBlank}
-          footerHtml={draft.footerHtml}
+          validUntil={draft.validUntil}
         />
+
+        <DocFooter footerHtml={draft.footerHtml} />
       </div>
     </div>
   );
