@@ -1,9 +1,11 @@
 import { Plus, Trash2 } from 'lucide-react';
 import type { ItemRow, ProductPreset } from './types';
 import { RichTextEditor } from './RichTextEditor';
-import { lineMontantHT, formatMoneyFr } from './lib/calc';
+import { lineMontantHT, formatMoneyFr, lineTvaRate } from './lib/calc';
 
-const emptyRow = (): ItemRow => ({ ref: '', designationHtml: '', um: 'U', qty: 1, puHT: 0 });
+const emptyRow = (): ItemRow => ({ ref: '', designationHtml: '', um: 'U', qty: 1, puHT: 0, tvaRate: 0.19 });
+/** A row's TVA as a percentage (legacy rows without a rate default to 19). */
+const tvaPctOf = (it: ItemRow): number => lineTvaRate(it) * 100;
 
 const field = 'w-full rounded-lg bg-[#0f2618] border border-white/10 px-3 py-2 text-sm text-white/90 outline-none focus:border-[#87A922]';
 const label = 'block text-[11px] uppercase tracking-wide text-white/40 mb-1';
@@ -26,12 +28,18 @@ export function ItemRowsEditor({
     if (!p) return;
     onChange([
       ...items,
-      { ref: p.ref, designationHtml: p.designationHtml, um: p.um || 'U', qty: 1, puHT: p.defaultPU || 0 },
+      { ref: p.ref, designationHtml: p.designationHtml, um: p.um || 'U', qty: 1, puHT: p.defaultPU || 0, tvaRate: 0.19 },
     ]);
   };
 
   return (
     <div className="space-y-4">
+      {/* Common Algerian TVA rates — suggestions only; any value is allowed. */}
+      <datalist id="tva-rates">
+        <option value="19" />
+        <option value="9" />
+        <option value="0" />
+      </datalist>
       {items.map((it, i) => (
         <div key={i} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-3">
           <div className="flex items-center justify-between">
@@ -48,7 +56,7 @@ export function ItemRowsEditor({
             <label className={label}>Désignation</label>
             <RichTextEditor value={it.designationHtml} onChange={(html) => update(i, { designationHtml: html })} placeholder="Description du produit…" />
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-5 gap-2">
             <div>
               <label className={label}>UM</label>
               <input className={field} value={it.um} onChange={(e) => update(i, { um: e.target.value })} />
@@ -62,6 +70,12 @@ export function ItemRowsEditor({
               <label className={label}>P.U H.T</label>
               <input type="number" min={0} step="0.01" className={field} value={it.puHT}
                 onChange={(e) => update(i, { puHT: Number(e.target.value) })} />
+            </div>
+            <div>
+              <label className={label}>TVA %</label>
+              <input type="number" min={0} max={100} step="0.5" list="tva-rates" className={field}
+                value={Number((tvaPctOf(it)).toFixed(2))}
+                onChange={(e) => update(i, { tvaRate: e.target.value === '' ? 0 : Number(e.target.value) / 100 })} />
             </div>
             <div>
               <label className={label}>Montant HT</label>

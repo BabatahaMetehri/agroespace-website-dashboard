@@ -1,5 +1,6 @@
 import './print.css';
 import type { DocumentDraft } from './types';
+import { normalizeBanks } from './defaults';
 import { DocHeader } from './DocHeader';
 import { ClientBox } from './ClientBox';
 import { ItemsTable } from './ItemsTable';
@@ -28,7 +29,7 @@ export function DocumentPreview({
   return (
     <div className="print-root">
       <div className="doc">
-        <DocHeader company={draft.companySnapshot} bank={draft.bank} />
+        <DocHeader company={draft.companySnapshot} banks={normalizeBanks(draft)} />
 
         <div className="id-row">
           <div>

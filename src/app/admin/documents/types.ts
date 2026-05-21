@@ -18,6 +18,8 @@ export interface ItemRow {
   um: string;
   qty: number;
   puHT: number;
+  /** TVA rate as a fraction (0.19 = 19 %). Undefined → default 19 % (legacy rows). */
+  tvaRate?: number;
 }
 
 export interface FactureExtras {
@@ -47,10 +49,18 @@ export interface CompanySettings {
   updated_at?: string;
 }
 
+export interface TvaRateLine {
+  rate: number;   // fraction, e.g. 0.19
+  base: number;   // HT amount taxed at this rate
+  amount: number; // TVA amount for this rate
+}
+
 export interface DocTotals {
   sousTotalHT: number;
   tva: number;
   totalTTC: number;
+  /** TVA split per distinct rate (one entry when all lines share a rate). */
+  tvaByRate?: TvaRateLine[];
 }
 
 /** A document as stored/returned by the server. */
@@ -67,7 +77,9 @@ export interface DocumentRecord {
   client: ClientInfo;
   items: ItemRow[];
   factureExtras?: FactureExtras;
-  bank: BankInfo;
+  banks: BankInfo[];
+  /** @deprecated legacy single-bank field — kept so old records still read. */
+  bank?: BankInfo;
   footerHtml: string;
   stampUrl: string;
   companySnapshot: CompanySettings;

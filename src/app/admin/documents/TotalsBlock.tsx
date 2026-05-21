@@ -34,7 +34,12 @@ export function TotalsBlock({
       </div>
       <div className="totals">
         <div className="tline"><span>Sous total HT</span><span className="num">{formatMoneyFr(totals.sousTotalHT)}</span></div>
-        <div className="tline"><span>T.V.A (19 %)</span><span className="num">{formatMoneyFr(totals.tva)}</span></div>
+        {totals.tvaByRate.map((l) => (
+          <div className="tline" key={l.rate}>
+            <span>T.V.A ({Number((l.rate * 100).toFixed(2))} %)</span>
+            <span className="num">{formatMoneyFr(l.amount)}</span>
+          </div>
+        ))}
         <div className="grand"><span>TOTAL TTC</span><span className="num">{formatMoneyFr(totals.totalTTC)}</span></div>
         {rg && (
           <div className="retenue">

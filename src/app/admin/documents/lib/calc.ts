@@ -8,21 +8,43 @@ export const round2 = (n: number): number =>
 export const lineMontantHT = (qty: number, puHT: number): number =>
   round2((Number(qty) || 0) * (Number(puHT) || 0));
 
+/** A line's TVA rate as a fraction; legacy rows without one default to 19 %. */
+export const lineTvaRate = (it: { tvaRate?: number }): number =>
+  typeof it.tvaRate === 'number' && Number.isFinite(it.tvaRate) ? it.tvaRate : TVA_RATE;
+
+export interface TvaRateLine {
+  rate: number;
+  base: number;
+  amount: number;
+}
+
 export interface Totals {
   sousTotalHT: number;
   tva: number;
   totalTTC: number;
+  tvaByRate: TvaRateLine[];
 }
 
 export function computeTotals(
-  items: Array<{ qty: number; puHT: number }>,
+  items: Array<{ qty: number; puHT: number; tvaRate?: number }>,
 ): Totals {
   const sousTotalHT = round2(
     items.reduce((sum, it) => sum + lineMontantHT(it.qty, it.puHT), 0),
   );
-  const tva = round2(sousTotalHT * TVA_RATE);
+
+  // Group taxable HT by distinct rate so each rate gets its own TVA line.
+  const baseByRate = new Map<number, number>();
+  for (const it of items) {
+    const rate = lineTvaRate(it);
+    baseByRate.set(rate, (baseByRate.get(rate) ?? 0) + lineMontantHT(it.qty, it.puHT));
+  }
+  const tvaByRate: TvaRateLine[] = [...baseByRate.entries()]
+    .map(([rate, base]) => ({ rate, base: round2(base), amount: round2(base * rate) }))
+    .sort((a, b) => b.rate - a.rate);
+
+  const tva = round2(tvaByRate.reduce((sum, l) => sum + l.amount, 0));
   const totalTTC = round2(sousTotalHT + tva);
-  return { sousTotalHT, tva, totalTTC };
+  return { sousTotalHT, tva, totalTTC, tvaByRate };
 }
 
 /** Facture-only: retenue de garantie (pct of HT) and resulting net HT. */

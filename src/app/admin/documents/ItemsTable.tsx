@@ -1,7 +1,7 @@
 import type { ItemRow } from './types';
-import { lineMontantHT, formatMoneyFr, TVA_RATE } from './lib/calc';
+import { lineMontantHT, formatMoneyFr, lineTvaRate } from './lib/calc';
 
-const tvaPct = `${Math.round(TVA_RATE * 100)} %`;
+const fmtPct = (rate: number) => `${Number((rate * 100).toFixed(2))} %`;
 
 export function ItemsTable({ items }: { items: ItemRow[] }) {
   return (
@@ -30,7 +30,7 @@ export function ItemsTable({ items }: { items: ItemRow[] }) {
             <td className="ctr">{it.um}</td>
             <td className="ctr">{it.qty}</td>
             <td className="num">{formatMoneyFr(it.puHT)}</td>
-            <td className="ctr">{tvaPct}</td>
+            <td className="ctr">{fmtPct(lineTvaRate(it))}</td>
             <td className="num">{formatMoneyFr(lineMontantHT(it.qty, it.puHT))}</td>
           </tr>
         ))}

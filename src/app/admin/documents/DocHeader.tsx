@@ -2,8 +2,13 @@ import agroLogo from '../../../imports/logo-with-shadow.png';
 import westernLogo from '../../../imports/partners/western-logo.png';
 import type { CompanySettings, BankInfo } from './types';
 
-export function DocHeader({ company, bank }: { company: CompanySettings; bank: BankInfo }) {
-  const bankLine = [bank?.bankName, bank?.accountLine].filter(Boolean).join(' : ');
+export function DocHeader({ company, banks }: { company: CompanySettings; banks: BankInfo[] }) {
+  // Each bank as "Name : account"; multiple banks share one line, separated by
+  // " / " to save vertical space, wrapping to the next line only on overflow.
+  const bankLine = (banks ?? [])
+    .map((b) => [b?.bankName, b?.accountLine].filter(Boolean).join(' : '))
+    .filter(Boolean)
+    .join('  /  ');
   return (
     <>
       <div className="doc-hd">

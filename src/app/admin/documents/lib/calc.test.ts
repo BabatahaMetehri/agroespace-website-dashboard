@@ -46,7 +46,24 @@ describe('computeTotals', () => {
     expect(t.totalTTC).toBe(239.19);
   });
   it('returns zero totals for empty items array', () => {
-    expect(computeTotals([])).toEqual({ sousTotalHT: 0, tva: 0, totalTTC: 0 });
+    expect(computeTotals([])).toEqual({ sousTotalHT: 0, tva: 0, totalTTC: 0, tvaByRate: [] });
+  });
+  it('defaults missing tvaRate to 19% and reports a single rate line', () => {
+    const t = computeTotals([{ qty: 2, puHT: 8100000 }]);
+    expect(t.tvaByRate).toEqual([{ rate: 0.19, base: 16200000, amount: 3078000 }]);
+  });
+  it('supports per-line TVA rates and splits TVA per distinct rate', () => {
+    const t = computeTotals([
+      { qty: 1, puHT: 1000, tvaRate: 0.19 },
+      { qty: 1, puHT: 1000, tvaRate: 0.09 },
+    ]);
+    expect(t.sousTotalHT).toBe(2000);
+    expect(t.tva).toBe(280); // 190 + 90
+    expect(t.totalTTC).toBe(2280);
+    expect(t.tvaByRate).toEqual([
+      { rate: 0.19, base: 1000, amount: 190 },
+      { rate: 0.09, base: 1000, amount: 90 },
+    ]);
   });
 });
 

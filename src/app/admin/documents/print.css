@@ -17,11 +17,14 @@
 .doc .sans { font-family: Arial, Helvetica, sans-serif; }
 .doc-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
 .doc-hd .logo-agro { height: 48px; width: auto; object-fit: contain; }
-.doc-hd .logo-western { height: 36px; width: auto; object-fit: contain; display: block; margin-left: auto; }
+/* Cap the partner logo's width: with width:auto a wide logo expanded this
+   column and squeezed the brand lines, wrapping the R.C/NIF/NIS line. */
+.doc-hd .logo-western { height: 36px; width: auto; max-width: 110px; object-fit: contain; display: block; margin-left: auto; }
 .brand-name { font-size: 24px; font-weight: 700; color: #1d6b3a; letter-spacing: .5px; line-height: 1; }
 .brand-sub { font-size: 11.5px; color: #34433a; margin-top: 3px; }
 .brand-lines { font-size: 10.5px; color: #42504a; margin-top: 6px; line-height: 1.55; }
-.brand-ids { color: #5f6b62; }
+/* Keep R.C · ART.IMP · NIF · NIS on a single line (NIS was wrapping under). */
+.brand-ids { color: #5f6b62; white-space: nowrap; font-size: 10px; }
 .rule { height: 3px; background: linear-gradient(90deg, #114232, #87A922); border-radius: 2px; margin: 8px 0 10px; }
 .id-row { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
 /* Document number — clean professional sans, not the body serif. */

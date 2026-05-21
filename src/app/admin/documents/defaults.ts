@@ -1,4 +1,15 @@
-import type { CompanySettings, ClientInfo, DocumentDraft } from './types';
+import type { CompanySettings, ClientInfo, DocumentDraft, BankInfo } from './types';
+
+/**
+ * Normalize a document's bank data to an array. Old records stored a single
+ * `bank` object; new ones store a `banks` array. Always returns at least one
+ * (possibly empty) row so the editor has something to render.
+ */
+export function normalizeBanks(d: { banks?: BankInfo[]; bank?: BankInfo }): BankInfo[] {
+  if (Array.isArray(d.banks) && d.banks.length) return d.banks;
+  if (d.bank && (d.bank.bankName || d.bank.accountLine)) return [d.bank];
+  return [{ bankName: '', accountLine: '' }];
+}
 
 export const DEFAULT_COMPANY: CompanySettings = {
   brandName: 'AGRO ESPACE',
@@ -35,7 +46,7 @@ export function emptyDraft(company: CompanySettings): DocumentDraft {
     client: { ...EMPTY_CLIENT },
     items: [{ ref: '', designationHtml: '', um: 'U', qty: 1, puHT: 0 }],
     factureExtras: {},
-    bank: { bankName: '', accountLine: '' },
+    banks: [{ bankName: '', accountLine: '' }],
     footerHtml: '',
     stampUrl: '',
     companySnapshot: company,

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowLeft, Printer, Save, Settings as SettingsIcon, Layers, Loader2 } from 'lucide-react';
+import { ArrowLeft, Printer, Save, Settings as SettingsIcon, Layers, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DocApi } from './lib/docApi';
 import type {
   DocumentDraft, DocumentRecord, DocType,
   BankPreset, FooterPreset, ProductPreset, StampPreset, IdentityPreset, CompanySettings,
 } from './types';
-import { DEFAULT_COMPANY, emptyDraft, addDaysIso } from './defaults';
+import { DEFAULT_COMPANY, emptyDraft, addDaysIso, normalizeBanks } from './defaults';
 import { computeTotals } from './lib/calc';
 import { numberToFrenchWords } from './lib/numberToWords.fr';
 import { sanitizeRichHtml } from './lib/sanitizeHtml';
@@ -27,6 +27,39 @@ function buildDisplayId(type: DocType, num: number, isoDate: string): string {
   return type === 'proforma'
     ? `P${String(num).padStart(4, '0')}/${yy}`
     : `${String(num).padStart(5, '0')}/${yy}`;
+}
+
+/** Strip HTML tags to plain text (for designation used in the PDF filename). */
+function htmlToText(html: string): string {
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html || '';
+  return (tmp.textContent || tmp.innerText || '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Build the PDF filename (the browser uses document.title as the default
+ * "Save as PDF" name). Format, uppercase:
+ *   [TYPE] [NUMBER]-[YEAR] [CLIENT] [QTY] [FIRST ARTICLE]
+ * e.g. "FACTURE PROFORMA 134-2026 LUSSAIL SERVICES 2 PIVOT 25 HA"
+ */
+function buildPdfName(draft: DocumentDraft, num: number, fullYear: number): string {
+  const typeLabel = draft.type === 'proforma' ? 'FACTURE PROFORMA' : 'FACTURE';
+  const first = draft.items[0];
+  const article = first ? (htmlToText(first.designationHtml) || first.ref) : '';
+  const parts = [
+    typeLabel,
+    `${num}-${fullYear}`,
+    draft.client.name,
+    first ? String(first.qty) : '',
+    article,
+  ];
+  return parts
+    .filter((p) => p != null && String(p).trim() !== '')
+    .join(' ')
+    .replace(/[\\/:*?"<>|]+/g, ' ') // drop characters illegal in filenames
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
 }
 
 export function DocumentEditor({
@@ -75,11 +108,12 @@ export function DocumentEditor({
       setPresets({ bank, footer, product, stamp, identity });
       if (existing) {
         manualValidity.current = true;
-        setDraft({ ...existing });
+        setDraft({ ...existing, banks: normalizeBanks(existing) });
       } else if (seedDraft) {
         manualValidity.current = false;
         setDraft({
           ...seedDraft,
+          banks: normalizeBanks(seedDraft),
           companySnapshot: comp,
           validUntil: addDaysIso(new Date(seedDraft.date), 15),
         });
@@ -91,12 +125,14 @@ export function DocumentEditor({
   };
   useEffect(() => { loadAll(); /* eslint-disable-line */ }, [existing, seedDraft]);
 
-  // Auto-print: once loading finishes and we have an existing doc, fire window.print() once.
+  // Auto-print: once loading finishes and we have an existing doc, fire the
+  // named print once. (printDoc is defined below; it's only called post-commit.)
   useEffect(() => {
     if (!loading && autoPrint && existing && !didAutoPrint.current) {
       didAutoPrint.current = true;
-      window.print();
+      printDoc();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, autoPrint, existing]);
 
   const set = <K extends keyof DocumentDraft>(k: K, v: DocumentDraft[K]) =>
@@ -105,6 +141,17 @@ export function DocumentEditor({
     setDraft((d) => ({ ...d, client: { ...d.client, [k]: v } }));
   const setExtras = (k: string, v: any) =>
     setDraft((d) => ({ ...d, factureExtras: { ...(d.factureExtras ?? {}), [k]: v } }));
+
+  // ── Banks (multiple) ──
+  const updateBank = (i: number, patch: Partial<DocumentDraft['banks'][number]>) =>
+    setDraft((d) => ({ ...d, banks: d.banks.map((b, idx) => (idx === i ? { ...b, ...patch } : b)) }));
+  const addBank = (bank = { bankName: '', accountLine: '' }) =>
+    setDraft((d) => ({ ...d, banks: [...d.banks, bank] }));
+  const removeBank = (i: number) =>
+    setDraft((d) => {
+      const next = d.banks.filter((_, idx) => idx !== i);
+      return { ...d, banks: next.length ? next : [{ bankName: '', accountLine: '' }] };
+    });
 
   const onDateChange = (iso: string) => {
     setDraft((d) => ({
@@ -115,13 +162,26 @@ export function DocumentEditor({
   };
 
   // Provisional display id (for new docs) or the real one (when editing).
+  const docNumber = existing
+    ? existing.number
+    : (draft.type === 'proforma' ? counters.proforma_next : counters.facture_next);
   const displayId = existing
     ? existing.displayId
-    : buildDisplayId(
-        draft.type,
-        draft.type === 'proforma' ? counters.proforma_next : counters.facture_next,
-        draft.date,
-      );
+    : buildDisplayId(draft.type, docNumber, draft.date);
+
+  // Print / Save-as-PDF. The browser uses document.title as the suggested
+  // filename, so we set it just for the print then restore it afterwards.
+  const printDoc = () => {
+    const prevTitle = document.title;
+    const name = buildPdfName({ ...draft, companySnapshot: company }, docNumber, new Date(draft.date).getFullYear());
+    if (name) document.title = name;
+    const restore = () => {
+      document.title = prevTitle;
+      window.removeEventListener('afterprint', restore);
+    };
+    window.addEventListener('afterprint', restore);
+    window.print();
+  };
 
   const finalize = async () => {
     setSaving(true);
@@ -130,6 +190,7 @@ export function DocumentEditor({
       const amountInWords = numberToFrenchWords(totals.totalTTC);
       const payload: DocumentDraft = {
         ...draft,
+        bank: undefined, // drop legacy single-bank field; banks[] is the source of truth
         companySnapshot: company,
         items: draft.items.map((it) => ({ ...it, designationHtml: sanitizeRichHtml(it.designationHtml) })),
         footerHtml: sanitizeRichHtml(draft.footerHtml),
@@ -167,7 +228,7 @@ export function DocumentEditor({
           <button onClick={() => setShowPresets(true)} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/80 hover:bg-white/5">
             <Layers className="w-4 h-4" /> Préréglages
           </button>
-          <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/80 hover:bg-white/5">
+          <button onClick={printDoc} className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-white/80 hover:bg-white/5">
             <Printer className="w-4 h-4" /> Imprimer / PDF
           </button>
           <button onClick={finalize} disabled={saving}
@@ -267,20 +328,34 @@ export function DocumentEditor({
             </div>
           )}
 
-          {/* Bank */}
+          {/* Banks (one or more — printed on a single line separated by " / ") */}
           <div className={section}>
-            <div className={h}>Banque</div>
+            <div className="flex items-center justify-between">
+              <div className={h}>Banque(s)</div>
+              <button type="button" onClick={() => addBank()}
+                className="text-[#87A922] hover:brightness-110 text-xs font-medium">+ Ajouter une banque</button>
+            </div>
             <select className={field} defaultValue=""
-              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) { set('bank', { bankName: p.bankName, accountLine: p.accountLine }); e.target.value = ''; } }}>
-              <option value="">Choisir un préréglage…</option>
+              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) { addBank({ bankName: p.bankName, accountLine: p.accountLine }); e.target.value = ''; } }}>
+              <option value="">Ajouter depuis un préréglage…</option>
               {presets.bank.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
-            <div className="grid grid-cols-2 gap-2">
-              <div><label className={label}>Nom de la banque</label>
-                <input className={field} value={draft.bank.bankName} onChange={(e) => set('bank', { ...draft.bank, bankName: e.target.value })} /></div>
-              <div><label className={label}>N° de compte</label>
-                <input className={field} value={draft.bank.accountLine} onChange={(e) => set('bank', { ...draft.bank, accountLine: e.target.value })} /></div>
-            </div>
+            {draft.banks.map((b, i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-white/40">Banque {i + 1}</span>
+                  <button type="button" onClick={() => removeBank(i)} className="text-red-300/70 hover:text-red-300" title="Supprimer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div><label className={label}>Nom de la banque</label>
+                    <input className={field} value={b.bankName} onChange={(e) => updateBank(i, { bankName: e.target.value })} /></div>
+                  <div><label className={label}>N° de compte</label>
+                    <input className={field} value={b.accountLine} onChange={(e) => updateBank(i, { accountLine: e.target.value })} /></div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {/* Items */}
