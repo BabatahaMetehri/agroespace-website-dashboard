@@ -36,12 +36,12 @@ export const BlogGallery = ({ images }: { images: string[] }) => {
                 key={i}
                 type="button"
                 onClick={() => setLightbox(i)}
-                className="relative flex-[0_0_100%] min-w-0 aspect-[16/10] block"
+                className="flex-[0_0_100%] min-w-0 flex items-center justify-center max-h-[70vh]"
               >
                 <img
                   src={src}
                   alt={`Galerie ${i + 1}`}
-                  className="w-full h-full object-cover"
+                  className="max-w-full max-h-[70vh] w-auto h-auto object-contain"
                   loading="lazy"
                 />
               </button>

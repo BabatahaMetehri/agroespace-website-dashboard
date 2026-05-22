@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { Eye, Heart, Share2, MessageCircle, ArrowLeft, ArrowRight, Send } from 'lucide-react';
+import { Heart, Share2, MessageCircle, ArrowLeft, ArrowRight, Send } from 'lucide-react';
 import { motion } from 'motion/react';
 import { toast } from 'sonner';
 import type { BlogArticle } from '../data/blog';
@@ -168,12 +168,6 @@ export const BlogDetail = () => {
 
         <div className="flex flex-wrap items-center gap-6 text-sm text-gray-500 mb-10">
           <span>{new Date(article.date).toLocaleDateString(lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-US' : 'fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })}</span>
-          <span className="flex items-center gap-1.5">
-            <Eye className="w-4 h-4" /> {views.toLocaleString()}
-          </span>
-          <span className="flex items-center gap-1.5">
-            <Heart className={`w-4 h-4 ${liked ? 'fill-red-500 text-red-500' : ''}`} /> {likes.toLocaleString()}
-          </span>
         </div>
 
         <div className="aspect-[16/9] rounded-3xl overflow-hidden mb-10 shadow-[0_25px_60px_rgba(0,0,0,0.08)]">
