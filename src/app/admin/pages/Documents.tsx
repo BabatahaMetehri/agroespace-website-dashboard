@@ -82,9 +82,9 @@ export const Documents = () => {
     `px-3 py-1.5 rounded-lg text-sm ${active ? 'bg-[#87A922] text-white' : 'text-white/60 hover:bg-white/5'}`;
 
   return (
-    <div>
+    <div className="p-8">
       <AdminHeader title="Factures & Proformas" subtitle="Créer et gérer les documents commerciaux" />
-      <div className="p-5 space-y-4">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-1">
             <button className={pill(type === 'all')} onClick={() => { setType('all'); setPage(1); }}>Tous {data ? `(${data.counts.all})` : ''}</button>
