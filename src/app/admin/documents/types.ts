@@ -25,8 +25,12 @@ export interface ItemRow {
 }
 
 export interface FactureExtras {
+  /** @deprecated replaced by free-text notesHtml — kept so old records still read. */
   orderNo?: string;
+  /** @deprecated replaced by free-text notesHtml — kept so old records still read. */
   contractNo?: string;
+  /** Free-text rich note printed under the document title (replaces orderNo/contractNo). */
+  notesHtml?: string;
   objet?: string;
   retenueGarantiePct?: number;
   /** Free-text franchise / tax-exemption note printed near the stamp. */

@@ -210,6 +210,9 @@ export function DocumentEditor({
         companySnapshot: company,
         items: draft.items.map((it) => ({ ...it, designationHtml: sanitizeRichHtml(it.designationHtml) })),
         footerHtml: sanitizeRichHtml(draft.footerHtml),
+        factureExtras: draft.factureExtras
+          ? { ...draft.factureExtras, notesHtml: draft.factureExtras.notesHtml ? sanitizeRichHtml(draft.factureExtras.notesHtml) : undefined }
+          : draft.factureExtras,
         totals,
         amountInWords,
       };
@@ -336,9 +339,11 @@ export function DocumentEditor({
               <div><label className={label}>Date</label>
                 <input type="date" className={field} value={toInputDate(draft.date)}
                   onChange={(e) => { if (e.target.value) onDateChange(new Date(e.target.value + 'T12:00:00').toISOString()); }} /></div>
-              <div><label className={label}>Valable jusqu'au</label>
-                <input type="date" className={field} value={toInputDate(draft.validUntil)}
-                  onChange={(e) => { if (e.target.value) { manualValidity.current = true; set('validUntil', new Date(e.target.value + 'T12:00:00').toISOString()); } }} /></div>
+              {draft.type === 'proforma' && (
+                <div><label className={label}>Valable jusqu'au</label>
+                  <input type="date" className={field} value={toInputDate(draft.validUntil)}
+                    onChange={(e) => { if (e.target.value) { manualValidity.current = true; set('validUntil', new Date(e.target.value + 'T12:00:00').toISOString()); } }} /></div>
+              )}
             </div>
           </div>
 
@@ -359,12 +364,8 @@ export function DocumentEditor({
           {/* Facture extras */}
           {draft.type === 'facture' && (
             <div className={section}>
-              <div className={h}>Mentions facture (bas de page)</div>
+              <div className={h}>Mentions facture</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <div><label className={label}>N° d'ordre</label>
-                  <input className={field} value={draft.factureExtras?.orderNo ?? ''} onChange={(e) => setExtras('orderNo', e.target.value)} /></div>
-                <div><label className={label}>Contrat N°</label>
-                  <input className={field} value={draft.factureExtras?.contractNo ?? ''} onChange={(e) => setExtras('contractNo', e.target.value)} /></div>
                 <div><label className={label}>Retenue garantie (%)</label>
                   <input type="number" min={0} className={field} value={draft.factureExtras?.retenueGarantiePct ?? ''}
                     onChange={(e) => setExtras('retenueGarantiePct', e.target.value === '' ? undefined : Number(e.target.value))} /></div>
@@ -375,6 +376,9 @@ export function DocumentEditor({
                   <input type="date" className={field} value={toInputDate(draft.factureExtras?.paymentDate ?? '')}
                     onChange={(e) => setExtras('paymentDate', e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : undefined)} /></div>
               </div>
+              <div><label className={label}>Mentions / notes (sous le titre — N° d'ordre, contrat, etc. si besoin)</label>
+                <RichTextEditor value={draft.factureExtras?.notesHtml ?? ''} onChange={(html) => setExtras('notesHtml', html)}
+                  placeholder="Texte libre affiché sous le titre du document…" /></div>
               <div><label className={label}>Objet</label>
                 <textarea className={field} rows={2} value={draft.factureExtras?.objet ?? ''} onChange={(e) => setExtras('objet', e.target.value)} /></div>
               <div><label className={label}>Franchise / exonération (à côté du cachet)</label>

@@ -112,9 +112,11 @@ export function TotalsBlock({
         {showFranchise && (
           <div className="franchise sans">{fx!.franchise}</div>
         )}
-        <div className="validity-row">
-          <div className="validity sans">Offre valable jusqu'au : {formatFrDate(validUntil)}</div>
-        </div>
+        {docType === 'proforma' && (
+          <div className="validity-row">
+            <div className="validity sans">Offre valable jusqu'au : {formatFrDate(validUntil)}</div>
+          </div>
+        )}
       </div>
     </div>
   );

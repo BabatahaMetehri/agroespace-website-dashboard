@@ -40,8 +40,9 @@ export function DocumentPreview({
             <div className="doc-date sans">
               {draft.wilayaCity} le : {formatFrDate(draft.date)}
             </div>
-            {draft.type === 'facture' && fx && (fx.orderNo || fx.contractNo || fx.objet) && (
+            {draft.type === 'facture' && fx && (fx.notesHtml || fx.orderNo || fx.contractNo || fx.objet) && (
               <div className="facture-extras sans">
+                {fx.notesHtml && <div dangerouslySetInnerHTML={{ __html: fx.notesHtml }} />}
                 {fx.orderNo && <div>N° d'ordre {fx.orderNo}</div>}
                 {fx.contractNo && <div>Contrat N° {fx.contractNo}</div>}
                 {fx.objet && <div>{fx.objet}</div>}
