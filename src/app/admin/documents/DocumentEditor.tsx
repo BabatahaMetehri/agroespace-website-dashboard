@@ -376,11 +376,9 @@ export function DocumentEditor({
                   <input type="date" className={field} value={toInputDate(draft.factureExtras?.paymentDate ?? '')}
                     onChange={(e) => setExtras('paymentDate', e.target.value ? new Date(e.target.value + 'T12:00:00').toISOString() : undefined)} /></div>
               </div>
-              <div><label className={label}>Mentions / notes (sous le titre — N° d'ordre, contrat, etc. si besoin)</label>
+              <div><label className={label}>Mentions / notes (sous le titre — objet, N° d'ordre, contrat, etc. si besoin)</label>
                 <RichTextEditor value={draft.factureExtras?.notesHtml ?? ''} onChange={(html) => setExtras('notesHtml', html)}
                   placeholder="Texte libre affiché sous le titre du document…" /></div>
-              <div><label className={label}>Objet</label>
-                <textarea className={field} rows={2} value={draft.factureExtras?.objet ?? ''} onChange={(e) => setExtras('objet', e.target.value)} /></div>
               <div><label className={label}>Franchise / exonération (à côté du cachet)</label>
                 <textarea className={field} rows={3}
                   placeholder="Achat exonéré de la TVA avec autorisation acquisition en franchise N° … du … — Direction des impôts de la wilaya d' …"
