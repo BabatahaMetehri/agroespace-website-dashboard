@@ -4,6 +4,17 @@ import { numberToFrenchWords } from './lib/numberToWords.fr';
 
 const WORDS_OVERFLOW_LIMIT = 110; // chars; beyond this, switch suffix to "DA"
 
+/**
+ * Decide what fills the stamp area. The "Espace cachet vide" toggle wins over
+ * any selected/default stamp image — so the user can always leave blank space
+ * for a physical stamp, even when a default stamp preset filled the image.
+ */
+export function stampMode(stampUrl: string, stampBlank?: boolean): 'blank' | 'image' | 'placeholder' {
+  if (stampBlank) return 'blank';
+  if (stampUrl) return 'image';
+  return 'placeholder';
+}
+
 function formatFrDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
@@ -50,15 +61,13 @@ export function TotalsBlock({
   const showPayment = isFacture && fx && (fx.paymentMode || fx.paymentDate);
   const showFranchise = isFacture && fx && fx.franchise && fx.franchise.trim();
 
-  // Stamp area precedence: an uploaded image wins; otherwise either a blank
-  // reserved space (for a physical stamp applied after printing) or the
-  // dashed-circle placeholder. Sits at the foot of the left column, right after
-  // the amount-in-words / payment text — so it follows the content above
-  // instead of being stranded in a full-width row near the page bottom.
-  const stampContent = stampUrl
-    ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
-    : stampBlank
-      ? <div className="stamp-blank" aria-hidden="true" />
+  // Stamp area sits at the foot of the left column, right after the
+  // amount-in-words / payment text — so it follows the content above instead of
+  // being stranded in a full-width row near the page bottom.
+  const stampContent = stampMode(stampUrl, stampBlank) === 'blank'
+    ? <div className="stamp-blank" aria-hidden="true" />
+    : stampMode(stampUrl, stampBlank) === 'image'
+      ? <img className="stamp-img" src={stampUrl} alt="Cachet et signature" />
       : <div className="stamp-ph">Cachet &<br />signature</div>;
 
   return (
