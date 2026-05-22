@@ -297,6 +297,36 @@ export function DocumentEditor({
             </div>
           </div>
 
+          {/* Banks (one or more — printed on a single line separated by " / ") */}
+          <div className={section}>
+            <div className="flex items-center justify-between">
+              <div className={h}>Banque(s)</div>
+              <button type="button" onClick={() => addBank()}
+                className="text-[#87A922] hover:brightness-110 text-xs font-medium">+ Ajouter une banque</button>
+            </div>
+            <select className={field} defaultValue=""
+              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) { addBank({ bankName: p.bankName, accountLine: p.accountLine }); e.target.value = ''; } }}>
+              <option value="">Ajouter depuis un préréglage…</option>
+              {presets.bank.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            {draft.banks.map((b, i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] text-white/40">Banque {i + 1}</span>
+                  <button type="button" onClick={() => removeBank(i)} className="text-red-300/70 hover:text-red-300" title="Supprimer">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div><label className={label}>Nom de la banque</label>
+                    <input className={field} value={b.bankName} onChange={(e) => updateBank(i, { bankName: e.target.value })} /></div>
+                  <div><label className={label}>N° de compte</label>
+                    <input className={field} value={b.accountLine} onChange={(e) => updateBank(i, { accountLine: e.target.value })} /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* Document */}
           <div className={section}>
             <div className={h}>Document</div>
@@ -353,36 +383,6 @@ export function DocumentEditor({
                   value={draft.factureExtras?.franchise ?? ''} onChange={(e) => setExtras('franchise', e.target.value)} /></div>
             </div>
           )}
-
-          {/* Banks (one or more — printed on a single line separated by " / ") */}
-          <div className={section}>
-            <div className="flex items-center justify-between">
-              <div className={h}>Banque(s)</div>
-              <button type="button" onClick={() => addBank()}
-                className="text-[#87A922] hover:brightness-110 text-xs font-medium">+ Ajouter une banque</button>
-            </div>
-            <select className={field} defaultValue=""
-              onChange={(e) => { const p = presets.bank.find((b) => b.id === Number(e.target.value)); if (p) { addBank({ bankName: p.bankName, accountLine: p.accountLine }); e.target.value = ''; } }}>
-              <option value="">Ajouter depuis un préréglage…</option>
-              {presets.bank.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
-            {draft.banks.map((b, i) => (
-              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.02] p-2">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] text-white/40">Banque {i + 1}</span>
-                  <button type="button" onClick={() => removeBank(i)} className="text-red-300/70 hover:text-red-300" title="Supprimer">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div><label className={label}>Nom de la banque</label>
-                    <input className={field} value={b.bankName} onChange={(e) => updateBank(i, { bankName: e.target.value })} /></div>
-                  <div><label className={label}>N° de compte</label>
-                    <input className={field} value={b.accountLine} onChange={(e) => updateBank(i, { accountLine: e.target.value })} /></div>
-                </div>
-              </div>
-            ))}
-          </div>
 
           {/* Items */}
           <div className={section}>
