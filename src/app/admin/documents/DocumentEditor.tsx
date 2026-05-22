@@ -7,7 +7,7 @@ import type {
   DocumentDraft, DocumentRecord, DocType,
   BankPreset, FooterPreset, ProductPreset, StampPreset, IdentityPreset, CompanySettings,
 } from './types';
-import { DEFAULT_COMPANY, emptyDraft, addDaysIso, normalizeBanks } from './defaults';
+import { DEFAULT_COMPANY, emptyDraft, addDaysIso, normalizeBanks, pickPresetDefaults } from './defaults';
 import { computeTotals } from './lib/calc';
 import { numberToFrenchWords } from './lib/numberToWords.fr';
 import { sanitizeRichHtml } from './lib/sanitizeHtml';
@@ -123,7 +123,18 @@ export function DocumentEditor({
           validUntil: addDaysIso(new Date(seedDraft.date), 15),
         });
       } else {
-        setDraft(emptyDraft(comp));
+        // Brand-new document — prefill from any presets flagged as default so
+        // a common template doesn't have to be picked every time.
+        const def = pickPresetDefaults({ bank, footer, stamp, identity });
+        const compWithIdentity = def.identity ? { ...comp, ...def.identity } : comp;
+        if (def.identity) setCompany(compWithIdentity);
+        const base = emptyDraft(compWithIdentity);
+        setDraft({
+          ...base,
+          banks: def.banks ?? base.banks,
+          footerHtml: def.footerHtml ?? base.footerHtml,
+          stampUrl: def.stampUrl ?? base.stampUrl,
+        });
       }
     } catch (e) { toast.error((e as Error).message); }
     finally { setLoading(false); }

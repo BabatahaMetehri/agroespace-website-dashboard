@@ -115,15 +115,16 @@ export type DocumentDraft = Omit<
 
 export type PresetKind = 'bank' | 'footer' | 'product' | 'stamp' | 'identity';
 
-export interface BankPreset { id: number; label: string; bankName: string; accountLine: string; }
-export interface FooterPreset { id: number; label: string; html: string; }
+/** When true, the preset is auto-applied to every new document. */
+export interface BankPreset { id: number; label: string; bankName: string; accountLine: string; isDefault?: boolean; }
+export interface FooterPreset { id: number; label: string; html: string; isDefault?: boolean; }
 export interface ProductPreset {
   id: number; label: string; ref: string; designationHtml: string; um: string; defaultPU: number;
 }
-export interface StampPreset { id: number; label: string; imageUrl: string; }
+export interface StampPreset { id: number; label: string; imageUrl: string; isDefault?: boolean; }
 /** Company registration identifiers — these change occasionally, so they are presettable. */
 export interface IdentityPreset {
-  id: number; label: string; rc: string; artImp: string; nif: string; nis: string;
+  id: number; label: string; rc: string; artImp: string; nif: string; nis: string; isDefault?: boolean;
 }
 
 export interface CountersInfo { proforma_next: number; facture_next: number; }

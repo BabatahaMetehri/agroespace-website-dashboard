@@ -164,6 +164,14 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
                   </div>
                 )}
 
+                {tab !== 'product' && (
+                  <label className="flex items-center gap-2 text-sm text-white/80 pt-1">
+                    <input type="checkbox" checked={!!r.isDefault}
+                      onChange={(e) => patch(i, { isDefault: e.target.checked })} />
+                    Par défaut (prérempli sur les nouveaux documents)
+                  </label>
+                )}
+
                 <div className="flex justify-end gap-2 pt-1">
                   <button onClick={() => del(i)} className="inline-flex items-center gap-1 text-sm text-red-300/70 hover:text-red-300">
                     <Trash2 className="w-4 h-4" /> Supprimer

@@ -1,4 +1,7 @@
-import type { CompanySettings, ClientInfo, DocumentDraft, BankInfo } from './types';
+import type {
+  CompanySettings, ClientInfo, DocumentDraft, BankInfo,
+  BankPreset, FooterPreset, StampPreset, IdentityPreset,
+} from './types';
 
 /**
  * Normalize a document's bank data to an array. Old records stored a single
@@ -34,6 +37,42 @@ export function addDaysIso(from: Date, days: number): string {
   const d = new Date(from);
   d.setDate(d.getDate() + days);
   return d.toISOString();
+}
+
+/** Identity fields a default identity preset overrides on the company header. */
+export type IdentityDefaults = Pick<CompanySettings, 'rc' | 'artImp' | 'nif' | 'nis'>;
+
+export interface PresetDefaults {
+  /** All bank presets flagged default, mapped to bank lines (undefined → none). */
+  banks?: BankInfo[];
+  footerHtml?: string;
+  stampUrl?: string;
+  identity?: IdentityDefaults;
+}
+
+/**
+ * Pick the values to prefill a brand-new document from any presets the user
+ * flagged as default. Banks accumulate (all defaults are added); footer, stamp
+ * and identity are single — the first flagged one wins. Returns only the fields
+ * that have a default so callers can fall back to the empty draft otherwise.
+ */
+export function pickPresetDefaults(presets: {
+  bank: BankPreset[]; footer: FooterPreset[]; stamp: StampPreset[]; identity: IdentityPreset[];
+}): PresetDefaults {
+  const banks = presets.bank
+    .filter((b) => b.isDefault)
+    .map((b) => ({ bankName: b.bankName, accountLine: b.accountLine }));
+  const footer = presets.footer.find((f) => f.isDefault);
+  const stamp = presets.stamp.find((s) => s.isDefault);
+  const identity = presets.identity.find((x) => x.isDefault);
+  return {
+    banks: banks.length ? banks : undefined,
+    footerHtml: footer?.html,
+    stampUrl: stamp?.imageUrl,
+    identity: identity
+      ? { rc: identity.rc, artImp: identity.artImp, nif: identity.nif, nis: identity.nis }
+      : undefined,
+  };
 }
 
 export function emptyDraft(company: CompanySettings): DocumentDraft {
