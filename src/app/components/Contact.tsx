@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Mail, Phone, MapPin, Check } from "lucide-react";
 import { Link } from "react-router";
 import { useI18n } from "../i18n/I18nProvider";
+import { projectId, publicAnonKey } from "../../../utils/supabase/info";
 
 export const Contact = () => {
   const { t } = useI18n();
@@ -92,9 +93,28 @@ export const Contact = () => {
                 e.preventDefault();
                 if (!accepted) return;
                 const form = new FormData(e.currentTarget);
-                const message = `Bonjour AGROESPACE,%0A%0AJe suis ${form.get("name") ?? ""} (${form.get("company") ?? ""}).%0ATéléphone : ${form.get("phone") ?? ""}%0AEmail : ${form.get("email") ?? ""}%0A%0A${form.get("message") ?? ""}`;
+                const name = (form.get("name") as string) ?? "";
+                const phone = (form.get("phone") as string) ?? "";
+                const email = (form.get("email") as string) ?? "";
+                const company = (form.get("company") as string) ?? "";
+                const body = (form.get("message") as string) ?? "";
+
+                // Best-effort save so the request lands in "Devis en attente".
+                fetch(
+                  `https://${projectId}.supabase.co/functions/v1/make-server-0c561120/quotes`,
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${publicAnonKey}`,
+                    },
+                    body: JSON.stringify({ name, phone, email, company, message: body }),
+                  },
+                ).catch(() => null);
+
+                const message = `Bonjour AGROESPACE,%0A%0AJe suis ${name} (${company}).%0ATéléphone : ${phone}%0AEmail : ${email}%0A%0A${body}`;
                 window.open(
-                  `https://wa.me/213552498687?text=${message}`,
+                  `https://wa.me/213670635013?text=${message}`,
                   "_blank",
                 );
               }}

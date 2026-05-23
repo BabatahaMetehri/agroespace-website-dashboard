@@ -20,6 +20,7 @@ type Quote = {
   address?: string;
   wilaya?: string;
   sprinkler?: string;
+  agency?: string;
   message?: string;
   created_at: string;
   status?: QuoteStatus;
@@ -341,6 +342,12 @@ const QuoteDrawer = ({
               {quote.company && <div className="text-white/60">{quote.company}</div>}
               {quote.address && <div className="text-white/60">📍 {quote.address}</div>}
               {quote.wilaya && <div className="text-white/60">🗺️ {quote.wilaya}</div>}
+              {quote.agency && (
+                <div className="flex items-center gap-2 text-white/80 pt-1">
+                  <span className="text-white/40 text-xs uppercase tracking-[0.15em]">Agence :</span>
+                  <span className="font-medium">{quote.agency}</span>
+                </div>
+              )}
               {quote.sprinkler && (
                 <div className="flex items-center gap-2 text-white/80 pt-1">
                   <span className="text-white/40 text-xs uppercase tracking-[0.15em]">Asperseur :</span>

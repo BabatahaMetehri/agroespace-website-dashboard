@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { agencies } from '../data/agencies';
 import { useI18n } from '../i18n/I18nProvider';
+import { projectId, publicAnonKey } from '../../../utils/supabase/info';
 
 const faq: { q: { fr: string; ar: string; en: string }; a: { fr: string; ar: string; en: string } }[] = [
   {
@@ -88,30 +89,54 @@ export const ContactMap = () => {
     const message = form.get('message') as string ?? '';
     const email = form.get('email') as string ?? '';
 
+    const productLabel =
+      PRODUCT_OPTIONS.find((o) => o.value === product)?.[lang] ?? product;
+
     setSubmitting(true);
 
-    // POST to Formspree for email CC
+    // Fire both best-effort sinks in parallel: Formspree (email CC) and the
+    // Supabase quotes store so the request lands in "Devis en attente".
     try {
-      await fetch('https://formspree.io/f/xvgaybny', {
-        method: 'POST',
-        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          phone,
-          email,
-          product,
-          agency: selected.city,
-          message,
-        }),
-      }).catch(() => null);
+      await Promise.all([
+        fetch('https://formspree.io/f/xvgaybny', {
+          method: 'POST',
+          headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            phone,
+            email,
+            product: productLabel,
+            agency: selected.city,
+            message,
+          }),
+        }).catch(() => null),
+        fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-0c561120/quotes`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${publicAnonKey}`,
+            },
+            body: JSON.stringify({
+              name,
+              phone,
+              email,
+              agency: selected.city,
+              product_title: productLabel,
+              message,
+            }),
+          },
+        ).catch(() => null),
+      ]);
     } catch {
       // best-effort, don't block WA
     } finally {
       setSubmitting(false);
     }
 
-    const text = `Bonjour AGROESPACE,%0A%0AJe suis ${name} (${phone}).%0AAgence souhaitée : ${selected.city}.%0AProduit : ${product}%0A%0A${message}`;
-    window.open(`https://wa.me/213552498687?text=${text}`, '_blank');
+    const text = `Bonjour AGROESPACE,%0A%0AJe suis ${name} (${phone}).%0AAgence souhaitée : ${selected.city}.%0AProduit : ${productLabel}%0A%0A${message}`;
+    window.open(`https://wa.me/${selected.phone.replace('+', '')}?text=${text}`, '_blank');
     toast.success(
       lang === 'ar' ? 'تم إرسال الطلب' : lang === 'en' ? 'Request sent' : 'Demande enregistrée',
       { description: lang === 'ar' ? 'سنوجّهك إلى واتساب...' : lang === 'en' ? 'Redirecting to WhatsApp...' : 'Nous vous redirigeons vers WhatsApp...' }
@@ -156,6 +181,9 @@ export const ContactMap = () => {
                 type="tel"
                 name="phone"
                 required
+                maxLength={30}
+                pattern="[+\d][\d\s().\-]{5,24}"
+                autoComplete="tel"
                 placeholder={phonePlaceholder}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] focus:bg-white/10 transition-all"
               />

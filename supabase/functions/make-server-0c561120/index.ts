@@ -217,6 +217,7 @@ app.post(
       const address = sanitiseStr(raw.address, 200);
       const wilaya = sanitiseStr(raw.wilaya, 100);
       const sprinkler = sanitiseStr(raw.sprinkler, 50);
+      const agency = sanitiseStr(raw.agency, 100);
       const message = sanitiseStr(raw.message, 2000);
       const product_id = sanitiseStr(String(raw.product_id ?? ""), 80);
       const product_sku = sanitiseStr(raw.product_sku, 80);
@@ -247,6 +248,7 @@ app.post(
         address,
         wilaya,
         sprinkler,
+        agency,
         message,
         product_id,
         product_sku,

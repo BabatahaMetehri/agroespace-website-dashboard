@@ -12,7 +12,7 @@ type Translatable = { fr?: string; en?: string; ar?: string };
 const FALLBACK_IMAGE =
   'https://i.ibb.co/pvjVWRfp/youre-an-expert-designer-create-a-placeh-IM5r1rwm-Wl-Os-Ut-NZCKXG9w-q-We-PUN3x-SZWUFCEKo7rq5-A-cover.jpg';
 
-const WHATSAPP_NUMBER = '213552498687';
+const WHATSAPP_NUMBER = '213670635013';
 
 const pick = (t: Translatable | undefined, lang: 'fr' | 'en' | 'ar'): string => {
   if (!t) return '';

@@ -57,7 +57,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
     const text = `Bonjour AGROESPACE,%0A%0ADemande de devis :%0AProduit : ${product.title}${
       product.sku ? ' (' + product.sku + ')' : ''
     }%0ANom : ${payload.name}%0AEntreprise : ${payload.company ?? '-'}%0ATéléphone : ${payload.phone}%0AAdresse : ${payload.address ?? '-'}%0AEmail : ${payload.email ?? '-'}%0A%0A${payload.message ?? ''}`;
-    window.open(`https://wa.me/213552498687?text=${text}`, '_blank');
+    window.open(`https://wa.me/213670635013?text=${text}`, '_blank');
     toast.success('Demande envoyée', { description: 'Nous vous répondons dans la journée.' });
     onClose();
   };
@@ -188,7 +188,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   Envoyer & ouvrir WhatsApp
                 </button>
                 <a
-                  href="tel:+213552498687"
+                  href="tel:+213670635013"
                   className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full px-6 py-4 font-bold uppercase tracking-[0.1em] text-sm transition-colors"
                 >
                   <Phone className="w-4 h-4" /> Appeler
