@@ -27,6 +27,13 @@ const MAX_IMG_BYTES = 10 * 1024 * 1024;
 type Translatable = { fr: string; en: string; ar: string };
 type FeaturedSpec = { label: Translatable; value: Translatable };
 type FeaturedBrochure = { label: Translatable; url: string };
+type ManualProduct = {
+  name: string;
+  sku: string;
+  image: string;
+  category: string;
+  inStock: boolean;
+};
 
 type FeaturedRecord = {
   product_id: number;
@@ -34,9 +41,11 @@ type FeaturedRecord = {
   sort_order: number;
   tagline: Translatable;
   highlight: Translatable;
+  coverage: string;
   specs: FeaturedSpec[];
   gallery: string[];
   brochures: FeaturedBrochure[];
+  manual?: ManualProduct | null;
   updated_at?: string;
   product?: {
     id: number;
@@ -68,9 +77,18 @@ const emptyRecord = (productId: number): FeaturedRecord => ({
   sort_order: 0,
   tagline: emptyTranslatable(),
   highlight: emptyTranslatable(),
+  coverage: '',
   specs: [],
   gallery: [],
   brochures: [],
+});
+
+const emptyManual = (): ManualProduct => ({
+  name: '',
+  sku: '',
+  image: '',
+  category: '',
+  inStock: true,
 });
 
 async function uploadToImgBB(file: File): Promise<string> {
@@ -198,6 +216,19 @@ export const Featured = () => {
     setEditing(stub);
   };
 
+  const createManual = () => {
+    // Standalone product, not synced from Logicom. Synthetic timestamp id won't
+    // collide with Logicom (WooCommerce) product ids.
+    const nextSort = items.length
+      ? Math.max(...items.map((i) => i.sort_order)) + 1
+      : 0;
+    setEditing({
+      ...emptyRecord(Date.now()),
+      sort_order: nextSort,
+      manual: emptyManual(),
+    });
+  };
+
   const sorted = useMemo(
     () => [...items].sort((a, b) => a.sort_order - b.sort_order),
     [items],
@@ -207,14 +238,22 @@ export const Featured = () => {
     <div className="p-8" style={{ position: 'relative' }}>
       <AdminHeader
         title="Produits Phares"
-        subtitle="Mettez en avant les produits stratégiques avec une carte enrichie (specs, galerie, brochures). N'affecte pas les autres produits du catalogue."
+        subtitle="Mettez en avant les produits stratégiques (pivots, etc.) avec une carte enrichie (specs, galerie, brochures). N'affecte pas les autres produits du catalogue."
         actions={
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Ajouter un produit phare
-          </button>
+          <>
+            <button
+              onClick={createManual}
+              className="flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Créer un produit manuel
+            </button>
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Depuis le catalogue (Logicom)
+            </button>
+          </>
         }
       />
 
@@ -233,14 +272,22 @@ export const Featured = () => {
           <Star className="w-10 h-10 text-[#87A922] mx-auto mb-4" />
           <p className="text-white/70 text-lg mb-2">Aucun produit phare pour l'instant.</p>
           <p className="text-white/40 text-sm mb-6">
-            Cliquez sur "Ajouter un produit phare" pour mettre en avant un produit important sur la page catalogue.
+            Créez un produit manuel (ex: pivot 30 HA) ou mettez en avant un produit du catalogue Logicom.
           </p>
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="inline-flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Ajouter un produit phare
-          </button>
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={createManual}
+              className="inline-flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Créer un produit manuel
+            </button>
+            <button
+              onClick={() => setPickerOpen(true)}
+              className="inline-flex items-center gap-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white text-xs uppercase tracking-[0.15em] font-bold px-5 py-2.5 rounded-full transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Depuis le catalogue
+            </button>
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -536,10 +583,13 @@ const FeaturedEditor = ({
     ...record,
     tagline: { fr: '', en: '', ar: '', ...record.tagline },
     highlight: { fr: '', en: '', ar: '', ...record.highlight },
+    coverage: record.coverage ?? '',
     specs: record.specs ?? [],
     gallery: record.gallery ?? [],
     brochures: record.brochures ?? [],
+    manual: record.manual ?? null,
   }));
+  const isManual = !!draft.manual;
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState<'general' | 'specs' | 'gallery' | 'brochures'>(
     'general',
@@ -597,6 +647,23 @@ const FeaturedEditor = ({
     }
   };
 
+  const setManual = (patch: Partial<ManualProduct>) =>
+    setDraft((d) => ({ ...d, manual: { ...(d.manual ?? emptyManual()), ...patch } }));
+
+  const handleCoverFile = async (file: File | null) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const url = await uploadToImgBB(file);
+      setManual({ image: url });
+      toast.success('Image de couverture ajoutée');
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const removeGalleryImage = (i: number) =>
     setDraft((d) => ({ ...d, gallery: d.gallery.filter((_, idx) => idx !== i) }));
 
@@ -616,15 +683,22 @@ const FeaturedEditor = ({
       // existed on the server. New entries always come with sort_order set
       // by the caller and no updated_at.
       const isNew = !record.updated_at;
+      if (isManual && !draft.manual?.name.trim()) {
+        toast.error('Le nom du produit est requis.');
+        setSaving(false);
+        return;
+      }
       const body = JSON.stringify({
         product_id: draft.product_id,
         enabled: draft.enabled,
         sort_order: draft.sort_order,
         tagline: draft.tagline,
         highlight: draft.highlight,
+        coverage: draft.coverage,
         specs: draft.specs,
         gallery: draft.gallery,
         brochures: draft.brochures,
+        manual: draft.manual ?? undefined,
       });
       if (isNew) {
         await api('/admin/featured', { method: 'POST', body });
@@ -640,7 +714,8 @@ const FeaturedEditor = ({
     }
   };
 
-  const productName = record.product?.name ?? `Produit #${draft.product_id}`;
+  const productName =
+    record.product?.name ?? (isManual ? draft.manual?.name || 'Nouveau produit manuel' : `Produit #${draft.product_id}`);
 
   return (
     <div
@@ -654,9 +729,9 @@ const FeaturedEditor = ({
         <header className="flex items-start justify-between gap-4 px-6 py-5 border-b border-white/5">
           <div className="flex items-start gap-4 min-w-0">
             <div className="w-14 h-14 rounded-xl bg-black/40 overflow-hidden flex-shrink-0">
-              {productThumb(record.product) ? (
+              {productThumb(record.product) || draft.manual?.image ? (
                 <img
-                  src={productThumb(record.product)}
+                  src={productThumb(record.product) || draft.manual?.image}
                   alt=""
                   className="w-full h-full object-cover"
                 />
@@ -671,7 +746,7 @@ const FeaturedEditor = ({
                 {productName}
               </h2>
               <p className="text-white/40 text-xs font-mono">
-                SKU: {record.product?.sku ?? '—'} · ID: {draft.product_id}
+                {isManual ? 'Produit manuel' : `SKU: ${record.product?.sku ?? '—'}`} · ID: {draft.product_id}
               </p>
             </div>
           </div>
@@ -720,6 +795,115 @@ const FeaturedEditor = ({
                 />
                 <span className="text-white text-sm">Activer ce produit phare</span>
               </label>
+
+              {/* Manual product identity — only for standalone (non-Logicom) entries */}
+              {isManual && (
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-4">
+                  <div className="text-white/60 text-xs uppercase tracking-[0.18em] font-semibold">
+                    Produit manuel (non synchronisé avec Logicom)
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="w-24 h-24 rounded-xl bg-black/40 overflow-hidden flex-shrink-0 relative">
+                      {draft.manual?.image ? (
+                        <img src={draft.manual.image} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/20">
+                          <ImageIcon className="w-6 h-6" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <label
+                        className={`flex items-center justify-center gap-2 rounded-xl border-2 border-dashed py-3 cursor-pointer transition-colors text-sm ${
+                          uploading
+                            ? 'border-[#87A922]/50 bg-[#87A922]/10 text-white'
+                            : 'border-white/10 hover:border-[#87A922]/50 hover:bg-white/5 text-white/60 hover:text-white'
+                        }`}
+                      >
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleCoverFile(e.target.files?.[0] ?? null)}
+                          disabled={uploading}
+                        />
+                        {uploading ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Upload className="w-4 h-4" />
+                        )}
+                        Image de couverture
+                      </label>
+                      <input
+                        type="url"
+                        value={draft.manual?.image ?? ''}
+                        onChange={(e) => setManual({ image: e.target.value })}
+                        placeholder="Ou collez une URL d'image..."
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#87A922]"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-white/60 text-xs uppercase tracking-[0.15em] font-semibold block mb-1.5">
+                        Nom du produit *
+                      </label>
+                      <input
+                        value={draft.manual?.name ?? ''}
+                        onChange={(e) => setManual({ name: e.target.value })}
+                        placeholder="Pivot central 30 HA"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#87A922]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-white/60 text-xs uppercase tracking-[0.15em] font-semibold block mb-1.5">
+                        SKU / Référence
+                      </label>
+                      <input
+                        value={draft.manual?.sku ?? ''}
+                        onChange={(e) => setManual({ sku: e.target.value })}
+                        placeholder="PIVOT-30"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#87A922]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-white/60 text-xs uppercase tracking-[0.15em] font-semibold block mb-1.5">
+                        Catégorie
+                      </label>
+                      <input
+                        value={draft.manual?.category ?? ''}
+                        onChange={(e) => setManual({ category: e.target.value })}
+                        placeholder="Pivots Centraux"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#87A922]"
+                      />
+                    </div>
+                    <label className="flex items-center gap-3 cursor-pointer self-end pb-2">
+                      <input
+                        type="checkbox"
+                        checked={draft.manual?.inStock !== false}
+                        onChange={(e) => setManual({ inStock: e.target.checked })}
+                        className="w-4 h-4 accent-[#87A922]"
+                      />
+                      <span className="text-white text-sm">En stock</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="text-white/60 text-xs uppercase tracking-[0.15em] font-semibold block mb-1.5">
+                  Surface couverte (badge mis en avant)
+                </label>
+                <input
+                  value={draft.coverage ?? ''}
+                  onChange={(e) => setDraft((d) => ({ ...d, coverage: e.target.value }))}
+                  placeholder="30 HA"
+                  className="w-full md:w-48 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#87A922]"
+                />
+                <p className="text-white/30 text-xs mt-1">
+                  Affiché en grand sur la carte et la fiche détaillée (ex: « 30 HA »).
+                </p>
+              </div>
 
               <TranslatableField
                 label="Slogan court (affiché sous le titre)"

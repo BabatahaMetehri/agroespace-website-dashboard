@@ -215,6 +215,8 @@ app.post(
       const email = sanitiseStr(raw.email, 254);
       const company = sanitiseStr(raw.company, 150);
       const address = sanitiseStr(raw.address, 200);
+      const wilaya = sanitiseStr(raw.wilaya, 100);
+      const sprinkler = sanitiseStr(raw.sprinkler, 50);
       const message = sanitiseStr(raw.message, 2000);
       const product_id = sanitiseStr(String(raw.product_id ?? ""), 80);
       const product_sku = sanitiseStr(raw.product_sku, 80);
@@ -243,6 +245,8 @@ app.post(
         email,
         company,
         address,
+        wilaya,
+        sprinkler,
         message,
         product_id,
         product_sku,
@@ -1248,17 +1252,58 @@ const featuredKey = (productId: string | number) =>
 type Translatable = { fr: string; en?: string; ar?: string };
 type FeaturedSpec = { label: Translatable; value: Translatable };
 type FeaturedBrochure = { label: Translatable; url: string };
+// Standalone product data for featured entries NOT synced from Logicom — the
+// admin types these in directly. When present, hydration uses them instead of
+// looking up a synced wc:product.
+type ManualProduct = {
+  name: string;
+  sku: string;
+  image: string;
+  category: string;
+  inStock: boolean;
+};
 type FeaturedProduct = {
   product_id: number;
   enabled: boolean;
   sort_order: number;
   tagline: Translatable;
   highlight: Translatable;
+  /** Headline coverage badge, e.g. "30 HA" (plain text, shared across langs). */
+  coverage: string;
   specs: FeaturedSpec[];
   gallery: string[];
   brochures: FeaturedBrochure[];
+  /** Present for admin-authored products that don't exist in the Logicom sync. */
+  manual?: ManualProduct | null;
   updated_at: string;
 };
+
+function sanitizeManual(raw: any): ManualProduct | null {
+  if (!raw || typeof raw !== "object") return null;
+  const name = String(raw.name ?? "").trim().slice(0, 200);
+  if (!name) return null; // a manual product is meaningless without a name
+  return {
+    name,
+    sku: String(raw.sku ?? "").trim().slice(0, 100),
+    image: sanitizeFeaturedUrl(raw.image, 1000),
+    category: String(raw.category ?? "").trim().slice(0, 100),
+    inStock: raw.inStock !== false,
+  };
+}
+
+/** Build a wc-product-shaped object from inline manual data, for hydration. */
+function manualProductShape(id: number, m: ManualProduct): any {
+  return {
+    id,
+    name: m.name,
+    sku: m.sku,
+    status: "publish",
+    images: m.image ? [{ src: m.image }] : [],
+    image: m.image,
+    stock_status: m.inStock ? "instock" : "outofstock",
+    categories: m.category ? [{ id: 0, name: m.category }] : [],
+  };
+}
 
 function sanitizeTranslatable(raw: any, max = 1000): Translatable {
   return {
@@ -1286,6 +1331,8 @@ function sanitizeFeatured(body: any, productId: number): FeaturedProduct {
       : 0,
     tagline: sanitizeTranslatable(body?.tagline, 200),
     highlight: sanitizeTranslatable(body?.highlight, 4000),
+    coverage: String(body?.coverage ?? "").trim().slice(0, 40),
+    manual: sanitizeManual(body?.manual),
     specs: Array.isArray(body?.specs)
       ? body.specs.slice(0, 30).map((s: any) => ({
           label: sanitizeTranslatable(s?.label, 200),
@@ -1319,6 +1366,11 @@ app.get(`${PUBLIC}/featured`, async (c) => {
   );
   const hydrated = await Promise.all(
     enabled.map(async (f) => {
+      // Manual (admin-authored) products aren't in the Logicom sync — hydrate
+      // straight from their inline data.
+      if (f.manual) {
+        return { ...f, product: wcProductShape(manualProductShape(f.product_id, f.manual)) };
+      }
       const product = (await kv.get(k.product(f.product_id))) as any | null;
       if (!product) return null;
       if (PUBLIC_HIDDEN_STATUSES.has(String(product.status ?? "publish")))
@@ -1334,6 +1386,9 @@ app.get(`${ADMIN}/featured`, requireAdmin, async (c) => {
   items.sort((a, b) => Number(a?.sort_order ?? 0) - Number(b?.sort_order ?? 0));
   const hydrated = await Promise.all(
     items.map(async (f) => {
+      if (f.manual) {
+        return { ...f, product: wcProductShape(manualProductShape(f.product_id, f.manual)) };
+      }
       const product = (await kv.get(k.product(f.product_id))) as any | null;
       return { ...f, product: product ? wcProductShape(product) : null };
     }),
@@ -1351,12 +1406,17 @@ app.post(`${ADMIN}/featured`, requireAdmin, async (c) => {
         400,
       );
     }
-    const product = await kv.get(k.product(productId));
-    if (!product) {
-      return c.json(
-        { code: "rest_product_not_found", message: "Product does not exist" },
-        404,
-      );
+    const manual = sanitizeManual(body?.manual);
+    // Logicom-synced entries must reference an existing product; manual
+    // (admin-authored) entries carry their own product data instead.
+    if (!manual) {
+      const product = await kv.get(k.product(productId));
+      if (!product) {
+        return c.json(
+          { code: "rest_product_not_found", message: "Product does not exist" },
+          404,
+        );
+      }
     }
     const config = sanitizeFeatured(body, productId);
     await kv.set(featuredKey(productId), config);

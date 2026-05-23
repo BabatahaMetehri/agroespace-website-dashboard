@@ -7,6 +7,7 @@ import {
   FeaturedProductCard,
   type FeaturedRecord,
 } from "../components/FeaturedProductCard";
+import { FeaturedDetailModal } from "../components/FeaturedDetailModal";
 import { FUNCTIONS_BASE, FUNCTIONS_HEADERS } from "../admin/auth/supabase";
 
 type WcProduct = {
@@ -65,6 +66,7 @@ export const Catalog = () => {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState<string>("Tous");
   const [quoteFor, setQuoteFor] = useState<Product | null>(null);
+  const [featuredOpen, setFeaturedOpen] = useState<FeaturedRecord | null>(null);
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 24;
 
@@ -212,31 +214,14 @@ export const Catalog = () => {
                 {t("catalog.featured.section.hint", "Sélection AGROESPACE")}
               </span>
             </div>
-            <div className="grid grid-cols-1 gap-6">
-              {featured.map((rec) => {
-                const fp = rec.product;
-                // Build a Product-shape object for the QuoteModal so existing
-                // contact flow keeps working without changes.
-                const productForQuote: Product = {
-                  id: rec.product_id,
-                  sku: fp?.sku ?? `SKU-${rec.product_id}`,
-                  title: fp?.name ?? `Produit #${rec.product_id}`,
-                  category: fp?.categories?.[0]?.name ?? "Produits",
-                  image:
-                    fp?.images?.[0]?.src ||
-                    (fp as any)?.image ||
-                    FALLBACK_IMAGE,
-                  inStock: fp?.stock_status !== "outofstock",
-                  price: null,
-                };
-                return (
-                  <FeaturedProductCard
-                    key={rec.product_id}
-                    record={rec}
-                    onQuote={() => setQuoteFor(productForQuote)}
-                  />
-                );
-              })}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              {featured.map((rec) => (
+                <FeaturedProductCard
+                  key={rec.product_id}
+                  record={rec}
+                  onOpen={() => setFeaturedOpen(rec)}
+                />
+              ))}
             </div>
           </section>
         )}
@@ -438,6 +423,13 @@ export const Catalog = () => {
         onClose={() => setQuoteFor(null)}
         product={quoteFor ?? { id: 0, title: "" }}
       />
+
+      {featuredOpen && (
+        <FeaturedDetailModal
+          record={featuredOpen}
+          onClose={() => setFeaturedOpen(null)}
+        />
+      )}
     </div>
   );
 };

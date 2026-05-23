@@ -18,6 +18,8 @@ type Quote = {
   email?: string;
   company?: string;
   address?: string;
+  wilaya?: string;
+  sprinkler?: string;
   message?: string;
   created_at: string;
   status?: QuoteStatus;
@@ -338,6 +340,13 @@ const QuoteDrawer = ({
               <div className="text-white">{quote.name ?? '—'}</div>
               {quote.company && <div className="text-white/60">{quote.company}</div>}
               {quote.address && <div className="text-white/60">📍 {quote.address}</div>}
+              {quote.wilaya && <div className="text-white/60">🗺️ {quote.wilaya}</div>}
+              {quote.sprinkler && (
+                <div className="flex items-center gap-2 text-white/80 pt-1">
+                  <span className="text-white/40 text-xs uppercase tracking-[0.15em]">Asperseur :</span>
+                  <span className="font-medium">{quote.sprinkler}</span>
+                </div>
+              )}
               {quote.phone && (
                 <div className="flex items-center gap-2 text-white/80">
                   <Phone className="w-4 h-4 text-[#87A922]" /> {quote.phone}
