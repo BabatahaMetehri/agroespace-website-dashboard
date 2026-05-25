@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import useEmblaCarousel from 'embla-carousel-react';
 import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { useI18n } from '../../i18n/I18nProvider';
 
 export const BlogGallery = ({ images }: { images: string[] }) => {
+  const { t } = useI18n();
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: 'center' });
   const [selected, setSelected] = useState(0);
   const [lightbox, setLightbox] = useState<number | null>(null);
@@ -25,7 +27,7 @@ export const BlogGallery = ({ images }: { images: string[] }) => {
   return (
     <section className="my-12">
       <div className="text-xs uppercase tracking-[0.18em] text-[#87A922] font-semibold mb-4">
-        Galerie
+        {t('blog.gallery')}
       </div>
 
       <div className="relative">

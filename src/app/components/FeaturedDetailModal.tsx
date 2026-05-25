@@ -82,11 +82,11 @@ export const FeaturedDetailModal = ({
     const valid: File[] = [];
     for (const f of incoming) {
       if (!ALLOWED_DOC_TYPES.includes(f.type)) {
-        toast.error(`Format non supporté : ${f.name}`, { description: 'PDF, JPG, PNG ou WEBP.' });
+        toast.error(`${t('toast.file.badtype')} : ${f.name}`, { description: t('toast.file.badtype.desc') });
         continue;
       }
       if (f.size > MAX_DOC_BYTES) {
-        toast.error(`Fichier trop volumineux : ${f.name}`, { description: 'Max 8 Mo par fichier.' });
+        toast.error(`${t('toast.file.toobig')} : ${f.name}`, { description: t('toast.file.toobig.desc') });
         continue;
       }
       valid.push(f);
@@ -108,7 +108,7 @@ export const FeaturedDetailModal = ({
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accepted) {
-      toast.error('Veuillez accepter les conditions.');
+      toast.error(t('toast.accept'));
       return;
     }
     const form = new FormData(e.currentTarget);
@@ -127,13 +127,13 @@ export const FeaturedDetailModal = ({
         try {
           documents = await uploadDocuments(files, headers);
           if (documents.length < files.length) {
-            toast.error('Certains documents n\'ont pas pu être envoyés', {
-              description: 'La demande continue avec les fichiers réussis.',
+            toast.error(t('toast.upload.partial'), {
+              description: t('toast.upload.partial.desc'),
             });
           }
         } catch {
-          toast.error('Échec du téléversement des documents', {
-            description: 'La demande est envoyée sans les fichiers.',
+          toast.error(t('toast.upload.failed'), {
+            description: t('toast.upload.failed.desc'),
           });
         }
       }
@@ -163,7 +163,7 @@ export const FeaturedDetailModal = ({
         coverage ? ' (' + coverage + ')' : ''
       }%0AQuantité : ${quantity}%0ANom : ${payload.name}%0ATéléphone : ${payload.phone}%0AAdresse : ${payload.address ?? '-'}%0AWilaya : ${payload.wilaya ?? '-'}%0AAsperseur : ${payload.sprinkler || '-'}`;
       window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`, '_blank');
-      toast.success('Demande envoyée', { description: 'Nous vous répondons dans la journée.' });
+      toast.success(t('toast.sent.title'), { description: t('toast.sent.desc') });
       onClose();
     } finally {
       setSubmitting(false);
@@ -192,7 +192,7 @@ export const FeaturedDetailModal = ({
           <button
             onClick={onClose}
             className="absolute top-4 right-4 z-20 w-10 h-10 bg-black/40 hover:bg-black/60 rounded-full flex items-center justify-center text-white/80 hover:text-white"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -319,7 +319,7 @@ export const FeaturedDetailModal = ({
                   <span className="text-[#87A922] uppercase tracking-[0.2em] text-xs font-semibold mb-1 block">
                     {t('catalog.quote', 'Demander un devis')}
                   </span>
-                  <h3 className="text-xl font-light mb-5">Demande de proforma</h3>
+                  <h3 className="text-xl font-light mb-5">{t('proforma.title')}</h3>
 
                   <form onSubmit={handleSubmit} className="space-y-3">
                     <input
@@ -328,7 +328,7 @@ export const FeaturedDetailModal = ({
                       minLength={2}
                       maxLength={100}
                       autoComplete="name"
-                      placeholder="Nom complet *"
+                      placeholder={`${t('form.name')} *`}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                     />
                     <input
@@ -338,27 +338,27 @@ export const FeaturedDetailModal = ({
                       maxLength={30}
                       pattern="[+\d][\d\s().\-]{5,24}"
                       autoComplete="tel"
-                      placeholder="Téléphone *"
+                      placeholder={`${t('form.phone')} *`}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                     />
                     <input
                       name="address"
                       required
                       maxLength={200}
-                      placeholder="Adresse *"
+                      placeholder={`${t('form.address')} *`}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                     />
                     <input
                       name="wilaya"
                       required
                       maxLength={100}
-                      placeholder="Wilaya *"
+                      placeholder={`${t('form.wilaya')} *`}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                     />
 
                     {/* Quantity */}
                     <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
-                      <span className="text-white/60 text-sm">Quantité</span>
+                      <span className="text-white/60 text-sm">{t('form.quantity')}</span>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -393,7 +393,7 @@ export const FeaturedDetailModal = ({
                     {/* Sprinkler brand picker */}
                     <div className="pt-1">
                       <label className="text-white/50 text-[11px] uppercase tracking-[0.15em] font-semibold block mb-2">
-                        Asperseur
+                        {t('form.sprinkler')}
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         {sprinklers.map((s) => {
@@ -433,14 +433,14 @@ export const FeaturedDetailModal = ({
                       name="message"
                       rows={3}
                       maxLength={2000}
-                      placeholder="Description / notes (surface, débit, contraintes du terrain…)"
+                      placeholder={t('form.notes_pivot')}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] resize-none"
                     />
 
                     {/* Optional legal documents (private upload) */}
                     <div>
                       <label className="text-white/50 text-[11px] uppercase tracking-[0.15em] font-semibold block mb-2">
-                        Documents légaux (RC, NIF, NIS…) — facultatif
+                        {t('form.docs.label')}
                       </label>
                       <label
                         className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-white/15 hover:border-[#87A922]/50 hover:bg-white/5 cursor-pointer py-5 text-center transition-colors"
@@ -453,7 +453,7 @@ export const FeaturedDetailModal = ({
                           onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }}
                         />
                         <Upload className="w-5 h-5 text-white/50" />
-                        <span className="text-white/60 text-xs">PDF ou image · 8 Mo max par fichier</span>
+                        <span className="text-white/60 text-xs">{t('form.docs.hint')}</span>
                       </label>
 
                       {files.length > 0 && (
@@ -472,7 +472,7 @@ export const FeaturedDetailModal = ({
                                 type="button"
                                 onClick={() => removeFile(i)}
                                 className="text-white/40 hover:text-red-300 flex-shrink-0"
-                                aria-label="Retirer"
+                                aria-label={t('common.remove')}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -483,8 +483,7 @@ export const FeaturedDetailModal = ({
 
                       <p className="flex items-start gap-1.5 text-white/35 text-[11px] mt-2 leading-relaxed">
                         <Lock className="w-3 h-3 mt-0.5 flex-shrink-0 text-[#87A922]" />
-                        Vos documents sont stockés de manière sécurisée et privée — visibles uniquement
-                        par notre équipe commerciale, jamais publiés.
+                        {t('form.docs.privacy')}
                       </p>
                     </div>
 
@@ -499,13 +498,13 @@ export const FeaturedDetailModal = ({
                         <Check className="w-3 h-3 text-[#87A922] opacity-0 peer-checked:opacity-100 transition-opacity" />
                       </span>
                       <span className="text-white/60 text-xs leading-relaxed">
-                        J'accepte les{' '}
+                        {t('consent.lead')}{' '}
                         <a href="/legal/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
-                          conditions générales
+                          {t('consent.terms')}
                         </a>{' '}
-                        et la{' '}
+                        {t('consent.and')}{' '}
                         <a href="/legal/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-white">
-                          politique de confidentialité
+                          {t('consent.privacy')}
                         </a>.
                       </span>
                     </label>
@@ -516,13 +515,13 @@ export const FeaturedDetailModal = ({
                       className="w-full bg-[#25D366] hover:bg-[#1fad53] text-white rounded-full px-6 py-3.5 font-bold uppercase tracking-[0.1em] text-sm transition-colors flex items-center justify-center gap-3 disabled:opacity-60"
                     >
                       {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                      {submitting ? 'Envoi…' : 'Envoyer la demande'}
+                      {submitting ? t('form.submitting') : t('form.submit.request')}
                     </button>
                     <a
                       href={`tel:+${WHATSAPP_NUMBER}`}
                       className="w-full flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full px-6 py-3 font-bold uppercase tracking-[0.1em] text-sm transition-colors"
                     >
-                      <Phone className="w-4 h-4" /> Appeler
+                      <Phone className="w-4 h-4" /> {t('form.call')}
                     </a>
                   </form>
                 </div>
@@ -544,7 +543,7 @@ export const FeaturedDetailModal = ({
           <button
             onClick={() => setActiveImage(null)}
             className="absolute top-6 right-6 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <X className="w-5 h-5" />
           </button>

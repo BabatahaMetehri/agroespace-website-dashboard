@@ -86,7 +86,7 @@ export const BlogDetail = () => {
     return (
       <div className="min-h-screen bg-[#0f2618] flex items-center justify-center text-white pt-24">
         <div className="text-center">
-          <p className="text-3xl font-light mb-6">Article introuvable.</p>
+          <p className="text-3xl font-light mb-6">{t('blog.detail.notfound')}</p>
           <Link to="/blog" className="underline">
             ← {t('blog.preview.cta')}
           </Link>
@@ -145,7 +145,7 @@ export const BlogDetail = () => {
     setDraftAuthor('');
     setDraftBody('');
     window.localStorage.setItem(STORAGE(article.slug).comments, JSON.stringify(updated));
-    toast.success('Commentaire publié');
+    toast.success(t('blog.comment.published'));
   };
 
   return (
@@ -185,7 +185,7 @@ export const BlogDetail = () => {
         {article.videos && article.videos.length > 0 && (
           <section className="my-12 space-y-6">
             <div className="text-xs uppercase tracking-[0.18em] text-[#87A922] font-semibold">
-              Vidéos
+              {t('blog.detail.videos')}
             </div>
             {article.videos.map((url, i) => (
               <VideoEmbed key={i} url={url} title={article.title[lang]} />
@@ -204,13 +204,13 @@ export const BlogDetail = () => {
             }`}
           >
             <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
-            {liked ? 'Aimé' : "J'aime"}
+            {liked ? t('blog.detail.liked') : t('blog.detail.like')}
           </button>
           <button
             onClick={onShare}
             className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold bg-white text-[#0f2618] border border-[#0f2618]/10 hover:bg-[#0f2618] hover:text-white hover:border-transparent transition-colors"
           >
-            <Share2 className="w-4 h-4" /> Partager
+            <Share2 className="w-4 h-4" /> {t('blog.detail.share')}
           </button>
           <a
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title[lang])}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
@@ -233,14 +233,14 @@ export const BlogDetail = () => {
         {/* Comments */}
         <section className="mt-16">
           <h2 className="text-2xl font-medium text-[#0f2618] mb-6 flex items-center gap-3">
-            <MessageCircle className="w-5 h-5" /> Commentaires ({comments.length})
+            <MessageCircle className="w-5 h-5" /> {t('blog.detail.comments')} ({comments.length})
           </h2>
 
           <form onSubmit={onSubmitComment} className="bg-white rounded-3xl p-6 md:p-8 border border-[#0f2618]/5 mb-8">
             <input
               value={draftAuthor}
               onChange={(e) => setDraftAuthor(e.target.value)}
-              placeholder="Votre nom"
+              placeholder={t('blog.comment.name')}
               className="w-full bg-[#f4f7f5] border border-transparent rounded-xl px-4 py-3 text-[#0f2618] focus:outline-none focus:border-[#87A922] mb-3"
               maxLength={80}
               required
@@ -249,7 +249,7 @@ export const BlogDetail = () => {
               value={draftBody}
               onChange={(e) => setDraftBody(e.target.value)}
               rows={3}
-              placeholder="Votre commentaire"
+              placeholder={t('blog.comment.body')}
               className="w-full bg-[#f4f7f5] border border-transparent rounded-xl px-4 py-3 text-[#0f2618] focus:outline-none focus:border-[#87A922] resize-none"
               maxLength={1000}
               required
@@ -258,13 +258,13 @@ export const BlogDetail = () => {
               type="submit"
               className="mt-4 inline-flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-sm font-bold uppercase tracking-[0.1em] px-6 py-3 rounded-full transition-colors"
             >
-              <Send className="w-4 h-4" /> Publier
+              <Send className="w-4 h-4" /> {t('blog.comment.publish')}
             </button>
           </form>
 
           <div className="space-y-5">
             {comments.length === 0 && (
-              <p className="text-gray-500 text-sm">Soyez le premier à commenter.</p>
+              <p className="text-gray-500 text-sm">{t('blog.comment.empty')}</p>
             )}
             {comments.map((c) => (
               <motion.div
@@ -288,7 +288,7 @@ export const BlogDetail = () => {
 
       {/* Suggested */}
       <section className="max-w-7xl mx-auto px-6 md:px-12 mt-24">
-        <h2 className="text-2xl md:text-3xl font-medium text-[#0f2618] mb-8">À lire ensuite</h2>
+        <h2 className="text-2xl md:text-3xl font-medium text-[#0f2618] mb-8">{t('blog.detail.next')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {suggested.map((s) => (
             <Link

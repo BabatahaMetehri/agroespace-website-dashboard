@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Send, Phone, Check } from 'lucide-react';
-import { Link } from 'react-router';
 import { toast } from 'sonner';
 import { projectId, publicAnonKey } from '../../../utils/supabase/info';
+import { useI18n } from '../i18n/I18nProvider';
 
 type Props = {
   open: boolean;
@@ -12,13 +12,14 @@ type Props = {
 };
 
 export const QuoteModal = ({ open, onClose, product }: Props) => {
+  const { t } = useI18n();
   const [submitting, setSubmitting] = useState(false);
   const [accepted, setAccepted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!accepted) {
-      toast.error('Veuillez accepter les conditions.');
+      toast.error(t('toast.accept'));
       return;
     }
     const form = new FormData(e.currentTarget);
@@ -58,7 +59,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
       product.sku ? ' (' + product.sku + ')' : ''
     }%0ANom : ${payload.name}%0AEntreprise : ${payload.company ?? '-'}%0ATéléphone : ${payload.phone}%0AAdresse : ${payload.address ?? '-'}%0AEmail : ${payload.email ?? '-'}%0A%0A${payload.message ?? ''}`;
     window.open(`https://wa.me/213670635013?text=${text}`, '_blank');
-    toast.success('Demande envoyée', { description: 'Nous vous répondons dans la journée.' });
+    toast.success(t('toast.sent.title'), { description: t('toast.sent.desc') });
     onClose();
   };
 
@@ -86,7 +87,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
             </button>
 
             <span className="text-[#87A922] uppercase tracking-[0.2em] text-xs font-semibold mb-3 block">
-              Demande de devis
+              {t('form.quote.title')}
             </span>
             <h3 className="text-3xl font-light mb-2">{product.title}</h3>
             {product.sku && <p className="text-white/40 text-xs font-mono mb-6">{product.sku}</p>}
@@ -99,7 +100,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   minLength={2}
                   maxLength={100}
                   autoComplete="name"
-                  placeholder="Nom complet"
+                  placeholder={t('form.name')}
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
                 <input
@@ -109,7 +110,7 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   maxLength={30}
                   pattern="[+\d][\d\s().\-]{5,24}"
                   autoComplete="tel"
-                  placeholder="Téléphone"
+                  placeholder={t('form.phone')}
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
               </div>
@@ -119,28 +120,28 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   type="email"
                   maxLength={254}
                   autoComplete="email"
-                  placeholder="Email"
+                  placeholder={t('form.email')}
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
                 <input
                   name="company"
                   maxLength={150}
                   autoComplete="organization"
-                  placeholder="Entreprise / ferme"
+                  placeholder={t('form.company')}
                   className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                 />
               </div>
               <input
                 name="address"
                 maxLength={200}
-                placeholder="Adresse / Wilaya"
+                placeholder={t('form.address_wilaya')}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
               />
               <textarea
                 name="message"
                 rows={3}
                 maxLength={2000}
-                placeholder="Surface, contraintes, calendrier..."
+                placeholder={t('form.message_project')}
                 className="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] resize-none"
               />
 
@@ -156,25 +157,24 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   <Check className="w-3 h-3 text-[#87A922] opacity-0 peer-checked:opacity-100 transition-opacity" />
                 </span>
                 <span className="text-white/60 text-sm leading-relaxed">
-                  J'accepte les{' '}
+                  {t('consent.lead')}{' '}
                   <a
                     href="/legal/terms"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:text-white"
                   >
-                    conditions générales
+                    {t('consent.terms')}
                   </a>{' '}
-                  et la{' '}
+                  {t('consent.and')}{' '}
                   <a
                     href="/legal/privacy"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="underline hover:text-white"
                   >
-                    politique de confidentialité
-                  </a>{' '}
-                  d'AGROESPACE.
+                    {t('consent.privacy')}
+                  </a>.
                 </span>
               </label>
 
@@ -185,13 +185,13 @@ export const QuoteModal = ({ open, onClose, product }: Props) => {
                   className="flex-1 bg-[#25D366] hover:bg-[#1fad53] text-white rounded-full px-6 py-4 font-bold uppercase tracking-[0.1em] text-sm transition-colors flex items-center justify-center gap-3 disabled:opacity-60"
                 >
                   <Send className="w-4 h-4" />
-                  Envoyer & ouvrir WhatsApp
+                  {t('form.submit.quote_wa')}
                 </button>
                 <a
                   href="tel:+213670635013"
                   className="flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-full px-6 py-4 font-bold uppercase tracking-[0.1em] text-sm transition-colors"
                 >
-                  <Phone className="w-4 h-4" /> Appeler
+                  <Phone className="w-4 h-4" /> {t('form.call')}
                 </a>
               </div>
             </form>
