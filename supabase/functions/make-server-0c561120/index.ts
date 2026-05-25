@@ -222,6 +222,25 @@ app.post(
       const product_id = sanitiseStr(String(raw.product_id ?? ""), 80);
       const product_sku = sanitiseStr(raw.product_sku, 80);
       const product_title = sanitiseStr(raw.product_title, 200);
+      const quantity = Math.min(
+        9999,
+        Math.max(1, Math.floor(Number(raw.quantity)) || 1),
+      );
+      // Attached legal documents live in the PRIVATE quote-docs bucket; we only
+      // persist their storage path + metadata (never a public URL). Admins fetch
+      // short-lived signed URLs on demand.
+      const documents = Array.isArray(raw.documents)
+        ? raw.documents.slice(0, 10).flatMap((d: any) => {
+            const path = sanitiseStr(d?.path, 300);
+            if (!path) return [];
+            return [{
+              path,
+              name: sanitiseStr(d?.name, 200),
+              type: sanitiseStr(d?.type, 100),
+              size: Math.max(0, Math.floor(Number(d?.size)) || 0),
+            }];
+          })
+        : [];
 
       if (!name || name.length < 2) {
         return c.json({ code: "invalid_name", message: "Name required" }, 400);
@@ -250,6 +269,8 @@ app.post(
         sprinkler,
         agency,
         message,
+        quantity,
+        documents,
         product_id,
         product_sku,
         product_title,
@@ -262,6 +283,69 @@ app.post(
         { code: "rest_invalid_payload", message: "Bad request" },
         400,
       );
+    }
+  },
+);
+
+// Proforma form's optional legal documents (RC, NIF, NIS...). To keep sending
+// fast, the browser uploads files DIRECTLY to the PRIVATE bucket using
+// short-lived signed upload tokens minted here (no base64 round-trip through
+// the function). Only admins can read the files later via signed download URLs.
+const ALLOWED_DOC_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+]);
+const MAX_DOC_BYTES = 8 * 1024 * 1024; // 8 MB per file
+
+app.post(
+  `${ROOT}/quote-documents/sign`,
+  rateLimit({ key: "quote-docs", max: 40, windowMs: 15 * 60_000, persist: true }),
+  async (c) => {
+    try {
+      const raw = await c.req.json();
+      const files = Array.isArray(raw?.files) ? raw.files.slice(0, 10) : [];
+      if (files.length === 0) {
+        return c.json({ code: "no_files", message: "No files" }, 400);
+      }
+      const sb = serviceStorageClient();
+      try {
+        await sb.storage.createBucket(PRIVATE_DOCS_BUCKET, { public: false });
+      } catch {
+        /* already exists */
+      }
+      const out: {
+        path: string; token: string; name: string; type: string; size: number;
+      }[] = [];
+      for (const f of files) {
+        const type = sanitiseStr(f?.type, 100);
+        const name = sanitiseStr(f?.name, 200) || "document";
+        const size = Math.max(0, Math.floor(Number(f?.size)) || 0);
+        if (!ALLOWED_DOC_TYPES.has(type)) {
+          return c.json(
+            { code: "bad_type", message: `Type non supporté: ${type}` },
+            400,
+          );
+        }
+        if (size <= 0 || size > MAX_DOC_BYTES) {
+          return c.json(
+            { code: "bad_size", message: "Fichier vide ou trop volumineux (max 8 Mo)" },
+            400,
+          );
+        }
+        const path = buildPrivateDocPath(name);
+        const { data, error } = await sb.storage
+          .from(PRIVATE_DOCS_BUCKET)
+          .createSignedUploadUrl(path);
+        if (error || !data?.token) {
+          return c.json({ code: "sign_failed", message: String(error?.message ?? "sign error") }, 400);
+        }
+        out.push({ path, token: data.token, name, type, size });
+      }
+      return c.json({ uploads: out }, 201);
+    } catch (e) {
+      return c.json({ code: "sign_failed", message: String(e) }, 400);
     }
   },
 );
@@ -388,8 +472,32 @@ app.patch(`${ADMIN}/quotes/:id`, requireAdmin, async (c) => {
 
 app.delete(`${ADMIN}/quotes/:id`, requireAdmin, async (c) => {
   const id = c.req.param("id");
+  const existing = (await kv.get(`quote:${id}`)) as any | null;
+  // Remove the private documents from storage alongside the quote record.
+  const paths = Array.isArray(existing?.documents)
+    ? existing.documents.map((d: any) => d?.path).filter(Boolean)
+    : [];
+  if (paths.length) await deletePrivateDocuments(paths).catch(() => {});
   await kv.del(`quote:${id}`);
   return c.json({ id, deleted: true });
+});
+
+// Admin-only: mint short-lived signed URLs for a quote's private documents.
+// The files are never publicly reachable; these links expire after 5 minutes.
+app.get(`${ADMIN}/quotes/:id/documents`, requireAdmin, async (c) => {
+  const id = c.req.param("id");
+  const quote = (await kv.get(`quote:${id}`)) as any | null;
+  if (!quote) return c.json({ code: "not_found", message: "Quote not found" }, 404);
+  const docs = Array.isArray(quote.documents) ? quote.documents : [];
+  const signed = await Promise.all(
+    docs.map(async (d: any) => ({
+      name: d?.name ?? "document",
+      type: d?.type ?? "",
+      size: d?.size ?? 0,
+      url: await signPrivateDocument(d?.path, 300),
+    })),
+  );
+  return c.json(signed.filter((d) => d.url));
 });
 
 // ─── Admin: blog ──────────────────────────────────────────────────────────
@@ -2216,6 +2324,47 @@ async function uploadFileToStorage(
 
   const { data } = sb.storage.from("media").getPublicUrl(path);
   return { url: data.publicUrl, path, size: body.byteLength };
+}
+
+// ─── Private documents (sensitive legal files attached to quotes) ───────────
+// Stored in a PRIVATE bucket — no public URL is ever issued. Admins read them
+// only through short-lived signed URLs minted on demand.
+const PRIVATE_DOCS_BUCKET = "quote-docs";
+
+function serviceStorageClient() {
+  const url = Deno.env.get("SUPABASE_URL") ?? "";
+  const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  if (!url || !key)
+    throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
+  return createClient(url, key);
+}
+
+function buildPrivateDocPath(filename: string): string {
+  const yyyy = new Date().getFullYear();
+  const mm = String(new Date().getMonth() + 1).padStart(2, "0");
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return `${yyyy}/${mm}/${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)}-${safeName}`;
+}
+
+async function signPrivateDocument(
+  path: string,
+  expiresIn: number,
+): Promise<string | null> {
+  if (!path || typeof path !== "string") return null;
+  const sb = serviceStorageClient();
+  const { data, error } = await sb.storage
+    .from(PRIVATE_DOCS_BUCKET)
+    .createSignedUrl(path, expiresIn);
+  if (error) return null;
+  return data?.signedUrl ?? null;
+}
+
+async function deletePrivateDocuments(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const sb = serviceStorageClient();
+  await sb.storage.from(PRIVATE_DOCS_BUCKET).remove(paths);
 }
 
 // ─── WooCommerce-mirror API ───────────────────────────────────────────────

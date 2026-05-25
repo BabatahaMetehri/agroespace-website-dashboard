@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Search, Phone, MoreHorizontal, X, MessageSquare, Mail, Plus, Trash2 } from 'lucide-react';
+import { Search, Phone, MoreHorizontal, X, MessageSquare, Mail, Plus, Trash2, FileText, Download, Lock, Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
 import { AdminHeader } from './AdminHeader';
@@ -21,11 +21,15 @@ type Quote = {
   wilaya?: string;
   sprinkler?: string;
   agency?: string;
+  quantity?: number;
+  documents?: { path: string; name: string; type: string; size: number }[];
   message?: string;
   created_at: string;
   status?: QuoteStatus;
   notes?: string | NoteEntry[];
 };
+
+type SignedDoc = { name: string; type: string; size: number; url: string };
 
 const statuses: { value: QuoteStatus; label: string; cls: string }[] = [
   { value: 'pending', label: 'En attente', cls: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25' },
@@ -294,9 +298,28 @@ const QuoteDrawer = ({
   onUpdate: (id: string, patch: Partial<Quote>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) => {
+  const { api } = useAdminAuth();
   const [notes, setNotes] = useState<NoteEntry[]>(() => parseNotes(quote.notes));
   const [draftNote, setDraftNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [docs, setDocs] = useState<SignedDoc[] | null>(null);
+  const [docsLoading, setDocsLoading] = useState(false);
+
+  // Fetch short-lived signed URLs for the private documents when the drawer
+  // opens. They expire after a few minutes, so we fetch on demand (not on list).
+  useEffect(() => {
+    if (!quote.documents?.length) {
+      setDocs([]);
+      return;
+    }
+    let cancelled = false;
+    setDocsLoading(true);
+    api<SignedDoc[]>(`/admin/quotes/${quote.id}/documents`)
+      .then((d) => { if (!cancelled) setDocs(Array.isArray(d) ? d : []); })
+      .catch(() => { if (!cancelled) setDocs([]); })
+      .finally(() => { if (!cancelled) setDocsLoading(false); });
+    return () => { cancelled = true; };
+  }, [quote.id, quote.documents, api]);
 
   const addNote = async () => {
     const body = draftNote.trim();
@@ -354,6 +377,11 @@ const QuoteDrawer = ({
                   <span className="font-medium">{quote.sprinkler}</span>
                 </div>
               )}
+              {quote.quantity != null && quote.quantity > 1 && (
+                <div className="flex items-center gap-2 text-white/80">
+                  <Package className="w-4 h-4 text-[#87A922]" /> Quantité : <span className="font-medium">{quote.quantity}</span>
+                </div>
+              )}
               {quote.phone && (
                 <div className="flex items-center gap-2 text-white/80">
                   <Phone className="w-4 h-4 text-[#87A922]" /> {quote.phone}
@@ -369,10 +397,47 @@ const QuoteDrawer = ({
 
           {quote.message && (
             <section>
-              <h3 className="text-xs uppercase tracking-[0.15em] text-white/40 mb-3">Message</h3>
+              <h3 className="text-xs uppercase tracking-[0.15em] text-white/40 mb-3">Message / notes</h3>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-4 text-sm text-white/80 whitespace-pre-line">
                 {quote.message}
               </div>
+            </section>
+          )}
+
+          {!!quote.documents?.length && (
+            <section>
+              <h3 className="flex items-center gap-2 text-xs uppercase tracking-[0.15em] text-white/40 mb-3">
+                <Lock className="w-3.5 h-3.5 text-[#87A922]" /> Documents légaux ({quote.documents.length})
+              </h3>
+              {docsLoading ? (
+                <div className="flex items-center gap-2 text-white/40 text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Génération des liens sécurisés…
+                </div>
+              ) : docs && docs.length > 0 ? (
+                <div className="space-y-2">
+                  {docs.map((d, i) => (
+                    <a
+                      key={i}
+                      href={d.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-3 bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 rounded-xl px-4 py-3 transition-colors group"
+                    >
+                      <FileText className="w-4 h-4 text-[#87A922] flex-shrink-0" />
+                      <span className="text-white/80 text-sm truncate flex-1">{d.name}</span>
+                      {d.size > 0 && (
+                        <span className="text-white/30 text-[10px] flex-shrink-0">
+                          {(d.size / 1024 / 1024).toFixed(1)} Mo
+                        </span>
+                      )}
+                      <Download className="w-4 h-4 text-white/40 group-hover:text-white flex-shrink-0" />
+                    </a>
+                  ))}
+                  <p className="text-white/30 text-[11px]">Liens valables 5 minutes — fichiers privés.</p>
+                </div>
+              ) : (
+                <p className="text-white/30 text-xs italic">Impossible de charger les documents.</p>
+              )}
             </section>
           )}
 

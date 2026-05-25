@@ -20,3 +20,12 @@ export const supabase = createClient(SUPABASE_URL, publicAnonKey, {
     storageKey: 'agroespace.admin.auth',
   },
 });
+
+/**
+ * Session-less client for *public* visitors (no admin auth). Used to upload
+ * proforma documents straight to Storage via signed upload tokens. Kept
+ * separate from `supabase` so it never touches the admin session.
+ */
+export const supabasePublic = createClient(SUPABASE_URL, publicAnonKey, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});

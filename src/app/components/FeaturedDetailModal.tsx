@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Download, FileText, Send, Phone, Check, Star } from 'lucide-react';
+import {
+  X, Download, FileText, Send, Phone, Check, Star,
+  Upload, Loader2, Paperclip, Trash2, Lock, Minus, Plus,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { useI18n } from '../i18n/I18nProvider';
-import { projectId, publicAnonKey } from '../../../utils/supabase/info';
+import { publicAnonKey } from '../../../utils/supabase/info';
+import { FUNCTIONS_BASE, supabasePublic } from '../admin/auth/supabase';
 import { sprinklers, sprinklerById } from '../data/sprinklers';
 import type { FeaturedRecord } from './FeaturedProductCard';
 
@@ -13,11 +17,49 @@ const FALLBACK_IMAGE =
   'https://i.ibb.co/pvjVWRfp/youre-an-expert-designer-create-a-placeh-IM5r1rwm-Wl-Os-Ut-NZCKXG9w-q-We-PUN3x-SZWUFCEKo7rq5-A-cover.jpg';
 
 const WHATSAPP_NUMBER = '213670635013';
+const QUOTE_DOCS_BUCKET = 'quote-docs';
+const ALLOWED_DOC_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+const MAX_DOC_BYTES = 8 * 1024 * 1024;
+const MAX_DOCS = 10;
+
+type StoredDoc = { path: string; name: string; type: string; size: number };
 
 const pick = (t: Translatable | undefined, lang: 'fr' | 'en' | 'ar'): string => {
   if (!t) return '';
   return (t[lang] || t.fr || t.en || t.ar || '').trim();
 };
+
+/**
+ * Upload the selected files straight to the private Storage bucket using
+ * short-lived signed upload tokens minted by the edge function. Uploads run in
+ * parallel and send raw binary (no base64), so it stays fast even on mobile.
+ * Returns the stored document references to attach to the quote.
+ */
+async function uploadDocuments(
+  files: File[],
+  headers: Record<string, string>,
+): Promise<StoredDoc[]> {
+  const signRes = await fetch(`${FUNCTIONS_BASE}/quote-documents/sign`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      files: files.map((f) => ({ name: f.name, type: f.type, size: f.size })),
+    }),
+  });
+  if (!signRes.ok) throw new Error('sign failed');
+  const { uploads } = await signRes.json();
+  if (!Array.isArray(uploads)) throw new Error('bad sign response');
+
+  const results = await Promise.all(
+    uploads.map(async (u: any, i: number) => {
+      const { error } = await supabasePublic.storage
+        .from(QUOTE_DOCS_BUCKET)
+        .uploadToSignedUrl(u.path, u.token, files[i], { contentType: files[i].type });
+      return error ? null : { path: u.path, name: u.name, type: u.type, size: u.size };
+    }),
+  );
+  return results.filter(Boolean) as StoredDoc[];
+}
 
 export const FeaturedDetailModal = ({
   record,
@@ -29,8 +71,29 @@ export const FeaturedDetailModal = ({
   const { t, lang } = useI18n();
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [sprinkler, setSprinkler] = useState<string>('');
+  const [quantity, setQuantity] = useState(1);
+  const [files, setFiles] = useState<File[]>([]);
   const [accepted, setAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const addFiles = (list: FileList | null) => {
+    if (!list) return;
+    const incoming = Array.from(list);
+    const valid: File[] = [];
+    for (const f of incoming) {
+      if (!ALLOWED_DOC_TYPES.includes(f.type)) {
+        toast.error(`Format non supporté : ${f.name}`, { description: 'PDF, JPG, PNG ou WEBP.' });
+        continue;
+      }
+      if (f.size > MAX_DOC_BYTES) {
+        toast.error(`Fichier trop volumineux : ${f.name}`, { description: 'Max 8 Mo par fichier.' });
+        continue;
+      }
+      valid.push(f);
+    }
+    setFiles((prev) => [...prev, ...valid].slice(0, MAX_DOCS));
+  };
+  const removeFile = (i: number) => setFiles((prev) => prev.filter((_, idx) => idx !== i));
 
   const product = record.product;
   const productName = product?.name ?? `Produit #${record.product_id}`;
@@ -50,41 +113,61 @@ export const FeaturedDetailModal = ({
     }
     const form = new FormData(e.currentTarget);
     const brand = sprinklerById(sprinkler);
-    const payload = {
-      product_id: record.product_id,
-      product_sku: sku,
-      product_title: productName,
-      name: form.get('name'),
-      phone: form.get('phone'),
-      address: form.get('address'),
-      wilaya: form.get('wilaya'),
-      sprinkler: brand?.name ?? '',
-      created_at: new Date().toISOString(),
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${publicAnonKey}`,
     };
 
     setSubmitting(true);
     try {
-      await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-0c561120/quotes`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-          body: JSON.stringify(payload),
-        },
-      ).catch(() => null);
+      // 1) Upload any attached legal documents straight to the PRIVATE bucket
+      //    first, so the quote stores only their storage references.
+      let documents: StoredDoc[] = [];
+      if (files.length) {
+        try {
+          documents = await uploadDocuments(files, headers);
+          if (documents.length < files.length) {
+            toast.error('Certains documents n\'ont pas pu être envoyés', {
+              description: 'La demande continue avec les fichiers réussis.',
+            });
+          }
+        } catch {
+          toast.error('Échec du téléversement des documents', {
+            description: 'La demande est envoyée sans les fichiers.',
+          });
+        }
+      }
+
+      const payload = {
+        product_id: record.product_id,
+        product_sku: sku,
+        product_title: productName,
+        name: form.get('name'),
+        phone: form.get('phone'),
+        address: form.get('address'),
+        wilaya: form.get('wilaya'),
+        sprinkler: brand?.name ?? '',
+        quantity,
+        message: form.get('message') ?? '',
+        documents,
+      };
+
+      // 2) Save the quote so it lands in "Devis en attente".
+      await fetch(`${FUNCTIONS_BASE}/quotes`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      }).catch(() => null);
+
+      const text = `Bonjour AGROESPACE,%0A%0ADemande de proforma :%0AProduit : ${productName}${
+        coverage ? ' (' + coverage + ')' : ''
+      }%0AQuantité : ${quantity}%0ANom : ${payload.name}%0ATéléphone : ${payload.phone}%0AAdresse : ${payload.address ?? '-'}%0AWilaya : ${payload.wilaya ?? '-'}%0AAsperseur : ${payload.sprinkler || '-'}`;
+      window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`, '_blank');
+      toast.success('Demande envoyée', { description: 'Nous vous répondons dans la journée.' });
+      onClose();
     } finally {
       setSubmitting(false);
     }
-
-    const text = `Bonjour AGROESPACE,%0A%0ADemande de proforma :%0AProduit : ${productName}${
-      coverage ? ' (' + coverage + ')' : ''
-    }%0ANom : ${payload.name}%0ATéléphone : ${payload.phone}%0AAdresse : ${payload.address ?? '-'}%0AWilaya : ${payload.wilaya ?? '-'}%0AAsperseur : ${payload.sprinkler || '-'}`;
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${text}`, '_blank');
-    toast.success('Demande envoyée', { description: 'Nous vous répondons dans la journée.' });
-    onClose();
   };
 
   const specs = record.specs
@@ -273,6 +356,40 @@ export const FeaturedDetailModal = ({
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
                     />
 
+                    {/* Quantity */}
+                    <div className="flex items-center justify-between gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-2">
+                      <span className="text-white/60 text-sm">Quantité</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white disabled:opacity-40"
+                          disabled={quantity <= 1}
+                          aria-label="Diminuer"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={9999}
+                          value={quantity}
+                          onChange={(e) =>
+                            setQuantity(Math.max(1, Math.min(9999, Number(e.target.value) || 1)))
+                          }
+                          className="w-14 bg-transparent text-center text-white font-medium focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuantity((q) => Math.min(9999, q + 1))}
+                          className="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white"
+                          aria-label="Augmenter"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Sprinkler brand picker */}
                     <div className="pt-1">
                       <label className="text-white/50 text-[11px] uppercase tracking-[0.15em] font-semibold block mb-2">
@@ -311,6 +428,66 @@ export const FeaturedDetailModal = ({
                       </div>
                     </div>
 
+                    {/* Description / notes */}
+                    <textarea
+                      name="message"
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Description / notes (surface, débit, contraintes du terrain…)"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] resize-none"
+                    />
+
+                    {/* Optional legal documents (private upload) */}
+                    <div>
+                      <label className="text-white/50 text-[11px] uppercase tracking-[0.15em] font-semibold block mb-2">
+                        Documents légaux (RC, NIF, NIS…) — facultatif
+                      </label>
+                      <label
+                        className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-white/15 hover:border-[#87A922]/50 hover:bg-white/5 cursor-pointer py-5 text-center transition-colors"
+                      >
+                        <input
+                          type="file"
+                          accept=".pdf,image/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = ''; }}
+                        />
+                        <Upload className="w-5 h-5 text-white/50" />
+                        <span className="text-white/60 text-xs">PDF ou image · 8 Mo max par fichier</span>
+                      </label>
+
+                      {files.length > 0 && (
+                        <ul className="mt-2 space-y-1.5">
+                          {files.map((f, i) => (
+                            <li
+                              key={`${f.name}-${i}`}
+                              className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-3 py-2"
+                            >
+                              <Paperclip className="w-3.5 h-3.5 text-[#87A922] flex-shrink-0" />
+                              <span className="text-white/80 text-xs truncate flex-1">{f.name}</span>
+                              <span className="text-white/30 text-[10px] flex-shrink-0">
+                                {(f.size / 1024 / 1024).toFixed(1)} Mo
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(i)}
+                                className="text-white/40 hover:text-red-300 flex-shrink-0"
+                                aria-label="Retirer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      <p className="flex items-start gap-1.5 text-white/35 text-[11px] mt-2 leading-relaxed">
+                        <Lock className="w-3 h-3 mt-0.5 flex-shrink-0 text-[#87A922]" />
+                        Vos documents sont stockés de manière sécurisée et privée — visibles uniquement
+                        par notre équipe commerciale, jamais publiés.
+                      </p>
+                    </div>
+
                     <label className="flex items-start gap-3 cursor-pointer py-1">
                       <span className="mt-0.5 relative flex items-center justify-center w-5 h-5 rounded border border-white/30 bg-transparent flex-shrink-0">
                         <input
@@ -338,8 +515,8 @@ export const FeaturedDetailModal = ({
                       disabled={submitting || !accepted}
                       className="w-full bg-[#25D366] hover:bg-[#1fad53] text-white rounded-full px-6 py-3.5 font-bold uppercase tracking-[0.1em] text-sm transition-colors flex items-center justify-center gap-3 disabled:opacity-60"
                     >
-                      <Send className="w-4 h-4" />
-                      Envoyer la demande
+                      {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                      {submitting ? 'Envoi…' : 'Envoyer la demande'}
                     </button>
                     <a
                       href={`tel:+${WHATSAPP_NUMBER}`}

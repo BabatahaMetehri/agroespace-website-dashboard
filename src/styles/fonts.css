@@ -1,0 +1,28 @@
+/* ── Arabic typography ────────────────────────────────────────────────────
+   Scoped to `html[lang="ar"]` (set by the i18n provider) so French/English
+   pages are completely unaffected. IBM Plex Sans Arabic for all UI text; the
+   decorative `.font-serif` accents fall back to Amiri (an elegant Naskh) since
+   Arabic script has no oblique/italic form. */
+
+html[lang="ar"],
+html[lang="ar"] body,
+html[lang="ar"] button,
+html[lang="ar"] input,
+html[lang="ar"] textarea,
+html[lang="ar"] select,
+html[lang="ar"] .font-sans {
+  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* Decorative serif accents → elegant Naskh instead of a Latin serif. */
+html[lang="ar"] .font-serif {
+  font-family: 'Amiri', 'IBM Plex Sans Arabic', serif;
+}
+
+/* Arabic has no italics — neutralise so the browser doesn't synthesise a
+   distorted slanted glyph. */
+html[lang="ar"] .italic,
+html[lang="ar"] em,
+html[lang="ar"] i {
+  font-style: normal;
+}
