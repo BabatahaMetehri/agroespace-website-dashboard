@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { pickPresetDefaults } from './defaults';
-import type { BankPreset, FooterPreset, StampPreset, IdentityPreset } from './types';
+import { pickPresetDefaults, productComponents } from './defaults';
+import type { BankPreset, FooterPreset, StampPreset, IdentityPreset, ProductPreset } from './types';
 
 const bank = (id: number, isDefault?: boolean): BankPreset =>
   ({ id, label: `b${id}`, bankName: `Bank ${id}`, accountLine: `ACC-${id}`, isDefault });
@@ -43,5 +43,32 @@ describe('pickPresetDefaults', () => {
   it('leaves banks undefined when none are flagged (so the empty draft wins)', () => {
     const d = pickPresetDefaults({ bank: [bank(1), bank(2)], footer: [], stamp: [], identity: [] });
     expect(d.banks).toBeUndefined();
+  });
+});
+
+describe('productComponents', () => {
+  it('returns the bundle components when present', () => {
+    const p: ProductPreset = {
+      id: 1, label: 'Forage 80 CV',
+      components: [
+        { ref: '', designationHtml: 'Pompe', um: 'U', qty: 1, puHT: 2159400 },
+        { ref: '', designationHtml: 'Colonne montante', um: 'U', qty: 20 },
+      ],
+    };
+    expect(productComponents(p)).toHaveLength(2);
+    expect(productComponents(p)[1]).toMatchObject({ designationHtml: 'Colonne montante', qty: 20 });
+  });
+
+  it('adapts a legacy single-line preset into one component', () => {
+    const legacy: ProductPreset = {
+      id: 2, label: 'Vieux produit', ref: 'R1', designationHtml: 'Désignation', um: 'M', defaultPU: 500,
+    };
+    expect(productComponents(legacy)).toEqual([
+      { ref: 'R1', designationHtml: 'Désignation', um: 'M', qty: 1, puHT: 500 },
+    ]);
+  });
+
+  it('returns an empty list for an empty preset', () => {
+    expect(productComponents({ id: 3, label: 'x' })).toEqual([]);
   });
 });

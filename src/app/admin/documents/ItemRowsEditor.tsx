@@ -2,6 +2,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import type { ItemRow, ProductPreset } from './types';
 import { RichTextEditor } from './RichTextEditor';
 import { lineMontantHT, formatMoneyFr, lineTvaRate } from './lib/calc';
+import { productComponents } from './defaults';
 
 const emptyRow = (): ItemRow => ({ ref: '', designationHtml: '', um: 'U', qty: 1, puHT: 0, tvaRate: 0.19 });
 /** A row's TVA as a percentage (legacy rows without a rate default to 19). */
@@ -26,10 +27,17 @@ export function ItemRowsEditor({
   const addFromPreset = (id: number) => {
     const p = productPresets.find((pp) => pp.id === id);
     if (!p) return;
-    onChange([
-      ...items,
-      { ref: p.ref, designationHtml: p.designationHtml, um: p.um || 'U', qty: 1, puHT: p.defaultPU || 0, tvaRate: 0.19, label: p.label },
-    ]);
+    // A preset bundles one or more component lines — add them all at once.
+    const rows: ItemRow[] = productComponents(p).map((c) => ({
+      ref: c.ref ?? '',
+      designationHtml: c.designationHtml,
+      um: c.um || 'U',
+      qty: c.qty || 1,
+      puHT: c.puHT ?? 0,
+      tvaRate: 0.19,
+      label: p.label,
+    }));
+    if (rows.length) onChange([...items, ...rows]);
   };
 
   return (

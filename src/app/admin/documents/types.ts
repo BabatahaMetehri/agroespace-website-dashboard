@@ -123,8 +123,26 @@ export type PresetKind = 'bank' | 'footer' | 'product' | 'stamp' | 'identity';
 /** When true, the preset is auto-applied to every new document. */
 export interface BankPreset { id: number; label: string; bankName: string; accountLine: string; isDefault?: boolean; }
 export interface FooterPreset { id: number; label: string; html: string; isDefault?: boolean; }
+/** One line within a product preset. A preset bundles one or more of these. */
+export interface ProductComponent {
+  ref?: string;
+  designationHtml: string;
+  um: string;
+  qty: number;
+  /** Optional unit price — many bundle lines are priced as a whole on line 1. */
+  puHT?: number;
+}
+
 export interface ProductPreset {
-  id: number; label: string; ref: string; designationHtml: string; um: string; defaultPU: number;
+  id: number;
+  label: string;
+  /** The bundle's lines. New presets always use this. */
+  components?: ProductComponent[];
+  // ── Legacy single-line fields (older presets) — read-only fallback ──
+  ref?: string;
+  designationHtml?: string;
+  um?: string;
+  defaultPU?: number;
 }
 export interface StampPreset { id: number; label: string; imageUrl: string; isDefault?: boolean; }
 /** Company registration identifiers — these change occasionally, so they are presettable. */

@@ -3,10 +3,13 @@ import { X, Plus, Trash2, Save, Loader2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import type { DocApi } from './lib/docApi';
 import type {
-  PresetKind, BankPreset, FooterPreset, ProductPreset, StampPreset,
+  PresetKind, BankPreset, FooterPreset, ProductPreset, ProductComponent, StampPreset,
 } from './types';
 import { RichTextEditor } from './RichTextEditor';
 import { sanitizeRichHtml } from './lib/sanitizeHtml';
+import { productComponents } from './defaults';
+
+const emptyComponent = (): ProductComponent => ({ ref: '', designationHtml: '', um: 'U', qty: 1, puHT: 0 });
 
 const IMGBB_KEY = (import.meta as any).env?.VITE_IMGBB_KEY ?? '';
 
@@ -39,7 +42,15 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
 
   const load = async (kind: PresetKind) => {
     setLoading(true);
-    try { setRows(await docApi.listPresets<any>(kind)); }
+    try {
+      let data = await docApi.listPresets<any>(kind);
+      // Adapt legacy single-line product presets into the component model so the
+      // editor always works with a `components` array.
+      if (kind === 'product') {
+        data = data.map((p: ProductPreset) => ({ ...p, components: productComponents(p) }));
+      }
+      setRows(data);
+    }
     catch (e) { toast.error((e as Error).message); }
     finally { setLoading(false); }
   };
@@ -49,12 +60,26 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
     bank: { label: '', bankName: '', accountLine: '' },
     identity: { label: '', rc: '', artImp: '', nif: '', nis: '' },
     footer: { label: '', html: '' },
-    product: { label: '', ref: '', designationHtml: '', um: 'U', defaultPU: 0 },
+    product: { label: '', components: [emptyComponent()] },
     stamp: { label: '', imageUrl: '' },
   }[kind]);
 
   const addBlank = () => setRows([...rows, { ...blank(tab), _new: true }]);
   const patch = (i: number, p: any) => setRows(rows.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
+
+  // ── Product component helpers (operate on rows[i].components) ──
+  const patchComponent = (i: number, ci: number, p: Partial<ProductComponent>) =>
+    setRows(rows.map((r, idx) =>
+      idx === i ? { ...r, components: (r.components ?? []).map((c: ProductComponent, cj: number) => (cj === ci ? { ...c, ...p } : c)) } : r,
+    ));
+  const addComponent = (i: number) =>
+    setRows(rows.map((r, idx) => (idx === i ? { ...r, components: [...(r.components ?? []), emptyComponent()] } : r)));
+  const removeComponent = (i: number, ci: number) =>
+    setRows(rows.map((r, idx) => {
+      if (idx !== i) return r;
+      const next = (r.components ?? []).filter((_: ProductComponent, cj: number) => cj !== ci);
+      return { ...r, components: next.length ? next : [emptyComponent()] };
+    }));
 
   const save = async (i: number) => {
     const r = rows[i];
@@ -62,7 +87,17 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
     try {
       const body = { ...r };
       delete body._new;
-      if (tab === 'product') body.designationHtml = sanitizeRichHtml(body.designationHtml || '');
+      if (tab === 'product') {
+        body.components = (body.components ?? []).map((c: ProductComponent) => ({
+          ref: (c.ref ?? '').trim(),
+          designationHtml: sanitizeRichHtml(c.designationHtml || ''),
+          um: c.um || 'U',
+          qty: Number(c.qty) || 1,
+          puHT: Number(c.puHT) || 0,
+        }));
+        // Drop legacy single-line fields — components is now the source of truth.
+        delete body.ref; delete body.designationHtml; delete body.um; delete body.defaultPU;
+      }
       if (tab === 'footer') body.html = sanitizeRichHtml(body.html || '');
       if (r._new) await docApi.createPreset(tab, body);
       else await docApi.updatePreset(tab, r.id, body);
@@ -140,17 +175,40 @@ export function PresetManager({ docApi, onClose }: { docApi: DocApi; onClose: ()
                 )}
 
                 {tab === 'product' && (<>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div><label className={label}>Référence</label>
-                      <input className={field} value={r.ref} onChange={(e) => patch(i, { ref: e.target.value })} /></div>
-                    <div><label className={label}>UM</label>
-                      <input className={field} value={r.um} onChange={(e) => patch(i, { um: e.target.value })} /></div>
-                    <div><label className={label}>P.U H.T par défaut</label>
-                      <input type="number" step="0.01" className={field} value={r.defaultPU}
-                        onChange={(e) => patch(i, { defaultPU: Number(e.target.value) })} /></div>
-                  </div>
-                  <div><label className={label}>Désignation</label>
-                    <RichTextEditor value={r.designationHtml} onChange={(html) => patch(i, { designationHtml: html })} /></div>
+                  <p className="text-[11px] text-white/40">
+                    Un préréglage produit est un <b>ensemble</b> : ajoutez une ou plusieurs lignes
+                    (ex. pompe, armoire, colonne montante, câble…). Chaque ligne a sa propre quantité,
+                    son unité et un prix optionnel. À l'insertion, toutes les lignes sont ajoutées d'un coup.
+                  </p>
+                  {(r.components ?? []).map((c: ProductComponent, ci: number) => (
+                    <div key={ci} className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] text-white/40">Ligne {ci + 1}</span>
+                        <button type="button" onClick={() => removeComponent(i, ci)}
+                          className="text-red-300/70 hover:text-red-300" title="Supprimer la ligne">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div><label className={label}>Référence</label>
+                          <input className={field} value={c.ref ?? ''} onChange={(e) => patchComponent(i, ci, { ref: e.target.value })} /></div>
+                        <div><label className={label}>UM</label>
+                          <input className={field} value={c.um} onChange={(e) => patchComponent(i, ci, { um: e.target.value })} /></div>
+                        <div><label className={label}>Quantité</label>
+                          <input type="number" min={0} className={field} value={c.qty}
+                            onChange={(e) => patchComponent(i, ci, { qty: Number(e.target.value) })} /></div>
+                        <div><label className={label}>P.U H.T (optionnel)</label>
+                          <input type="number" min={0} step="0.01" className={field} value={c.puHT ?? 0}
+                            onChange={(e) => patchComponent(i, ci, { puHT: Number(e.target.value) })} /></div>
+                      </div>
+                      <div><label className={label}>Désignation</label>
+                        <RichTextEditor value={c.designationHtml} onChange={(html) => patchComponent(i, ci, { designationHtml: html })} /></div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addComponent(i)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-dashed border-white/15 px-3 py-2 text-sm text-white/70 hover:bg-white/5 hover:text-white">
+                    <Plus className="w-4 h-4" /> Ajouter une ligne
+                  </button>
                 </>)}
 
                 {tab === 'stamp' && (

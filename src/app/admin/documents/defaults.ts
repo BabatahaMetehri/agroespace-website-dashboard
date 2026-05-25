@@ -1,7 +1,26 @@
 import type {
   CompanySettings, ClientInfo, DocumentDraft, BankInfo,
   BankPreset, FooterPreset, StampPreset, IdentityPreset,
+  ProductPreset, ProductComponent,
 } from './types';
+
+/**
+ * Return a product preset's component lines. New presets carry a `components`
+ * array; older single-line presets are adapted on the fly so both keep working.
+ */
+export function productComponents(p: ProductPreset): ProductComponent[] {
+  if (Array.isArray(p.components) && p.components.length) return p.components;
+  if (p.designationHtml || p.ref) {
+    return [{
+      ref: p.ref ?? '',
+      designationHtml: p.designationHtml ?? '',
+      um: p.um ?? 'U',
+      qty: 1,
+      puHT: p.defaultPU ?? 0,
+    }];
+  }
+  return [];
+}
 
 /**
  * Normalize a document's bank data to an array. Old records stored a single
