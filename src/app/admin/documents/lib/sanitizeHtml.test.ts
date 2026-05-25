@@ -16,10 +16,27 @@ describe('sanitizeRichHtml', () => {
     const html = '<b onclick="alert(1)">x</b><script>alert(2)</script>';
     expect(sanitizeRichHtml(html)).toBe('<b>x</b>');
   });
-  it('unwraps disallowed tags but keeps their text', () => {
+  it('unwraps a standalone disallowed wrapper but keeps its text', () => {
     expect(sanitizeRichHtml('<div><a href="x">link</a> text</div>')).toBe(
       'link text',
     );
+  });
+
+  it('converts contentEditable line <div>s into <br> breaks', () => {
+    // Chrome/Edge wrap each new line in a <div>; previously these were inlined
+    // and the text smooshed together on save.
+    expect(sanitizeRichHtml('a<div>b</div><div>c</div>')).toBe('a<br>b<br>c');
+    expect(sanitizeRichHtml('<div>a</div><div>b</div>')).toBe('a<br>b');
+  });
+
+  it('treats <p> paragraphs as line breaks too', () => {
+    expect(sanitizeRichHtml('<p>one</p><p>two</p>')).toBe('one<br>two');
+  });
+
+  it('keeps a single break between lines (blank line collapses, idempotent)', () => {
+    expect(sanitizeRichHtml('a<div><br></div><div>b</div>')).toBe('a<br>b');
+    // Re-sanitizing the result must not pile up extra breaks.
+    expect(sanitizeRichHtml('a<br>b<br>c')).toBe('a<br>b<br>c');
   });
   it('returns empty string for empty/nullish input', () => {
     expect(sanitizeRichHtml('')).toBe('');

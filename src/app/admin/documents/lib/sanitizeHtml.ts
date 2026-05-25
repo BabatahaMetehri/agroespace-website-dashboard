@@ -1,14 +1,34 @@
 const ALLOWED_TAGS = new Set([
-  'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'SPAN',
+  'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'UL', 'OL', 'LI', 'SPAN',
 ]);
+
+// Block tags that contentEditable inserts when the user presses Enter. We don't
+// keep them as-is — each becomes a <br> line break so multi-line text survives
+// sanitizing. (Keeping them inline like other disallowed tags used to smoosh
+// every line together on save.) The conversion is idempotent: once a <div> is
+// turned into <br>-separated text, re-sanitizing leaves it unchanged.
+const BLOCK_TAGS = new Set(['DIV', 'P']);
 
 const DROP_TAGS = new Set(['SCRIPT', 'STYLE', 'TEMPLATE', 'NOSCRIPT', 'IFRAME', 'OBJECT', 'EMBED', 'LINK', 'META', 'BASE']);
 
 /** Serialize a node's allowed children to a sanitized HTML string. */
 function serializeChildren(node: Node): string {
   let out = '';
+  let emitted = false; // whether any content/line has been written yet
   node.childNodes.forEach((child) => {
-    out += serializeNode(child);
+    if (child.nodeType === 1 && BLOCK_TAGS.has((child as Element).tagName.toUpperCase())) {
+      const inner = serializeChildren(child);
+      // Separate this line from the previous one, unless we're at the start or
+      // the previous output already ended with a break.
+      if (emitted && !out.endsWith('<br>')) out += '<br>';
+      // A blank line (<div><br></div>) is fully represented by the break above.
+      if (!/^(?:<br>)*$/.test(inner)) out += inner;
+      emitted = true;
+      return;
+    }
+    const s = serializeNode(child);
+    out += s;
+    if (s !== '') emitted = true;
   });
   return out;
 }
