@@ -27,13 +27,17 @@ export function ClientBox({ client }: { client: ClientInfo }) {
           <b>WILAYA :</b> {client.wilaya}
         </div>
       )}
-      {idRows
-        .filter(([, v]) => v)
-        .map(([label, v]) => (
-          <div className="crow" key={label}>
-            <b>{label} :</b> {v}
-          </div>
-        ))}
+      {idRows.some(([, v]) => v) && (
+        <div className="crow-ids">
+          {idRows
+            .filter(([, v]) => v)
+            .map(([label, v]) => (
+              <span className="cid" key={label}>
+                <b>{label} :</b> {v}
+              </span>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
