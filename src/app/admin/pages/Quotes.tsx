@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Search, Phone, MoreHorizontal, X, MessageSquare, Mail, Plus, Trash2, FileText, Download, Lock, Loader2, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
+import { nameFromEmail } from '../auth/identity';
 import { AdminHeader } from './AdminHeader';
 
 type QuoteStatus = 'pending' | 'contacted' | 'quoted' | 'won' | 'lost';
 
-type NoteEntry = { id: string; body: string; created_at: string };
+type NoteEntry = { id: string; body: string; created_at: string; author?: string };
 
 type Quote = {
   id: string;
@@ -298,7 +299,7 @@ const QuoteDrawer = ({
   onUpdate: (id: string, patch: Partial<Quote>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) => {
-  const { api } = useAdminAuth();
+  const { api, user } = useAdminAuth();
   const [notes, setNotes] = useState<NoteEntry[]>(() => parseNotes(quote.notes));
   const [draftNote, setDraftNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -328,6 +329,7 @@ const QuoteDrawer = ({
       id: crypto.randomUUID(),
       body,
       created_at: new Date().toISOString(),
+      author: user?.email ?? undefined,
     };
     const updated = [entry, ...notes];
     setNotes(updated);
@@ -480,17 +482,24 @@ const QuoteDrawer = ({
                     className="group bg-white/[0.03] border border-white/5 rounded-xl p-4"
                   >
                     <div className="flex items-start justify-between gap-3 mb-2">
-                      <span className="text-white/30 text-xs font-mono">
-                        {new Date(note.created_at).toLocaleString('fr-FR', {
-                          day: '2-digit',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                      <span className="flex items-center gap-2 min-w-0">
+                        {note.author && (
+                          <span className="text-[#87A922] text-xs font-semibold truncate">
+                            {nameFromEmail(note.author)}
+                          </span>
+                        )}
+                        <span className="text-white/30 text-xs font-mono flex-shrink-0">
+                          {new Date(note.created_at).toLocaleString('fr-FR', {
+                            day: '2-digit',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
                       </span>
                       <button
                         onClick={() => removeNote(note.id)}
-                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all"
+                        className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all flex-shrink-0"
                         title="Supprimer"
                       >
                         <Trash2 className="w-3.5 h-3.5" />

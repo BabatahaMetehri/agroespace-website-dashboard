@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Plus, Search, FileText, Copy, Ban, Trash2, Printer, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
+import { nameFromEmail } from '../auth/identity';
 import { AdminHeader } from './AdminHeader';
 import { createDocApi } from '../documents/lib/docApi';
 import type { DocumentRecord, DocumentDraft, PaginatedDocuments } from '../documents/types';
@@ -113,15 +114,16 @@ export const Documents = () => {
                 <th className="text-left px-4 py-3">Type</th>
                 <th className="text-left px-4 py-3">Client</th>
                 <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3">Créé par</th>
                 <th className="text-right px-4 py-3">Total TTC</th>
                 <th className="text-right px-4 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {loading ? (
-                <tr><td colSpan={6} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-[#87A922] mx-auto" /></td></tr>
+                <tr><td colSpan={7} className="py-12 text-center"><Loader2 className="w-6 h-6 animate-spin text-[#87A922] mx-auto" /></td></tr>
               ) : !data || data.items.length === 0 ? (
-                <tr><td colSpan={6} className="py-12 text-center text-white/40">
+                <tr><td colSpan={7} className="py-12 text-center text-white/40">
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" /> Aucun document
                 </td></tr>
               ) : (
@@ -131,6 +133,7 @@ export const Documents = () => {
                     <td className="px-4 py-3">{d.type === 'proforma' ? 'Proforma' : 'Facture'}</td>
                     <td className="px-4 py-3">{d.client?.name || '—'}</td>
                     <td className="px-4 py-3">{formatFrDate(d.date)}</td>
+                    <td className="px-4 py-3 text-white/55">{d.created_by ? nameFromEmail(d.created_by) : '—'}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{formatMoneyFr(d.totals?.totalTTC ?? 0)}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">

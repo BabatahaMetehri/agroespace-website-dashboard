@@ -106,6 +106,9 @@ export interface DocumentRecord {
   companySnapshot: CompanySettings;
   totals: DocTotals;
   amountInWords: string;
+  /** Admin email of the creator / last editor (stamped server-side). */
+  created_by?: string;
+  updated_by?: string;
   created_at: string;
   updated_at: string;
 }

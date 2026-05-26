@@ -691,8 +691,10 @@ app.post(`${ADMIN}/blog`, requireAdmin, async (c) => {
         },
         409,
       );
-    await kv.set(blogKey(post.slug), post);
-    return c.json(await withCounter(post), 201);
+    // Stamp the authoring admin (authoritative — from the verified session).
+    const stored = { ...post, created_by: c.get("admin")?.email ?? null };
+    await kv.set(blogKey(post.slug), stored);
+    return c.json(await withCounter(stored), 201);
   } catch (e) {
     return c.json({ code: "rest_invalid_payload", message: String(e) }, 400);
   }
@@ -705,7 +707,13 @@ app.put(`${ADMIN}/blog/:slug`, requireAdmin, async (c) => {
     return c.json({ code: "not_found", message: "Post not found" }, 404);
   try {
     const raw = await c.req.json();
-    const post = sanitize({ ...existing, ...raw }, slug);
+    const sanitized = sanitize({ ...existing, ...raw }, slug);
+    // Preserve the original author; record who last edited it.
+    const post = {
+      ...sanitized,
+      created_by: (existing as any)?.created_by ?? null,
+      updated_by: c.get("admin")?.email ?? null,
+    };
     if (post.slug !== slug) {
       // Slug change: move post AND counter so view/like history follows.
       await kv.set(blogKey(post.slug), post);
@@ -1716,6 +1724,7 @@ app.post(`${ADMIN}/documents`, requireAdmin, async (c) => {
       year: Number(twoDigitYear(date)),
       displayId,
       status: "finalized",
+      created_by: c.get("admin")?.email ?? null,
       created_at: now,
       updated_at: now,
     };
@@ -1740,6 +1749,8 @@ app.put(`${ADMIN}/documents/:id`, requireAdmin, async (c) => {
       number: existing.number,
       year: existing.year,
       displayId: existing.displayId,
+      created_by: existing.created_by ?? null,
+      updated_by: c.get("admin")?.email ?? null,
       created_at: existing.created_at,
       updated_at: new Date().toISOString(),
     };

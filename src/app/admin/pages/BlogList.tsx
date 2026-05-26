@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { Plus, Pencil, Trash2, Eye, Heart, Search, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAdminAuth } from '../auth/AuthProvider';
+import { nameFromEmail } from '../auth/identity';
 import { AdminHeader } from './AdminHeader';
 
 type AdminPost = {
@@ -16,6 +17,7 @@ type AdminPost = {
   likes: number;
   published: boolean;
   source: 'cms' | 'seed';
+  created_by?: string;
   updated_at?: string;
 };
 
@@ -198,8 +200,13 @@ export const BlogList = () => {
                 </div>
 
                 <div className="p-5 flex flex-col flex-1">
-                  <div className="text-[#87A922] text-[10px] uppercase tracking-[0.18em] font-semibold mb-2">
-                    {new Date(p.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  <div className="text-[#87A922] text-[10px] uppercase tracking-[0.18em] font-semibold mb-2 flex flex-wrap items-center gap-x-2">
+                    <span>{new Date(p.date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                    {p.created_by && (
+                      <span className="text-white/40 normal-case tracking-normal font-normal">
+                        · par {nameFromEmail(p.created_by)}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-white text-lg font-medium leading-snug line-clamp-2 mb-2">
                     {p.title.fr}
