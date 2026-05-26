@@ -56,9 +56,13 @@ export const Navigation = () => {
     setActivitiesOpen(false);
   }, [location.pathname]);
 
-  const navBackgroundClass = scrolled || !isHome
-    ? 'bg-[#0f2618]/90 backdrop-blur-xl py-4 border-b border-white/10'
-    : 'bg-transparent py-6 border-b border-transparent';
+  // On the home hero the bar is transparent — but the drone video has logos in
+  // the top-middle that fight the nav. When transparent we lay a top-down scrim
+  // behind the bar and add text/logo shadows so the nav stays readable.
+  const transparentTop = isHome && !scrolled;
+  const navBackgroundClass = transparentTop
+    ? 'bg-transparent py-6 border-b border-transparent'
+    : 'bg-[#0f2618]/90 backdrop-blur-xl py-4 border-b border-white/10';
 
   const links: { to: string; label: string }[] = [
     { to: '/about', label: t('nav.about') },
@@ -94,12 +98,26 @@ export const Navigation = () => {
       transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-500 ${navBackgroundClass}`}
     >
-      <div className="max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center">
+      {/* Top scrim — only on the transparent home hero. Darkens behind the bar
+          (where the video's centre logos sit) and fades to nothing below it. */}
+      {transparentTop && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-black/75 via-black/35 to-transparent"
+        />
+      )}
+      <div
+        className={`relative max-w-7xl mx-auto px-6 md:px-12 flex justify-between items-center ${
+          transparentTop ? '[text-shadow:0_1px_12px_rgba(0,0,0,0.7)]' : ''
+        }`}
+      >
         <Link to="/" className="flex items-center gap-4 group">
           <motion.img
             src={logoImg}
             alt="AGROESPACE"
-            className="h-12 w-auto object-contain"
+            className={`h-12 w-auto object-contain ${
+              transparentTop ? 'drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)]' : ''
+            }`}
             whileHover={{ rotate: 6, scale: 1.08 }}
             transition={{ type: 'spring', stiffness: 220, damping: 14 }}
           />

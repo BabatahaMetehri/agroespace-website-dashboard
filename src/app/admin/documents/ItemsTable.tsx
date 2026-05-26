@@ -17,23 +17,29 @@ export function ItemsTable({ items }: { items: ItemRow[] }) {
         </tr>
       </thead>
       <tbody>
-        {items.map((it, i) => (
-          <tr key={i}>
-            <td>
-              {it.ref && <div style={{ fontWeight: 700 }}>{it.ref}</div>}
-              <div
-                className="desc"
-                // designationHtml is sanitized by RichTextEditor on edit and on finalize
-                dangerouslySetInnerHTML={{ __html: it.designationHtml }}
-              />
-            </td>
-            <td className="ctr">{it.um}</td>
-            <td className="ctr">{it.qty}</td>
-            <td className="num">{formatMoneyFr(it.puHT)}</td>
-            <td className="ctr">{fmtPct(lineTvaRate(it))}</td>
-            <td className="num">{formatMoneyFr(lineMontantHT(it.qty, it.puHT))}</td>
-          </tr>
-        ))}
+        {items.map((it, i) => {
+          // Lines without a price (e.g. component lines of a bundle priced on
+          // line 1) show only their designation, UM and quantity — the price,
+          // TVA and amount columns stay blank instead of printing "0,00".
+          const hasPrice = (it.puHT ?? 0) > 0;
+          return (
+            <tr key={i}>
+              <td>
+                {it.ref && <div style={{ fontWeight: 700 }}>{it.ref}</div>}
+                <div
+                  className="desc"
+                  // designationHtml is sanitized by RichTextEditor on edit and on finalize
+                  dangerouslySetInnerHTML={{ __html: it.designationHtml }}
+                />
+              </td>
+              <td className="ctr">{it.um}</td>
+              <td className="ctr">{it.qty}</td>
+              <td className="num">{hasPrice ? formatMoneyFr(it.puHT) : ''}</td>
+              <td className="ctr">{hasPrice ? fmtPct(lineTvaRate(it)) : ''}</td>
+              <td className="num">{hasPrice ? formatMoneyFr(lineMontantHT(it.qty, it.puHT)) : ''}</td>
+            </tr>
+          );
+        })}
       </tbody>
     </table>
   );

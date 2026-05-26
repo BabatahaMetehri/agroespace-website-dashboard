@@ -1,11 +1,17 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "motion/react";
 import { Link } from "react-router";
 import { ShieldCheck, Truck, Wrench, Award } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
 
+// Poster + fallback still — a real frame of the drone footage. Shown instantly
+// (LCP), and stays if the video is skipped (slow/data-saver connection, reduced
+// motion) or fails to load.
+const HERO_FALLBACK_IMG = "/hero-poster.jpg";
+
 export const Hero = () => {
   const containerRef = useRef(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const { t } = useI18n();
   const { scrollYProgress } = useScroll({
     target: containerRef,
@@ -14,6 +20,33 @@ export const Hero = () => {
 
   const y = useTransform(scrollYProgress, [0, 1], ["0%", "50%"]);
   const opacity = useTransform(scrollYProgress, [0, 1], [1, 0]);
+
+  // Load the drone video lazily so it never blocks first paint. We hold off
+  // until the browser is idle, and skip it entirely on data-saver / slow
+  // connections or when the user prefers reduced motion — the poster stays.
+  const [showVideo, setShowVideo] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const conn = (navigator as any).connection;
+    if (conn?.saveData) return;
+    if (typeof conn?.effectiveType === "string" && /(^|-)2g$/.test(conn.effectiveType)) return;
+
+    let idleId: number;
+    let timeoutId: number;
+    const start = () => setShowVideo(true);
+    if ("requestIdleCallback" in window) {
+      idleId = (window as any).requestIdleCallback(start, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(start, 1000);
+    }
+    return () => {
+      if (idleId && "cancelIdleCallback" in window) (window as any).cancelIdleCallback(idleId);
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   const usps = [
     { icon: ShieldCheck, key: "usp.installed" },
@@ -30,13 +63,37 @@ export const Hero = () => {
     >
       <motion.div style={{ y, opacity }} className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-b from-[#0f2618]/60 via-[#0f2618]/40 to-[#0f2618] z-10" />
+        {/* Fallback / poster — always present beneath the video. Instant paint
+            (LCP) and the guaranteed fallback if the video is skipped or fails. */}
         <img
-          src="https://images.unsplash.com/photo-1625419196393-fcd5737436a5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxhZ3JpY3VsdHVyZSUyMGlycmlnYXRpb24lMjBwaXZvdCUyMGRyb25lfGVufDF8fHx8MTc3NzMzNTAwMHww&ixlib=rb-4.1.0&q=80&w=1080&utm_source=figma&utm_medium=referral"
-          alt="Agriculture Irrigation"
-          className="w-full h-full object-cover scale-105"
+          src={HERO_FALLBACK_IMG}
+          alt="Pivot d'irrigation vu par drone"
+          className="absolute inset-0 w-full h-full object-cover scale-105"
           fetchPriority="high"
           decoding="async"
         />
+        {/* Drone video — mounted only once idle, fades in over the poster. */}
+        {showVideo && (
+          <video
+            ref={videoRef}
+            className={`absolute inset-0 w-full h-full object-cover scale-105 transition-opacity duration-700 ${
+              videoReady ? "opacity-100" : "opacity-0"
+            }`}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            poster={HERO_FALLBACK_IMG}
+            onCanPlay={() => setVideoReady(true)}
+            onError={() => {
+              setShowVideo(false);
+              setVideoReady(false);
+            }}
+          >
+            <source src="/hero-video.mp4" type="video/mp4" />
+          </video>
+        )}
       </motion.div>
 
       <div className="relative z-10 min-h-screen flex flex-col justify-end px-6 md:px-12 max-w-7xl mx-auto pt-32 pb-12">
