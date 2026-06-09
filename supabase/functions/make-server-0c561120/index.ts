@@ -169,6 +169,20 @@ function rateLimit(opts: {
   };
 }
 
+// Reject obviously oversized request bodies BEFORE any handler reads them so a
+// caller within their rate-limit quota can't tie up function memory by posting
+// huge JSON. Public callers send tiny bodies (forms + file metadata); 64 KB is
+// generous. Returns 413. Content-Length absence falls through (chunked).
+function maxBodyBytes(max: number) {
+  return async (c: any, next: any) => {
+    const len = Number(c.req.header("content-length") ?? "0");
+    if (Number.isFinite(len) && len > max) {
+      return c.json({ code: "payload_too_large", message: "Body too large" }, 413);
+    }
+    await next();
+  };
+}
+
 // ─── Input sanitisation helpers ──────────────────────────────────────────
 function sanitiseStr(v: unknown, max = 500): string {
   if (typeof v !== "string") return "";
@@ -200,6 +214,7 @@ app.get(`${ROOT}/health`, (c) => c.json({ status: "ok" }));
 app.post(
   `${ROOT}/quotes`,
   rateLimit({ key: "quotes", max: 10, windowMs: 15 * 60_000, persist: true }),
+  maxBodyBytes(64 * 1024),
   async (c) => {
     try {
       const raw = await c.req.json();
@@ -302,6 +317,7 @@ const MAX_DOC_BYTES = 8 * 1024 * 1024; // 8 MB per file
 app.post(
   `${ROOT}/quote-documents/sign`,
   rateLimit({ key: "quote-docs", max: 40, windowMs: 15 * 60_000, persist: true }),
+  maxBodyBytes(64 * 1024),
   async (c) => {
     try {
       const raw = await c.req.json();
@@ -310,11 +326,7 @@ app.post(
         return c.json({ code: "no_files", message: "No files" }, 400);
       }
       const sb = serviceStorageClient();
-      try {
-        await sb.storage.createBucket(PRIVATE_DOCS_BUCKET, { public: false });
-      } catch {
-        /* already exists */
-      }
+      await ensurePrivateBucket(sb);
       const out: {
         path: string; token: string; name: string; type: string; size: number;
       }[] = [];
@@ -1165,23 +1177,41 @@ app.delete(`${ADMIN}/categories/:id`, requireAdmin, async (c) => {
   return c.json({ id, deleted: true });
 });
 
+// ─── Public read protection ───────────────────────────────────────────────
+// All public GET endpoints share these two guards:
+//  1) Per-IP rate limit so a crawler/scraper can't drain the function quota.
+//     100/min is far above what a normal browsing session does.
+//  2) A short browser cache so the same visitor doesn't re-hit on every page.
+const publicReadLimiter = rateLimit({ key: "public-read", max: 100, windowMs: 60_000 });
+async function publicReadCacheHeaders(c: any, next: any) {
+  c.header("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
+  await next();
+}
+
 // ─── Public blog endpoints (no auth) ──────────────────────────────────────
-app.get(`${PUBLIC}/blog`, async (c) => {
+// Hard cap on what a single public read can return — keeps payload/processing
+// bounded if the blog grows or if someone seeds garbage. Newest-first.
+const PUBLIC_BLOG_MAX = 100;
+const PUBLIC_COUNTERS_MAX = 500;
+
+app.get(`${PUBLIC}/blog`, publicReadLimiter, publicReadCacheHeaders, async (c) => {
   const posts = (await kv.getByPrefix("blog:post:")) as BlogPostShape[];
   const published = posts.filter((p) => p?.published !== false);
-  const merged = await Promise.all(published.map((p) => withCounter(p)));
+  published.sort((a: any, b: any) => String(b?.date ?? "").localeCompare(String(a?.date ?? "")));
+  const capped = published.slice(0, PUBLIC_BLOG_MAX);
+  const merged = await Promise.all(capped.map((p) => withCounter(p)));
   return c.json(merged);
 });
 
 // All known blog counters in a single call. The frontend uses this to
 // overlay live counts on top of static seed posts that don't have a
 // CMS-stored body.
-app.get(`${PUBLIC}/blog/counters`, async (_c) => {
+app.get(`${PUBLIC}/blog/counters`, publicReadLimiter, publicReadCacheHeaders, async (_c) => {
   const counters = (await kv.getByPrefix("blog:counter:")) as BlogCounter[];
-  return _c.json(counters);
+  return _c.json(counters.slice(0, PUBLIC_COUNTERS_MAX));
 });
 
-app.get(`${PUBLIC}/blog/:slug`, async (c) => {
+app.get(`${PUBLIC}/blog/:slug`, publicReadLimiter, publicReadCacheHeaders, async (c) => {
   const slug = c.req.param("slug");
   const item = (await kv.get(blogKey(slug))) as BlogPostShape | null;
   if (!item)
@@ -1259,7 +1289,7 @@ const PUBLIC_HIDDEN_STATUSES = new Set([
   "deleted",
 ]);
 
-app.get(`${PUBLIC}/products`, async (c) => {
+app.get(`${PUBLIC}/products`, publicReadLimiter, publicReadCacheHeaders, async (c) => {
   const items = (await kv.getByPrefix("wc:product:")) as any[];
   const visible = items.filter(
     (p) =>
@@ -1312,7 +1342,7 @@ type PromoConfig = {
   updatedAt?: string;
 };
 
-app.get(`${PUBLIC}/promo`, async (c) => {
+app.get(`${PUBLIC}/promo`, publicReadLimiter, publicReadCacheHeaders, async (c) => {
   const promo = (await kv.get(PROMO_KV_KEY)) as PromoConfig | null;
   if (!promo) return c.json(null, 404);
   return c.json(promo);
@@ -1476,7 +1506,7 @@ function sanitizeFeatured(body: any, productId: number): FeaturedProduct {
 // Public endpoint used by /catalog — hydrates each featured entry with the
 // live product (so SKU, title, stock, image stay current). Filters out
 // entries whose product has been hidden, trashed, or deleted.
-app.get(`${PUBLIC}/featured`, async (c) => {
+app.get(`${PUBLIC}/featured`, publicReadLimiter, publicReadCacheHeaders, async (c) => {
   const items = (await kv.getByPrefix(FEATURED_KV_PREFIX)) as FeaturedProduct[];
   const enabled = items.filter((f) => f?.enabled !== false);
   enabled.sort(
@@ -2341,6 +2371,37 @@ async function uploadFileToStorage(
 // Stored in a PRIVATE bucket — no public URL is ever issued. Admins read them
 // only through short-lived signed URLs minted on demand.
 const PRIVATE_DOCS_BUCKET = "quote-docs";
+const PRIVATE_DOC_MIME_TYPES = [
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+const PRIVATE_DOC_MAX_BYTES = 8 * 1024 * 1024;
+
+// Storage-level limits on the private bucket — enforced by Supabase even if a
+// caller bypasses the sign endpoint's checks (defense in depth). Idempotent
+// across cold starts: once a bucket has the limits, subsequent calls no-op.
+let privateBucketEnsured = false;
+async function ensurePrivateBucket(sb: any) {
+  if (privateBucketEnsured) return;
+  const opts = {
+    public: false,
+    fileSizeLimit: PRIVATE_DOC_MAX_BYTES,
+    allowedMimeTypes: PRIVATE_DOC_MIME_TYPES,
+  };
+  try {
+    await sb.storage.createBucket(PRIVATE_DOCS_BUCKET, opts);
+  } catch {
+    // Bucket already exists — make sure its limits match the current policy.
+    try {
+      await sb.storage.updateBucket(PRIVATE_DOCS_BUCKET, opts);
+    } catch {
+      /* ignore — surface as a sign error on the next call if storage is down */
+    }
+  }
+  privateBucketEnsured = true;
+}
 
 function serviceStorageClient() {
   const url = Deno.env.get("SUPABASE_URL") ?? "";

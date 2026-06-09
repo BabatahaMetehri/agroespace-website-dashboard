@@ -1,6 +1,99 @@
 # AGROESPACE — robots.txt
-# Allow all well-behaved crawlers, disallow the admin console & raw API.
+# Allow legitimate search engines (Google, Bing, DuckDuckGo, etc.). Block known
+# AI scrapers and aggressive SEO crawlers so they don't drain edge function
+# quota or the egress budget. Well-behaved bots obey this; rogue ones are also
+# rate-limited at the function level (100 req/min/IP across all public reads).
 
+# ─── AI / LLM crawlers ────────────────────────────────────────────────────
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ChatGPT-User
+Disallow: /
+
+User-agent: OAI-SearchBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: PerplexityBot
+Disallow: /
+
+User-agent: Perplexity-User
+Disallow: /
+
+User-agent: YouBot
+Disallow: /
+
+User-agent: cohere-ai
+Disallow: /
+
+User-agent: Bytespider
+Disallow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: meta-externalagent
+Disallow: /
+
+User-agent: FacebookBot
+Disallow: /
+
+User-agent: Applebot-Extended
+Disallow: /
+
+User-agent: Diffbot
+Disallow: /
+
+User-agent: ImagesiftBot
+Disallow: /
+
+# ─── Aggressive / commercial SEO / scraping crawlers ──────────────────────
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /
+
+User-agent: DotBot
+Disallow: /
+
+User-agent: BLEXBot
+Disallow: /
+
+User-agent: DataForSeoBot
+Disallow: /
+
+User-agent: PetalBot
+Disallow: /
+
+User-agent: SeekportBot
+Disallow: /
+
+User-agent: serpstatbot
+Disallow: /
+
+User-agent: ZoominfoBot
+Disallow: /
+
+# ─── Default for everyone else (Google, Bing, etc.) ───────────────────────
 User-agent: *
 Allow: /
 Disallow: /admin
@@ -8,5 +101,4 @@ Disallow: /admin/
 Disallow: /map/
 Crawl-delay: 1
 
-# Sitemap
 Sitemap: https://agroespace.com/sitemap.xml

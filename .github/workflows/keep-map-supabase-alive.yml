@@ -1,0 +1,72 @@
+name: Keep Map Supabase project alive
+
+# Supabase free-plan projects pause after 7 days of no API activity. This
+# workflow pings the *map installations* project once a day so it never reaches
+# the inactivity threshold.
+#
+# It hits two endpoints, so whichever of the two Supabase counts as "activity"
+# is covered:
+#   1) /auth/v1/health   — GoTrue health check (no key needed)
+#   2) /rest/v1/         — PostgREST root, which forces a database round-trip
+#                          to build its OpenAPI schema. Authenticated with the
+#                          public anon key (RLS still applies — no data leak).
+#
+# ─── One-time setup ──────────────────────────────────────────────────────────
+# Repo → Settings → Secrets and variables → Actions → New repository secret
+#   • MAP_SUPABASE_URL        e.g. https://abcd1234.supabase.co
+#                             (no trailing slash, no path)
+#   • MAP_SUPABASE_ANON_KEY   the map project's anon (public) key
+#                             — found in Supabase Dashboard → Project Settings
+#                               → API → Project API keys → anon / public
+#
+# Both secrets must be set on this repository (not on the main agroespace
+# project). If either is missing the workflow fails fast so you notice.
+#
+# ─── Schedule ────────────────────────────────────────────────────────────────
+# Daily at 03:14 UTC. Cron in GitHub Actions is best-effort and may be delayed
+# a few minutes under heavy load; daily gives ~6 days of buffer before the
+# 7-day pause kicks in, so a few missed runs are still safe.
+
+on:
+  schedule:
+    - cron: '14 3 * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verify secrets are configured
+        env:
+          URL: ${{ secrets.MAP_SUPABASE_URL }}
+          KEY: ${{ secrets.MAP_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::error::MAP_SUPABASE_URL secret is not set on this repo. See file comments for setup."
+            exit 1
+          fi
+          if [ -z "$KEY" ]; then
+            echo "::error::MAP_SUPABASE_ANON_KEY secret is not set on this repo. See file comments for setup."
+            exit 1
+          fi
+          # Strip any trailing slash once, here, so later steps can rely on it.
+          echo "BASE=${URL%/}" >> "$GITHUB_ENV"
+
+      - name: Ping Auth health endpoint
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 --max-time 30 \
+            "$BASE/auth/v1/health" > /dev/null
+          echo "auth/v1/health → OK"
+
+      - name: Ping PostgREST root (exercises the database)
+        env:
+          KEY: ${{ secrets.MAP_SUPABASE_ANON_KEY }}
+        run: |
+          curl -fsS --retry 3 --retry-delay 5 --max-time 30 \
+            -H "apikey: $KEY" \
+            -H "Authorization: Bearer $KEY" \
+            "$BASE/rest/v1/" > /dev/null
+          echo "rest/v1/ → OK"
