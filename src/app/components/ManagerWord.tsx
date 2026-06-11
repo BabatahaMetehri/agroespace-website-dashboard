@@ -1,43 +1,20 @@
 import { motion } from "motion/react";
-import { Quote } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
+import { PivotField } from "./fx/PivotField";
 
 export const ManagerWord = () => {
   const { t } = useI18n();
   return (
     <section
-      className="py-32 bg-[#0f2618] text-white relative overflow-hidden"
+      className="py-32 bg-forest text-white relative overflow-hidden grain"
       style={{ position: "relative" }}
     >
-      <div className="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
-        <svg
-          viewBox="0 0 100 100"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-full transform translate-x-1/3 -translate-y-1/4"
-        >
-          <circle
-            cx="50"
-            cy="50"
-            r="40"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <circle
-            cx="50"
-            cy="50"
-            r="30"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-          <circle
-            cx="50"
-            cy="50"
-            r="20"
-            stroke="currentColor"
-            strokeWidth="2"
-          />
-        </svg>
+      {/* Pivot mark sweeping slowly in the corner */}
+      <div
+        aria-hidden
+        className="absolute -top-40 ltr:-right-40 rtl:-left-40 w-[34rem] h-[34rem] text-white/[0.06] pointer-events-none"
+      >
+        <PivotField className="w-full h-full" />
       </div>
 
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
@@ -49,20 +26,27 @@ export const ManagerWord = () => {
             transition={{ duration: 0.8 }}
             className="w-full lg:w-5/12"
           >
-            <div className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
-              <div className="absolute inset-0 bg-[#87A922]/20 mix-blend-overlay z-10" />
-              <img
-                src="https://i.ibb.co/DP04Gfx8/ai-yacine-fekhar-squoosh.jpg"
-                alt="Yacine Fekhar - Directeur Général"
-                className="w-full h-full object-cover"
+            <div className="relative">
+              {/* Offset frame — printed-plate effect */}
+              <div
+                aria-hidden
+                className="absolute -inset-3 ltr:translate-x-5 rtl:-translate-x-5 translate-y-5 rounded-3xl border border-lime/25"
               />
-              <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-[#0f2618] to-transparent z-20">
-                <h3 className="text-2xl font-medium text-white mb-1">
-                  Yacine Fekhar
-                </h3>
-                <p className="text-[#87A922] font-semibold text-sm uppercase tracking-wider">
-                  {t("manager.role")}
-                </p>
+              <div className="relative aspect-[3/4] rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
+                <div className="absolute inset-0 bg-lime/20 mix-blend-overlay z-10" />
+                <img
+                  src="https://i.ibb.co/DP04Gfx8/ai-yacine-fekhar-squoosh.jpg"
+                  alt="Yacine Fekhar - Directeur Général"
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute bottom-0 left-0 right-0 p-8 bg-gradient-to-t from-forest to-transparent z-20">
+                  <h3 className="text-2xl font-display font-medium text-white mb-1">
+                    Yacine Fekhar
+                  </h3>
+                  <p className="text-lime font-semibold text-sm uppercase tracking-wider">
+                    {t("manager.role")}
+                  </p>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -74,11 +58,17 @@ export const ManagerWord = () => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="w-full lg:w-7/12 space-y-8"
           >
-            <Quote className="w-12 h-12 text-white/20 mb-2" />
-            <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold block">
+            {/* Oversized editorial quote glyph */}
+            <span
+              aria-hidden
+              className="block font-display italic text-lime/30 text-[7rem] leading-[0.4] select-none"
+            >
+              “
+            </span>
+            <span className="text-lime uppercase tracking-[0.2em] text-sm font-semibold block">
               {t("manager.eyebrow")}
             </span>
-            <h2 className="text-4xl md:text-5xl font-light text-white leading-tight">
+            <h2 className="text-4xl md:text-5xl font-display font-light text-white leading-[1.1]">
               {t("manager.commitment.title")}
             </h2>
 
@@ -92,7 +82,7 @@ export const ManagerWord = () => {
                 <br />
                 {t("manager.mission.body")}
               </p>
-              <p className="text-xl font-medium text-white italic pt-4 border-t border-white/10">
+              <p className="text-xl font-display italic text-white pt-4 border-t border-white/10">
                 {t("manager.signoff")}
               </p>
             </div>

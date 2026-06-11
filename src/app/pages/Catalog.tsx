@@ -150,18 +150,21 @@ export const Catalog = () => {
 
   return (
     <div
-      className="bg-[#0a1c12] min-h-screen pt-32 pb-24 text-white"
+      className="bg-ink min-h-screen pt-32 pb-24 text-white grain"
       style={{ position: "relative" }}
     >
-      <div className="max-w-7xl mx-auto px-6 md:px-12">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="flex flex-col md:flex-row justify-between items-end mb-12 gap-8">
           <div>
-            <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
-              {t("nav.products")}
-            </span>
-            <h1 className="text-4xl md:text-6xl font-light text-white leading-tight">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="h-px w-10 bg-lime/50" aria-hidden />
+              <span className="text-lime uppercase tracking-[0.2em] text-sm font-semibold">
+                {t("nav.products")}
+              </span>
+            </div>
+            <h1 className="text-4xl md:text-6xl font-display font-light text-white leading-tight">
               {t("catalog.hero.title.1")}{" "}
-              <span className="font-serif italic text-white/80">
+              <span className="italic text-lime">
                 {t("catalog.hero.title.italic")}
               </span>
             </h1>
@@ -175,7 +178,7 @@ export const Catalog = () => {
                 onChange={(e) => setQuery(e.target.value)}
                 type="text"
                 placeholder={t("catalog.search")}
-                className="w-full bg-white/5 border border-white/10 rounded-full py-3 ps-12 pe-4 text-white focus:outline-none focus:border-[#87A922] transition-colors"
+                className="w-full bg-white/5 border border-white/10 rounded-full py-3 ps-12 pe-4 text-white focus:outline-none focus:border-lime transition-colors"
               />
             </div>
           </div>
@@ -189,7 +192,7 @@ export const Catalog = () => {
               onClick={() => setActive(c)}
               className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.15em] font-semibold transition-colors ${
                 active === c
-                  ? "bg-[#87A922] text-white border border-transparent"
+                  ? "bg-lime text-white border border-transparent"
                   : "bg-white/5 text-white/70 border border-white/10 hover:bg-white/10 hover:text-white"
               }`}
             >
@@ -203,10 +206,10 @@ export const Catalog = () => {
         {showFeatured && (
           <section className="mb-16">
             <div className="flex items-baseline gap-3 mb-6">
-              <Star className="w-5 h-5 text-[#87A922]" fill="currentColor" />
-              <h2 className="text-2xl md:text-3xl font-light text-white">
+              <Star className="w-5 h-5 text-lime" fill="currentColor" />
+              <h2 className="text-2xl md:text-3xl font-display font-light text-white">
                 {t("catalog.featured.section.title", "Produits")}{" "}
-                <span className="font-serif italic text-white/80">
+                <span className="italic text-lime">
                   {t("catalog.featured.section.italic", "Phares")}
                 </span>
               </h2>
@@ -229,7 +232,7 @@ export const Catalog = () => {
         {/* Loading state */}
         {loading && (
           <div className="flex items-center justify-center py-24">
-            <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-[#87A922] animate-spin" />
+            <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-lime animate-spin" />
           </div>
         )}
 
@@ -262,7 +265,7 @@ export const Catalog = () => {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
                 key={product.id}
-                className="group bg-[#0f2618] border border-white/5 rounded-3xl overflow-hidden hover:border-white/20 transition-all duration-500 flex flex-col"
+                className="group bg-forest border border-white/5 rounded-3xl overflow-hidden hover:border-lime/40 hover:-translate-y-1 transition-all duration-500 flex flex-col"
               >
                 <div className="relative aspect-square overflow-hidden bg-black/50">
                   <img
@@ -277,7 +280,7 @@ export const Catalog = () => {
                   />
                   <div className="absolute top-4 left-4 z-10 flex flex-col gap-2 items-start">
                     {product.inStock ? (
-                      <span className="bg-[#87A922] text-white text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">
+                      <span className="bg-lime text-white text-xs font-bold uppercase tracking-wider px-3 py-1.5 rounded-full shadow-lg">
                         {t("catalog.instock")}
                       </span>
                     ) : (
@@ -321,13 +324,13 @@ export const Catalog = () => {
 
                   <div className="mt-auto pt-6 border-t border-white/5 flex items-center justify-between">
                     {product.price ? (
-                      <div className="text-[#87A922] font-medium text-xl">
+                      <div className="text-lime font-medium text-xl">
                         {product.price}
                       </div>
                     ) : (
                       <button
                         onClick={() => setQuoteFor(product)}
-                        className="text-white hover:text-[#87A922] font-medium text-sm flex items-center gap-2 transition-colors"
+                        className="text-white hover:text-lime font-medium text-sm flex items-center gap-2 transition-colors"
                       >
                         {t("catalog.quote")} <ArrowRight className="w-4 h-4" />
                       </button>
@@ -336,7 +339,7 @@ export const Catalog = () => {
                     {product.price && (
                       <button
                         onClick={() => setQuoteFor(product)}
-                        className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-[#87A922] transition-colors"
+                        className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-lime transition-colors"
                         aria-label={t("catalog.quote")}
                       >
                         <ArrowRight className="w-4 h-4 text-white" />
@@ -393,7 +396,7 @@ export const Catalog = () => {
                     aria-current={tok === safePage ? "page" : undefined}
                     className={`min-w-10 h-10 px-3 rounded-full text-sm font-semibold transition-colors ${
                       tok === safePage
-                        ? "bg-[#87A922] text-white"
+                        ? "bg-lime text-white"
                         : "bg-white/5 text-white/60 hover:bg-white/10 border border-white/10"
                     }`}
                   >

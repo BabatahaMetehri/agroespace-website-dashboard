@@ -93,10 +93,10 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
   const { t, lang } = useI18n();
 
   return (
-    <div className="bg-[#f4f7f5]" style={{ position: "relative" }}>
-      <section className="relative h-[60vh] flex items-end overflow-hidden bg-[#0f2618]">
+    <div className="bg-paper" style={{ position: "relative" }}>
+      <section className="relative h-[60vh] flex items-end overflow-hidden bg-forest">
         <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0f2618] via-[#0f2618]/60 to-transparent z-10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-forest via-forest/60 to-transparent z-10" />
           <img
             src={heroImages[service]}
             alt=""
@@ -113,7 +113,7 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="text-5xl md:text-7xl font-light text-white leading-tight max-w-3xl"
+            className="text-5xl md:text-7xl font-display font-light text-white leading-tight max-w-3xl"
           >
             {t(`services.${service}.title`)}
           </motion.h1>
@@ -122,7 +122,7 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
 
       <section className="py-24">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
-          <p className="text-xl md:text-2xl font-light text-[#0f2618]/85 leading-relaxed whitespace-pre-line">
+          <p className="text-xl md:text-2xl font-display font-light text-forest/85 leading-relaxed whitespace-pre-line">
             {longCopy[service][lang]}
           </p>
         </div>
@@ -130,8 +130,8 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
 
       <section className="pb-24">
         <div className="max-w-5xl mx-auto px-6 md:px-12">
-          <div className="bg-white rounded-3xl p-10 md:p-14 border border-[#114232]/5 shadow-[0_15px_40px_rgba(0,0,0,0.03)]">
-            <h2 className="text-2xl md:text-3xl font-medium text-[#0f2618] mb-8">
+          <div className="bg-white rounded-3xl p-10 md:p-14 border border-pine/10 shadow-[0_15px_40px_rgba(0,0,0,0.03)]">
+            <h2 className="text-2xl md:text-3xl font-medium text-forest mb-8">
               {service === "irrigation"
                 ? lang === "ar"
                   ? "لماذا نحن"
@@ -147,7 +147,7 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
             <ul className="space-y-5">
               {benefits[service].map((b, i) => (
                 <li key={i} className="flex items-start gap-4">
-                  <div className="w-7 h-7 rounded-full bg-[#87A922] text-white flex items-center justify-center flex-shrink-0 mt-1">
+                  <div className="w-7 h-7 rounded-full bg-lime text-white flex items-center justify-center flex-shrink-0 mt-1">
                     <Check className="w-4 h-4" strokeWidth={2.5} />
                   </div>
                   <span className="text-gray-700 text-base md:text-lg leading-relaxed">
@@ -160,9 +160,9 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
         </div>
       </section>
 
-      <section className="bg-[#0f2618] py-24">
+      <section className="bg-forest py-24">
         <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-light text-white leading-tight mb-8">
+          <h2 className="text-3xl md:text-4xl font-display font-light text-white leading-tight mb-8">
             {lang === "ar"
               ? "هل نناقش مشروعكم؟"
               : lang === "en"
@@ -171,7 +171,7 @@ export const ServicePage = ({ service }: { service: ServiceKey }) => {
           </h2>
           <Link
             to="/contact"
-            className="inline-flex items-center gap-3 bg-[#87A922] hover:bg-[#6c871b] text-white px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-colors"
+            className="inline-flex items-center gap-3 bg-lime hover:bg-lime-deep text-white px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-colors"
           >
             {t("hero.cta.quote")}
             <ArrowRight className="w-4 h-4" />

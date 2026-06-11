@@ -3,20 +3,31 @@ import { MapPin, Phone, ArrowUpRight } from 'lucide-react';
 import { agencies } from '../data/agencies';
 import { useI18n } from '../i18n/I18nProvider';
 
+/** City-level survey coordinates — decorative, engineering-drawing flavour. */
+const coords: Record<string, string> = {
+  alger: '36.75°N · 3.21°E',
+  ghardaia: '32.49°N · 3.67°E',
+  'el-meniaa': '30.58°N · 2.88°E',
+  adrar: '27.87°N · 0.29°W',
+};
+
 export const Agencies = () => {
   const { t, lang } = useI18n();
 
   return (
-    <section className="relative py-32 bg-[#f4f7f5]" style={{ position: 'relative' }}>
+    <section className="relative py-32 bg-paper grain" style={{ position: 'relative' }}>
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-16">
           <div>
-            <span className="text-[#114232] uppercase tracking-[0.2em] text-sm font-semibold mb-3 block">
-              {t('agencies.eyebrow')}
-            </span>
-            <h2 className="text-4xl md:text-5xl font-light text-[#0f2618] leading-tight max-w-2xl">
+            <div className="flex items-center gap-4 mb-3">
+              <span className="h-px w-10 bg-sage/40" aria-hidden />
+              <span className="text-pine uppercase tracking-[0.2em] text-sm font-semibold">
+                {t('agencies.eyebrow')}
+              </span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-display font-light text-forest leading-tight max-w-2xl">
               {t('agencies.title.1')}{' '}
-              <span className="font-serif italic text-[#4a7856]">{t('agencies.title.italic')}</span>
+              <span className="italic text-sage">{t('agencies.title.italic')}</span>
             </h2>
           </div>
           <p className="text-gray-600 max-w-md">{t('agencies.subtitle')}</p>
@@ -30,32 +41,39 @@ export const Agencies = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: '-50px' }}
               transition={{ delay: idx * 0.08, duration: 0.6 }}
-              className="group bg-white rounded-3xl p-8 border border-[#114232]/5 shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-500 flex flex-col"
+              className="group bg-white rounded-3xl p-8 border border-pine/10 shadow-[0_15px_40px_rgba(15,38,24,0.04)] hover:shadow-[0_25px_60px_rgba(15,38,24,0.1)] hover:-translate-y-1 hover:border-lime/40 transition-all duration-500 flex flex-col"
             >
-              <div className="w-12 h-12 rounded-full bg-[#f4f7f5] flex items-center justify-center mb-5 group-hover:bg-[#87A922] transition-colors">
-                <MapPin className="w-5 h-5 text-[#114232] group-hover:text-white transition-colors" />
+              <div className="flex items-start justify-between mb-5">
+                <div className="w-12 h-12 rounded-full bg-paper border border-pine/10 flex items-center justify-center group-hover:bg-lime group-hover:border-transparent transition-colors duration-500">
+                  <MapPin className="w-5 h-5 text-pine group-hover:text-white transition-colors duration-500" />
+                </div>
+                {coords[a.id] && (
+                  <span dir="ltr" className="font-mono text-[10px] text-gray-400 tracking-wider pt-1">
+                    {coords[a.id]}
+                  </span>
+                )}
               </div>
-              <h3 className="text-xl font-semibold text-[#0f2618] mb-1">{a.city}</h3>
+              <h3 className="text-xl font-display font-semibold text-forest mb-1">{a.city}</h3>
               <p className="text-sm text-gray-500 mb-5 leading-relaxed">
                 {a.address[lang]}
               </p>
 
               <a
                 href={`tel:${a.phone}`}
-                className="text-[#0f2618] font-medium flex items-center gap-2 mb-3"
+                className="text-forest font-medium flex items-center gap-2 mb-3 hover:text-lime transition-colors"
               >
-                <Phone className="w-4 h-4 text-[#87A922]" /> {a.phoneDisplay}
+                <Phone className="w-4 h-4 text-lime" /> {a.phoneDisplay}
               </a>
 
-              <div className="mt-auto pt-5 border-t border-gray-100 flex items-center justify-between">
+              <div className="mt-auto pt-5 border-t border-pine/10 flex items-center justify-between">
                 <a
                   href={a.map}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm font-semibold text-[#4a7856] hover:text-[#0f2618] transition-colors flex items-center gap-1.5"
+                  className="text-sm font-semibold text-sage hover:text-forest transition-colors flex items-center gap-1.5"
                 >
                   {t('agencies.itinerary')}
-                  <ArrowUpRight className="w-4 h-4" />
+                  <ArrowUpRight className="w-4 h-4 rtl:-scale-x-100" />
                 </a>
                 <a
                   href={`https://wa.me/${a.phone.replace('+', '')}`}

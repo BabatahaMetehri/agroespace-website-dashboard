@@ -27,7 +27,7 @@ const NavLinkItem = ({
     <span className="relative inline-block py-1">
       {label}
       <span
-        className={`pointer-events-none absolute left-0 -bottom-0.5 h-[1.5px] bg-[#87A922] origin-left transition-transform duration-500 ${
+        className={`pointer-events-none absolute left-0 -bottom-0.5 h-[1.5px] bg-lime origin-left transition-transform duration-500 ${
           active ? 'w-full scale-x-100' : 'w-full scale-x-0 group-hover:scale-x-100'
         }`}
       />
@@ -62,7 +62,7 @@ export const Navigation = () => {
   const transparentTop = isHome && !scrolled;
   const navBackgroundClass = transparentTop
     ? 'bg-transparent py-6 border-b border-transparent'
-    : 'bg-[#0f2618]/90 backdrop-blur-xl py-4 border-b border-white/10';
+    : 'bg-forest/90 backdrop-blur-xl py-4 border-b border-white/10';
 
   const links: { to: string; label: string }[] = [
     { to: '/about', label: t('nav.about') },
@@ -141,7 +141,7 @@ export const Navigation = () => {
               <span className="relative inline-block py-1">
                 {t('nav.activities')}
                 <span
-                  className={`pointer-events-none absolute left-0 -bottom-0.5 h-[1.5px] bg-[#87A922] origin-left transition-transform duration-500 ${
+                  className={`pointer-events-none absolute left-0 -bottom-0.5 h-[1.5px] bg-lime origin-left transition-transform duration-500 ${
                     location.pathname.startsWith('/services')
                       ? 'w-full scale-x-100'
                       : 'w-full scale-x-0 group-hover:scale-x-100'
@@ -160,11 +160,11 @@ export const Navigation = () => {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.2 }}
-                  className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-[#0f2618] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+                  className="absolute top-full left-1/2 -translate-x-1/2 mt-3 w-64 bg-forest border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
                 >
                   <Link
                     to="/services"
-                    className="block px-5 py-3 text-xs uppercase tracking-[0.15em] text-[#87A922] border-b border-white/5 hover:bg-white/5"
+                    className="block px-5 py-3 text-xs uppercase tracking-[0.15em] text-lime border-b border-white/5 hover:bg-white/5"
                   >
                     {t('nav.activities')}
                   </Link>
@@ -192,7 +192,7 @@ export const Navigation = () => {
 
           <Link
             to="/contact"
-            className="px-6 py-2.5 bg-white text-[#0f2618] rounded-full hover:bg-[#87A922] hover:text-white transition-all uppercase tracking-[0.1em] text-xs font-bold"
+            className="px-6 py-2.5 bg-white text-forest rounded-full hover:bg-lime hover:text-white transition-all uppercase tracking-[0.1em] text-xs font-bold"
           >
             {t('nav.contact')}
           </Link>
@@ -218,7 +218,7 @@ export const Navigation = () => {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="md:hidden absolute top-full left-0 right-0 bg-[#0f2618] px-6 py-8 flex flex-col space-y-5 border-b border-white/10 shadow-2xl"
+            className="md:hidden absolute top-full left-0 right-0 bg-forest px-6 py-8 flex flex-col space-y-5 border-b border-white/10 shadow-2xl"
           >
             <Link to="/about" onClick={() => setIsOpen(false)} className="text-white text-lg">
               {t('nav.about')}
@@ -254,7 +254,7 @@ export const Navigation = () => {
               </Link>
             ))}
 
-            <Link to="/contact" onClick={() => setIsOpen(false)} className="text-[#87A922] text-lg">
+            <Link to="/contact" onClick={() => setIsOpen(false)} className="text-lime text-lg">
               {t('nav.contact')}
             </Link>
 

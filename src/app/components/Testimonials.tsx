@@ -1,5 +1,4 @@
 import { motion } from "motion/react";
-import { Quote } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
 
 type Testimonial = {
@@ -48,17 +47,17 @@ export const Testimonials = () => {
   const { t, lang } = useI18n();
   return (
     <section
-      className="py-32 bg-[#f4f7f5] text-[#0f2618]"
+      className="py-32 bg-sand/40 text-forest relative grain"
       style={{ position: "relative" }}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="text-center mb-20">
-          <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
+          <span className="text-lime uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
             {t("testimonials.eyebrow")}
           </span>
-          <h2 className="text-4xl md:text-5xl font-light leading-tight">
+          <h2 className="text-4xl md:text-5xl font-display font-light leading-tight">
             {t("testimonials.title.1")}{" "}
-            <span className="font-serif italic text-[#4a7856]">
+            <span className="italic text-sage">
               {t("testimonials.title.italic")}
             </span>
           </h2>
@@ -66,39 +65,40 @@ export const Testimonials = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {testimonials.map((tm, idx) => (
-            <motion.div
+            <motion.figure
               key={tm.id}
               initial={{ opacity: 0, y: 30 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
-              transition={{ delay: idx * 0.2, duration: 0.8 }}
-              className="bg-white p-12 rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.03)] border border-[#114232]/5 flex flex-col"
+              transition={{ delay: idx * 0.15, duration: 0.8 }}
+              className="relative bg-white p-10 md:p-12 rounded-3xl shadow-[0_20px_50px_rgba(15,38,24,0.05)] border border-pine/10 flex flex-col"
             >
-              <Quote className="w-10 h-10 text-[#87A922]/20 mb-6" />
-              <p className="text-gray-600 text-lg leading-relaxed flex-1 italic mb-8">
-                « {tm.content[lang]} »
-              </p>
+              <span
+                aria-hidden
+                className="block font-display italic text-lime/25 text-[5.5rem] leading-[0.5] select-none mb-6"
+              >
+                “
+              </span>
+              <blockquote className="text-gray-600 text-lg leading-relaxed flex-1 font-display italic mb-8">
+                {tm.content[lang]}
+              </blockquote>
 
-              <div className="flex items-center gap-4 pt-6 border-t border-gray-100">
+              <figcaption className="flex items-center gap-4 pt-6 border-t border-pine/10">
                 <img
                   src={tm.image}
                   alt={tm.name}
-                  className="w-14 h-14 rounded-full object-cover border-2 border-[#f4f7f5]"
+                  className="w-14 h-14 rounded-full object-cover border-2 border-paper"
                   loading="lazy"
                   decoding="async"
                   width="56"
                   height="56"
                 />
                 <div>
-                  <h3 className="font-bold text-[#0f2618] text-base">
-                    {tm.name}
-                  </h3>
-                  <p className="text-sm text-[#4a7856] font-medium">
-                    {tm.role[lang]}
-                  </p>
+                  <h3 className="font-bold text-forest text-base">{tm.name}</h3>
+                  <p className="text-sm text-sage font-medium">{tm.role[lang]}</p>
                 </div>
-              </div>
-            </motion.div>
+              </figcaption>
+            </motion.figure>
           ))}
         </div>
       </div>

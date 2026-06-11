@@ -423,7 +423,7 @@ export const Legal = () => {
   const { lang } = useI18n();
 
   return (
-    <div className="bg-[#f4f7f5] min-h-screen pt-32 pb-24" style={{ position: 'relative' }}>
+    <div className="bg-paper min-h-screen pt-32 pb-24" style={{ position: 'relative' }}>
       <div className="max-w-3xl mx-auto px-6 md:px-12">
         <div className="flex gap-3 mb-10 flex-wrap">
           {(['terms', 'privacy', 'notice'] as Section[]).map((s) => (
@@ -432,8 +432,8 @@ export const Legal = () => {
               to={`/legal/${s}`}
               className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.15em] font-semibold transition-colors ${
                 key === s
-                  ? 'bg-[#0f2618] text-white border border-transparent'
-                  : 'bg-white text-[#0f2618]/70 border border-[#0f2618]/10 hover:text-[#0f2618]'
+                  ? 'bg-forest text-white border border-transparent'
+                  : 'bg-white text-forest/70 border border-forest/10 hover:text-forest'
               }`}
             >
               {titles[s][lang]}
@@ -441,9 +441,9 @@ export const Legal = () => {
           ))}
         </div>
 
-        <h1 className="text-4xl md:text-5xl font-light text-[#0f2618] mb-10">{titles[key][lang]}</h1>
+        <h1 className="text-4xl md:text-5xl font-display font-light text-forest mb-10">{titles[key][lang]}</h1>
         <article className="bg-white rounded-3xl p-8 md:p-12 border border-[#0f2618]/5 shadow-[0_15px_40px_rgba(0,0,0,0.03)]">
-          <p className="whitespace-pre-line text-[#0f2618]/80 leading-relaxed text-base md:text-[17px]">
+          <p className="whitespace-pre-line text-forest/80 leading-relaxed text-base md:text-[17px]">
             {bodies[key][lang]}
           </p>
         </article>

@@ -150,32 +150,32 @@ export const ContactMap = () => {
   const messagePlaceholder = lang === 'ar' ? 'مشروعكم' : lang === 'en' ? 'Your project' : 'Votre projet';
 
   return (
-    <div className="bg-[#0a1c12] text-white" style={{ position: 'relative' }}>
+    <div className="bg-ink text-white" style={{ position: 'relative' }}>
       {/* Header */}
-      <section className="relative pt-32 pb-16 bg-[#0f2618] overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-[480px] h-[480px] rounded-full bg-[#114232] blur-[120px] opacity-50" />
+      <section className="relative pt-32 pb-16 bg-forest overflow-hidden">
+        <div className="absolute -top-40 -right-40 w-[480px] h-[480px] rounded-full bg-pine blur-[120px] opacity-50" />
         <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
-          <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
+          <span className="text-lime uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
             {t('contact.eyebrow')}
           </span>
-          <h1 className="text-4xl md:text-6xl font-light text-white leading-tight max-w-3xl">
+          <h1 className="text-4xl md:text-6xl font-display font-light text-white leading-tight max-w-3xl">
             {t('contact.title.1')}{' '}
-            <span className="font-serif italic text-white/85">{t('contact.title.italic')}</span>
+            <span className="italic text-lime">{t('contact.title.italic')}</span>
           </h1>
         </div>
       </section>
 
       {/* Form + Map */}
-      <section className="bg-[#0a1c12] py-20">
+      <section className="bg-ink py-20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-10">
-          <div className="bg-[#0f2618] rounded-3xl p-8 md:p-12 border border-white/5">
+          <div className="bg-forest rounded-3xl p-8 md:p-12 border border-white/5">
             <form className="space-y-5" onSubmit={handleSubmit}>
               <input
                 type="text"
                 name="name"
                 required
                 placeholder={namePlaceholder}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] focus:bg-white/10 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-lime focus:bg-white/10 transition-all"
               />
               <input
                 type="tel"
@@ -185,13 +185,13 @@ export const ContactMap = () => {
                 pattern="[+\d][\d\s().\-]{5,24}"
                 autoComplete="tel"
                 placeholder={phonePlaceholder}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] focus:bg-white/10 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-lime focus:bg-white/10 transition-all"
               />
               <input
                 type="email"
                 name="email"
                 placeholder={emailPlaceholder}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] focus:bg-white/10 transition-all"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-lime focus:bg-white/10 transition-all"
               />
 
               <div className="relative">
@@ -199,13 +199,13 @@ export const ContactMap = () => {
                   name="product"
                   required
                   defaultValue=""
-                  className="w-full appearance-none bg-[#114232] border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-[#87A922] transition-all"
+                  className="w-full appearance-none bg-pine border border-white/10 rounded-2xl px-6 py-4 text-white focus:outline-none focus:border-lime transition-all"
                 >
-                  <option value="" disabled className="bg-[#114232] text-white/50">
+                  <option value="" disabled className="bg-pine text-white/50">
                     {productPlaceholder}
                   </option>
                   {PRODUCT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value} className="bg-[#114232] text-white">
+                    <option key={o.value} value={o.value} className="bg-pine text-white">
                       {o[lang]}
                     </option>
                   ))}
@@ -217,7 +217,7 @@ export const ContactMap = () => {
                 name="message"
                 rows={4}
                 placeholder={messagePlaceholder}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922] focus:bg-white/10 transition-all resize-none"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-lime focus:bg-white/10 transition-all resize-none"
               />
 
               <label className="flex items-start gap-3 py-2 cursor-pointer">
@@ -229,7 +229,7 @@ export const ContactMap = () => {
                     required
                     className="absolute w-full h-full opacity-0 cursor-pointer peer"
                   />
-                  <Check className="w-3 h-3 text-[#87A922] opacity-0 peer-checked:opacity-100 transition-opacity" />
+                  <Check className="w-3 h-3 text-lime opacity-0 peer-checked:opacity-100 transition-opacity" />
                 </span>
                 <span className="text-white/60 text-sm leading-relaxed">
                   {t('contact.consent')}{' '}
@@ -257,14 +257,14 @@ export const ContactMap = () => {
           </div>
 
           {/* Map */}
-          <div className="relative bg-[#0f2618] rounded-3xl border border-white/5 overflow-hidden min-h-[520px]">
+          <div className="relative bg-forest rounded-3xl border border-white/5 overflow-hidden min-h-[520px]">
             <div className="absolute top-6 left-6 right-6 z-20">
               <button
                 onClick={() => setOpenDropdown((o) => !o)}
                 className="w-full bg-white/10 backdrop-blur-xl border border-white/20 rounded-2xl px-5 py-4 flex items-center justify-between text-white shadow-2xl"
               >
                 <span className="flex items-center gap-3 text-start">
-                  <MapPin className="w-5 h-5 text-[#87A922] flex-shrink-0" />
+                  <MapPin className="w-5 h-5 text-lime flex-shrink-0" />
                   <span className="font-medium truncate">{selected.fullCity[lang]}</span>
                 </span>
                 <ChevronDown
@@ -278,7 +278,7 @@ export const ContactMap = () => {
                     initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="mt-2 bg-[#114232] border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
+                    className="mt-2 bg-pine border border-white/10 rounded-2xl overflow-hidden shadow-2xl"
                   >
                     {agencies.map((a) => (
                       <button
@@ -295,7 +295,7 @@ export const ContactMap = () => {
                           <div className="font-medium">{a.fullCity[lang]}</div>
                           <div className="text-xs text-white/50 mt-0.5">{a.phoneDisplay}</div>
                         </div>
-                        {a.id === selectedId && <Check className="w-4 h-4 text-[#87A922]" />}
+                        {a.id === selectedId && <Check className="w-4 h-4 text-lime" />}
                       </button>
                     ))}
                   </motion.div>
@@ -313,7 +313,7 @@ export const ContactMap = () => {
               allowFullScreen
             />
 
-            <div className="absolute bottom-6 left-6 right-6 z-20 bg-[#0f2618]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
+            <div className="absolute bottom-6 left-6 right-6 z-20 bg-forest/90 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
               <div className="flex flex-wrap items-center gap-3 justify-between">
                 <div className="text-white">
                   <div className="font-semibold">{selected.city}</div>
@@ -322,7 +322,7 @@ export const ContactMap = () => {
                 <div className="flex gap-2">
                   <a
                     href={`tel:${selected.phone}`}
-                    className="flex items-center gap-2 bg-white/10 hover:bg-white text-white hover:text-[#0f2618] rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-colors"
+                    className="flex items-center gap-2 bg-white/10 hover:bg-white text-white hover:text-forest rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-colors"
                   >
                     <Phone className="w-3.5 h-3.5" /> {selected.phoneDisplay}
                   </a>
@@ -330,7 +330,7 @@ export const ContactMap = () => {
                     href={selected.map}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-colors"
+                    className="flex items-center gap-2 bg-lime hover:bg-lime-deep text-white rounded-full px-4 py-2 text-xs font-bold uppercase tracking-[0.12em] transition-colors"
                   >
                     {t('agencies.itinerary')}
                     <ArrowUpRight className="w-3.5 h-3.5" />
@@ -343,25 +343,25 @@ export const ContactMap = () => {
       </section>
 
       {/* Big agency cards */}
-      <section className="bg-[#0a1c12] pb-20">
+      <section className="bg-ink pb-20">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <h2 className="text-3xl md:text-4xl font-light text-white mb-12">
+          <h2 className="text-3xl md:text-4xl font-display font-light text-white mb-12">
             {t('agencies.title.1')}{' '}
-            <span className="font-serif italic text-white/80">{t('agencies.title.italic')}</span>
+            <span className="italic text-lime">{t('agencies.title.italic')}</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {agencies.map((a) => (
               <div
                 key={a.id}
-                className={`group bg-[#0f2618] rounded-3xl p-8 border ${
-                  a.id === selectedId ? 'border-[#87A922]/40' : 'border-white/5'
+                className={`group bg-forest rounded-3xl p-8 border ${
+                  a.id === selectedId ? 'border-lime/40' : 'border-white/5'
                 } hover:border-white/20 transition-all duration-500`}
               >
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-xl font-medium text-white">{a.fullCity[lang]}</h3>
-                      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold bg-[#87A922]/15 text-[#87A922] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] uppercase tracking-[0.15em] font-semibold bg-lime/15 text-lime px-2 py-0.5 rounded-full">
                         {a.type[lang]}
                       </span>
                     </div>
@@ -371,7 +371,7 @@ export const ContactMap = () => {
                     onClick={() => setSelectedId(a.id)}
                     className={`text-[10px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 rounded-full transition-colors flex-shrink-0 ${
                       a.id === selectedId
-                        ? 'bg-[#87A922] text-white'
+                        ? 'bg-lime text-white'
                         : 'bg-white/5 text-white/60 hover:bg-white/10'
                     }`}
                   >
@@ -385,7 +385,7 @@ export const ContactMap = () => {
                     href={`tel:${a.phone}`}
                     className="flex items-center gap-2 text-white/80 hover:text-white text-sm"
                   >
-                    <Phone className="w-4 h-4 text-[#87A922]" /> {a.phoneDisplay}
+                    <Phone className="w-4 h-4 text-lime" /> {a.phoneDisplay}
                   </a>
                   <a
                     href={`https://wa.me/${a.phone.replace('+', '')}`}
@@ -412,11 +412,11 @@ export const ContactMap = () => {
       </section>
 
       {/* FAQ */}
-      <section className="bg-[#f4f7f5] text-[#0f2618] py-24">
+      <section className="bg-paper text-forest py-24">
         <div className="max-w-4xl mx-auto px-6 md:px-12">
-          <h2 className="text-4xl md:text-5xl font-light mb-12 text-center">
+          <h2 className="text-4xl md:text-5xl font-display font-light mb-12 text-center">
             {t('faq.title.1')}{' '}
-            <span className="font-serif italic text-[#4a7856]">{t('faq.title.italic')}</span>
+            <span className="italic text-sage">{t('faq.title.italic')}</span>
           </h2>
 
           <div className="space-y-3">
@@ -431,11 +431,11 @@ export const ContactMap = () => {
                     onClick={() => setOpenFaq(open ? null : i)}
                     className="w-full flex items-center justify-between gap-4 px-6 py-5 text-start"
                   >
-                    <span className="font-medium text-[#0f2618]">{item.q[lang]}</span>
+                    <span className="font-medium text-forest">{item.q[lang]}</span>
                     {open ? (
-                      <Minus className="w-5 h-5 text-[#87A922] flex-shrink-0" />
+                      <Minus className="w-5 h-5 text-lime flex-shrink-0" />
                     ) : (
-                      <Plus className="w-5 h-5 text-[#0f2618]/40 flex-shrink-0" />
+                      <Plus className="w-5 h-5 text-forest/40 flex-shrink-0" />
                     )}
                   </button>
                   <AnimatePresence initial={false}>
@@ -459,10 +459,10 @@ export const ContactMap = () => {
       </section>
 
       {/* Newsletter */}
-      <section className="bg-[#0f2618] py-20">
+      <section className="bg-forest py-20">
         <div className="max-w-3xl mx-auto px-6 md:px-12 text-center">
-          <Mail className="w-10 h-10 text-[#87A922] mx-auto mb-6" />
-          <h2 className="text-3xl md:text-4xl font-light text-white mb-4">{t('newsletter.title')}</h2>
+          <Mail className="w-10 h-10 text-lime mx-auto mb-6" />
+          <h2 className="text-3xl md:text-4xl font-display font-light text-white mb-4">{t('newsletter.title')}</h2>
           <p className="text-white/60 mb-8">{t('newsletter.subtitle')}</p>
           <form
             onSubmit={async (e) => {
@@ -491,11 +491,11 @@ export const ContactMap = () => {
               name="email"
               required
               placeholder={t('newsletter.placeholder')}
-              className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-[#87A922]"
+              className="flex-1 bg-white/5 border border-white/10 rounded-full px-6 py-4 text-white placeholder-white/40 focus:outline-none focus:border-lime"
             />
             <button
               type="submit"
-              className="bg-[#87A922] hover:bg-[#6c871b] text-white rounded-full px-7 py-4 font-bold uppercase tracking-[0.1em] text-sm transition-colors"
+              className="bg-lime hover:bg-lime-deep text-white rounded-full px-7 py-4 font-bold uppercase tracking-[0.1em] text-sm transition-colors"
             >
               {t('newsletter.submit')}
             </button>

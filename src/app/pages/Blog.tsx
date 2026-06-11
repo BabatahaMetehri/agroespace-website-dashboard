@@ -38,15 +38,15 @@ export const Blog = () => {
   const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   return (
-    <div className="bg-[#f4f7f5] min-h-screen pt-32 pb-24" style={{ position: 'relative' }}>
+    <div className="bg-paper min-h-screen pt-32 pb-24" style={{ position: 'relative' }}>
       <div className="max-w-7xl mx-auto px-6 md:px-12">
         <div className="mb-16 text-center">
-          <span className="text-[#114232] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
+          <span className="text-pine uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
             {t('blog.preview.eyebrow')}
           </span>
-          <h1 className="text-4xl md:text-6xl font-light text-[#0f2618]">
+          <h1 className="text-4xl md:text-6xl font-display font-light text-forest">
             {t('blog.preview.title.1')}{' '}
-            <span className="font-serif italic text-[#4a7856]">{t('blog.preview.title.italic')}</span>
+            <span className="italic text-sage">{t('blog.preview.title.italic')}</span>
           </h1>
         </div>
 
@@ -58,7 +58,7 @@ export const Blog = () => {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Rechercher un article..."
-              className="w-full bg-white border border-[#0f2618]/5 rounded-full py-3 ps-12 pe-4 text-[#0f2618] focus:outline-none focus:border-[#87A922] transition-colors"
+              className="w-full bg-white border border-forest/5 rounded-full py-3 ps-12 pe-4 text-forest focus:outline-none focus:border-lime transition-colors"
             />
           </div>
 
@@ -69,8 +69,8 @@ export const Blog = () => {
                 onClick={() => setActiveCat(c)}
                 className={`px-4 py-2 rounded-full text-xs uppercase tracking-[0.15em] font-semibold transition-colors ${
                   activeCat === c
-                    ? 'bg-[#0f2618] text-white border border-transparent'
-                    : 'bg-white text-[#0f2618]/70 border border-[#0f2618]/10 hover:text-[#0f2618]'
+                    ? 'bg-forest text-white border border-transparent'
+                    : 'bg-white text-forest/70 border border-forest/10 hover:text-forest'
                 }`}
               >
                 {c === 'all' ? 'Tous' : c}
@@ -94,7 +94,7 @@ export const Blog = () => {
               >
                 <Link
                   to={`/blog/${article.slug}`}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-[#114232]/5 hover:shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition-all duration-500 cursor-pointer flex flex-col h-full"
+                  className="group bg-white rounded-3xl overflow-hidden shadow-[0_10px_40px_rgba(0,0,0,0.04)] border border-pine/10 hover:shadow-[0_20px_60px_rgba(0,0,0,0.08)] transition-all duration-500 cursor-pointer flex flex-col h-full"
                 >
                   <div className="relative aspect-[16/9] overflow-hidden shrink-0">
                     <img
@@ -104,19 +104,19 @@ export const Blog = () => {
                       loading="lazy"
                       decoding="async"
                     />
-                    <span className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.18em] font-bold bg-white/90 text-[#0f2618] px-3 py-1.5 rounded-full">
+                    <span className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.18em] font-bold bg-white/90 text-forest px-3 py-1.5 rounded-full">
                       {article.category}
                     </span>
                   </div>
 
                   <div className="p-6 md:p-8 flex flex-col flex-1">
-                    <div className="text-[#87A922] text-sm font-semibold tracking-wider uppercase mb-3">
+                    <div className="text-lime text-sm font-semibold tracking-wider uppercase mb-3">
                       {new Date(article.date).toLocaleDateString(
                         lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-US' : 'fr-FR',
                         { day: '2-digit', month: 'long', year: 'numeric' }
                       )}
                     </div>
-                    <h2 className="text-lg md:text-xl font-medium text-[#0f2618] leading-snug mb-3 group-hover:text-[#4a7856] transition-colors">
+                    <h2 className="text-lg md:text-xl font-medium text-forest leading-snug mb-3 group-hover:text-sage transition-colors">
                       {article.title[lang]}
                     </h2>
                     <p className="text-gray-500 leading-relaxed line-clamp-3 mb-6 flex-1 text-sm md:text-base">
@@ -132,7 +132,7 @@ export const Blog = () => {
                           <Heart className="w-4 h-4" /> {article.likes.toLocaleString()}
                         </span>
                       </div>
-                      <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-[#87A922] transition-colors shrink-0">
+                      <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-lime transition-colors shrink-0">
                         <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" />
                       </div>
                     </div>
@@ -149,7 +149,7 @@ export const Blog = () => {
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={safePage === 1}
-              className="w-10 h-10 rounded-full border border-[#0f2618]/10 bg-white hover:bg-[#0f2618]/5 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors text-[#0f2618]"
+              className="w-10 h-10 rounded-full border border-forest/10 bg-white hover:bg-forest/5 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors text-forest"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -159,8 +159,8 @@ export const Blog = () => {
                 onClick={() => setPage(n)}
                 className={`min-w-10 h-10 px-3 rounded-full text-sm font-semibold transition-colors ${
                   n === safePage
-                    ? 'bg-[#0f2618] text-white'
-                    : 'bg-white text-[#0f2618]/70 border border-[#0f2618]/10 hover:bg-[#0f2618]/5'
+                    ? 'bg-forest text-white'
+                    : 'bg-white text-forest/70 border border-forest/10 hover:bg-forest/5'
                 }`}
               >
                 {n}
@@ -169,7 +169,7 @@ export const Blog = () => {
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={safePage === totalPages}
-              className="w-10 h-10 rounded-full border border-[#0f2618]/10 bg-white hover:bg-[#0f2618]/5 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors text-[#0f2618]"
+              className="w-10 h-10 rounded-full border border-forest/10 bg-white hover:bg-forest/5 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-colors text-forest"
             >
               <ChevronRight className="w-4 h-4" />
             </button>

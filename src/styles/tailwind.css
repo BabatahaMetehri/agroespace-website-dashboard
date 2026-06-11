@@ -2,3 +2,69 @@
 @source '../**/*.{js,ts,jsx,tsx}';
 
 @import 'tw-animate-css';
+
+/* ── AGROESPACE design system ("Precision Fields") ─────────────────────────
+   Brand typography + signature utilities used across the public site.
+   Latin: Fraunces (display serif) + Archivo (industrial grotesque).
+   Arabic overrides live in fonts.css (IBM Plex Sans Arabic / Amiri). */
+@theme {
+  --font-sans: 'Archivo', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Fraunces', Georgia, 'Times New Roman', serif;
+  --font-display: 'Fraunces', Georgia, serif;
+
+  /* Brand palette — single source of truth for the public site. */
+  --color-ink: #0a1c12;       /* darkest — page backgrounds */
+  --color-forest: #0f2618;    /* primary dark surface */
+  --color-pine: #114232;      /* mid green */
+  --color-sage: #4a7856;      /* soft green for accents on light */
+  --color-lime: #87a922;      /* signature accent */
+  --color-lime-deep: #6c871b; /* accent hover */
+  --color-mist: #f4f7f5;      /* cool light surface (legacy) */
+  --color-paper: #f5f3ec;     /* warm light surface */
+  --color-sand: #e7e0d0;      /* desert accent */
+
+  --animate-marquee: marquee 36s linear infinite;
+  --animate-pivot-spin: pivot-spin 48s linear infinite;
+  --animate-pivot-spin-rev: pivot-spin-rev 64s linear infinite;
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+  @keyframes pivot-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  @keyframes pivot-spin-rev {
+    from { transform: rotate(360deg); }
+    to   { transform: rotate(0deg); }
+  }
+}
+
+/* Display utility: Fraunces with optical sizing enabled. */
+@utility font-display {
+  font-family: var(--font-display);
+  font-optical-sizing: auto;
+}
+
+/* Film-grain overlay — adds organic depth to large flat surfaces.
+   Pure SVG data-URI: zero network cost. Apply alongside `relative` (or any
+   positioned parent) so the pseudo-element anchors correctly. */
+.grain::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-marquee,
+  .animate-pivot-spin,
+  .animate-pivot-spin-rev {
+    animation: none !important;
+  }
+}

@@ -48,12 +48,12 @@ export const VideoShowcase = () => {
       className="py-32 bg-[#0f2618] overflow-hidden"
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 mb-16 text-center">
-        <span className="text-[#87A922] uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
+        <span className="text-lime uppercase tracking-[0.2em] text-sm font-semibold mb-4 block">
           {t("video.eyebrow")}
         </span>
-        <h2 className="text-4xl md:text-5xl font-light text-white leading-tight">
+        <h2 className="text-4xl md:text-5xl font-display font-light text-white leading-tight">
           {t("video.title.1")}{" "}
-          <span className="font-serif italic text-white/80">
+          <span className="italic text-lime">
             {t("video.title.italic")}
           </span>
         </h2>

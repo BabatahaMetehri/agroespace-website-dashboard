@@ -23,23 +23,26 @@ export const BlogPreview = () => {
   const featured = articles.slice(0, 3);
 
   return (
-    <section className="py-32 bg-white">
-      <div className="max-w-7xl mx-auto px-6 md:px-12">
+    <section className="py-32 bg-paper relative grain">
+      <div className="max-w-7xl mx-auto px-6 md:px-12 relative z-10">
         <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-8 mb-16">
           <div>
-            <span className="text-[#114232] uppercase tracking-[0.2em] text-sm font-semibold mb-3 block">
-              {t('blog.preview.eyebrow')}
-            </span>
-            <h2 className="text-4xl md:text-5xl font-light text-[#0f2618] leading-tight">
+            <div className="flex items-center gap-4 mb-3">
+              <span className="h-px w-10 bg-sage/40" aria-hidden />
+              <span className="text-pine uppercase tracking-[0.2em] text-sm font-semibold">
+                {t('blog.preview.eyebrow')}
+              </span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-display font-light text-forest leading-tight">
               {t('blog.preview.title.1')}{' '}
-              <span className="font-serif italic text-[#4a7856]">{t('blog.preview.title.italic')}</span>
+              <span className="italic text-sage">{t('blog.preview.title.italic')}</span>
             </h2>
           </div>
           <Link
             to="/blog"
-            className="inline-flex items-center gap-2 text-[#0f2618] hover:text-[#87A922] font-semibold uppercase tracking-[0.15em] text-xs transition-colors"
+            className="inline-flex items-center gap-2 text-forest hover:text-lime font-semibold uppercase tracking-[0.15em] text-xs transition-colors"
           >
-            {t('blog.preview.cta')} <ArrowRight className="w-4 h-4" />
+            {t('blog.preview.cta')} <ArrowRight className="w-4 h-4 rtl:-scale-x-100" />
           </Link>
         </div>
 
@@ -54,7 +57,7 @@ export const BlogPreview = () => {
             >
               <Link
                 to={`/blog/${a.slug}`}
-                className="group block bg-white rounded-3xl overflow-hidden border border-[#114232]/5 shadow-[0_15px_40px_rgba(0,0,0,0.03)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.07)] hover:-translate-y-1 transition-all duration-500"
+                className="group block bg-white rounded-3xl overflow-hidden border border-pine/10 shadow-[0_15px_40px_rgba(15,38,24,0.03)] hover:shadow-[0_25px_60px_rgba(15,38,24,0.08)] hover:-translate-y-1 hover:border-lime/40 transition-all duration-500"
               >
                 <div className="relative aspect-[16/10] overflow-hidden">
                   <img
@@ -62,15 +65,15 @@ export const BlogPreview = () => {
                     alt={a.title[lang]}
                     className="w-full h-full object-cover transform group-hover:scale-105 transition-transform duration-700"
                   />
-                  <span className="absolute top-4 left-4 text-[10px] uppercase tracking-[0.18em] font-bold bg-white/90 text-[#0f2618] px-3 py-1.5 rounded-full">
+                  <span className="absolute top-4 ltr:left-4 rtl:right-4 text-[10px] uppercase tracking-[0.18em] font-bold bg-white/90 text-forest px-3 py-1.5 rounded-full">
                     {a.category}
                   </span>
                 </div>
                 <div className="p-7">
-                  <div className="text-xs text-[#87A922] font-semibold tracking-wider uppercase mb-3">
+                  <div className="text-xs text-lime font-semibold tracking-wider uppercase mb-3">
                     {formatDate(a.date, lang)}
                   </div>
-                  <h3 className="text-lg md:text-xl font-medium text-[#0f2618] leading-snug mb-4 group-hover:text-[#4a7856] transition-colors line-clamp-3">
+                  <h3 className="text-lg md:text-xl font-display font-medium text-forest leading-snug mb-4 group-hover:text-sage transition-colors line-clamp-3">
                     {a.title[lang]}
                   </h3>
                   <p className="text-gray-500 text-sm leading-relaxed line-clamp-2 mb-5">
@@ -85,9 +88,9 @@ export const BlogPreview = () => {
                         <Heart className="w-3.5 h-3.5" /> {a.likes.toLocaleString()}
                       </span>
                     </div>
-                    <span className="text-[#0f2618] font-semibold uppercase tracking-[0.12em] flex items-center gap-1.5 group-hover:text-[#87A922] transition-colors">
+                    <span className="text-forest font-semibold uppercase tracking-[0.12em] flex items-center gap-1.5 group-hover:text-lime transition-colors">
                       {t('blog.read')}
-                      <ArrowRight className="w-3.5 h-3.5" />
+                      <ArrowRight className="w-3.5 h-3.5 rtl:-scale-x-100" />
                     </span>
                   </div>
                 </div>

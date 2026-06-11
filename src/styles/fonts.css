@@ -14,8 +14,9 @@ html[lang="ar"] .font-sans {
   font-family: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, sans-serif;
 }
 
-/* Decorative serif accents → elegant Naskh instead of a Latin serif. */
-html[lang="ar"] .font-serif {
+/* Decorative serif/display accents → elegant Naskh instead of a Latin serif. */
+html[lang="ar"] .font-serif,
+html[lang="ar"] .font-display {
   font-family: 'Amiri', 'IBM Plex Sans Arabic', serif;
 }
 

@@ -76,15 +76,15 @@ export const BlogDetail = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f2618] flex items-center justify-center text-white pt-24">
-        <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-[#87A922] animate-spin" />
+      <div className="min-h-screen bg-forest flex items-center justify-center text-white pt-24">
+        <div className="w-10 h-10 rounded-full border-2 border-white/10 border-t-lime animate-spin" />
       </div>
     );
   }
 
   if (!article) {
     return (
-      <div className="min-h-screen bg-[#0f2618] flex items-center justify-center text-white pt-24">
+      <div className="min-h-screen bg-forest flex items-center justify-center text-white pt-24">
         <div className="text-center">
           <p className="text-3xl font-light mb-6">{t('blog.detail.notfound')}</p>
           <Link to="/blog" className="underline">
@@ -149,20 +149,20 @@ export const BlogDetail = () => {
   };
 
   return (
-    <div className="bg-[#f4f7f5] pt-32 pb-24" style={{ position: 'relative' }}>
+    <div className="bg-paper pt-32 pb-24" style={{ position: 'relative' }}>
       <article className="max-w-3xl mx-auto px-6 md:px-12">
         <Link
           to="/blog"
-          className="inline-flex items-center gap-2 text-[#0f2618]/60 hover:text-[#0f2618] text-xs uppercase tracking-[0.2em] mb-8"
+          className="inline-flex items-center gap-2 text-forest/60 hover:text-forest text-xs uppercase tracking-[0.2em] mb-8"
         >
           <ArrowLeft className="w-4 h-4" /> {t('blog.preview.cta')}
         </Link>
 
-        <span className="inline-block bg-white text-[#0f2618] text-[10px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 rounded-full mb-4">
+        <span className="inline-block bg-white text-forest text-[10px] uppercase tracking-[0.18em] font-bold px-3 py-1.5 rounded-full mb-4">
           {article.category}
         </span>
 
-        <h1 className="text-4xl md:text-6xl font-light text-[#0f2618] leading-[1.1] mb-6">
+        <h1 className="text-4xl md:text-6xl font-display font-light text-forest leading-[1.08] mb-6">
           {article.title[lang]}
         </h1>
 
@@ -174,7 +174,7 @@ export const BlogDetail = () => {
           <img src={article.image} alt={article.title[lang]} className="w-full h-full object-cover" />
         </div>
 
-        <div className="prose prose-lg max-w-none text-[#0f2618]/85 leading-relaxed whitespace-pre-line">
+        <div className="prose prose-lg max-w-none text-forest/85 leading-relaxed whitespace-pre-line">
           {article.body[lang]}
         </div>
 
@@ -184,7 +184,7 @@ export const BlogDetail = () => {
 
         {article.videos && article.videos.length > 0 && (
           <section className="my-12 space-y-6">
-            <div className="text-xs uppercase tracking-[0.18em] text-[#87A922] font-semibold">
+            <div className="text-xs uppercase tracking-[0.18em] text-lime font-semibold">
               {t('blog.detail.videos')}
             </div>
             {article.videos.map((url, i) => (
@@ -194,13 +194,13 @@ export const BlogDetail = () => {
         )}
 
         {/* Action bar */}
-        <div className="mt-12 flex flex-wrap gap-3 items-center border-t border-[#0f2618]/5 pt-8">
+        <div className="mt-12 flex flex-wrap gap-3 items-center border-t border-forest/5 pt-8">
           <button
             onClick={toggleLike}
             className={`flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold border transition-colors ${
               liked
                 ? 'bg-red-50 text-red-600 border-red-200'
-                : 'bg-white text-[#0f2618] border-[#0f2618]/10 hover:bg-[#0f2618] hover:text-white hover:border-transparent'
+                : 'bg-white text-forest border-forest/10 hover:bg-forest hover:text-white hover:border-transparent'
             }`}
           >
             <Heart className={`w-4 h-4 ${liked ? 'fill-current' : ''}`} />
@@ -208,7 +208,7 @@ export const BlogDetail = () => {
           </button>
           <button
             onClick={onShare}
-            className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold bg-white text-[#0f2618] border border-[#0f2618]/10 hover:bg-[#0f2618] hover:text-white hover:border-transparent transition-colors"
+            className="flex items-center gap-2 px-5 py-3 rounded-full text-sm font-semibold bg-white text-forest border border-forest/10 hover:bg-forest hover:text-white hover:border-transparent transition-colors"
           >
             <Share2 className="w-4 h-4" /> {t('blog.detail.share')}
           </button>
@@ -216,7 +216,7 @@ export const BlogDetail = () => {
             href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(article.title[lang])}&url=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[#0f2618]/60 hover:text-[#0f2618]"
+            className="text-sm text-forest/60 hover:text-forest"
           >
             Tweet
           </a>
@@ -224,7 +224,7 @@ export const BlogDetail = () => {
             href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sm text-[#0f2618]/60 hover:text-[#0f2618]"
+            className="text-sm text-forest/60 hover:text-forest"
           >
             Facebook
           </a>
@@ -232,16 +232,16 @@ export const BlogDetail = () => {
 
         {/* Comments */}
         <section className="mt-16">
-          <h2 className="text-2xl font-medium text-[#0f2618] mb-6 flex items-center gap-3">
+          <h2 className="text-2xl font-medium text-forest mb-6 flex items-center gap-3">
             <MessageCircle className="w-5 h-5" /> {t('blog.detail.comments')} ({comments.length})
           </h2>
 
-          <form onSubmit={onSubmitComment} className="bg-white rounded-3xl p-6 md:p-8 border border-[#0f2618]/5 mb-8">
+          <form onSubmit={onSubmitComment} className="bg-white rounded-3xl p-6 md:p-8 border border-forest/5 mb-8">
             <input
               value={draftAuthor}
               onChange={(e) => setDraftAuthor(e.target.value)}
               placeholder={t('blog.comment.name')}
-              className="w-full bg-[#f4f7f5] border border-transparent rounded-xl px-4 py-3 text-[#0f2618] focus:outline-none focus:border-[#87A922] mb-3"
+              className="w-full bg-paper border border-transparent rounded-xl px-4 py-3 text-forest focus:outline-none focus:border-lime mb-3"
               maxLength={80}
               required
             />
@@ -250,13 +250,13 @@ export const BlogDetail = () => {
               onChange={(e) => setDraftBody(e.target.value)}
               rows={3}
               placeholder={t('blog.comment.body')}
-              className="w-full bg-[#f4f7f5] border border-transparent rounded-xl px-4 py-3 text-[#0f2618] focus:outline-none focus:border-[#87A922] resize-none"
+              className="w-full bg-paper border border-transparent rounded-xl px-4 py-3 text-forest focus:outline-none focus:border-lime resize-none"
               maxLength={1000}
               required
             />
             <button
               type="submit"
-              className="mt-4 inline-flex items-center gap-2 bg-[#87A922] hover:bg-[#6c871b] text-white text-sm font-bold uppercase tracking-[0.1em] px-6 py-3 rounded-full transition-colors"
+              className="mt-4 inline-flex items-center gap-2 bg-lime hover:bg-lime-deep text-white text-sm font-bold uppercase tracking-[0.1em] px-6 py-3 rounded-full transition-colors"
             >
               <Send className="w-4 h-4" /> {t('blog.comment.publish')}
             </button>
@@ -271,15 +271,15 @@ export const BlogDetail = () => {
                 key={c.id}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-2xl p-6 border border-[#0f2618]/5"
+                className="bg-white rounded-2xl p-6 border border-forest/5"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="font-semibold text-[#0f2618]">{c.author}</span>
+                  <span className="font-semibold text-forest">{c.author}</span>
                   <span className="text-xs text-gray-400">
                     {new Date(c.created).toLocaleString(lang === 'ar' ? 'ar-DZ' : lang === 'en' ? 'en-US' : 'fr-FR')}
                   </span>
                 </div>
-                <p className="text-[#0f2618]/80 text-sm leading-relaxed whitespace-pre-line">{c.body}</p>
+                <p className="text-forest/80 text-sm leading-relaxed whitespace-pre-line">{c.body}</p>
               </motion.div>
             ))}
           </div>
@@ -288,13 +288,13 @@ export const BlogDetail = () => {
 
       {/* Suggested */}
       <section className="max-w-7xl mx-auto px-6 md:px-12 mt-24">
-        <h2 className="text-2xl md:text-3xl font-medium text-[#0f2618] mb-8">{t('blog.detail.next')}</h2>
+        <h2 className="text-2xl md:text-3xl font-medium text-forest mb-8">{t('blog.detail.next')}</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {suggested.map((s) => (
             <Link
               key={s.slug}
               to={`/blog/${s.slug}`}
-              className="group block bg-white rounded-3xl overflow-hidden border border-[#0f2618]/5 shadow-[0_15px_40px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-500"
+              className="group block bg-white rounded-3xl overflow-hidden border border-forest/5 shadow-[0_15px_40px_rgba(0,0,0,0.04)] hover:shadow-[0_25px_60px_rgba(0,0,0,0.08)] hover:-translate-y-1 transition-all duration-500"
             >
               <div className="aspect-[16/10] overflow-hidden">
                 <img
@@ -304,10 +304,10 @@ export const BlogDetail = () => {
                 />
               </div>
               <div className="p-6">
-                <h3 className="text-base md:text-lg font-medium text-[#0f2618] leading-snug mb-3 group-hover:text-[#4a7856] transition-colors line-clamp-3">
+                <h3 className="text-base md:text-lg font-medium text-forest leading-snug mb-3 group-hover:text-sage transition-colors line-clamp-3">
                   {s.title[lang]}
                 </h3>
-                <span className="text-xs text-[#0f2618] font-semibold uppercase tracking-[0.15em] flex items-center gap-1.5 group-hover:text-[#87A922] transition-colors">
+                <span className="text-xs text-forest font-semibold uppercase tracking-[0.15em] flex items-center gap-1.5 group-hover:text-lime transition-colors">
                   {t('blog.read')}
                   <ArrowRight className="w-3.5 h-3.5" />
                 </span>
