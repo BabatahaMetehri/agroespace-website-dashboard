@@ -1,27 +1,46 @@
-import { Outlet } from 'react-router';
+import { useEffect } from 'react';
+import { Outlet, useLocation } from 'react-router';
+import { motion } from 'motion/react';
 import { Toaster } from 'sonner';
 import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { useI18n } from '../i18n/I18nProvider';
 import { GoogleAnalytics } from '../analytics/GoogleAnalytics';
+import { CustomCursor } from '../components/fx/CustomCursor';
+import { Preloader } from '../components/fx/Preloader';
 
 export const MainLayout = () => {
   const { dir } = useI18n();
+  const { pathname } = useLocation();
   // Float WhatsApp on the side closest to the user's reading direction
   const whatsappSide = dir === 'rtl' ? 'left-6' : 'right-6';
 
+  // SPA navigations keep the scroll position by default — always start new
+  // pages at the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
   return (
     <div
-      className="bg-[#f4f7f5] min-h-screen font-sans selection:bg-[#87A922] selection:text-white"
+      className="bg-paper min-h-screen font-sans selection:bg-lime selection:text-white"
       style={{ position: 'relative' }}
       dir={dir}
     >
       {/* GA4 — needs to be inside RouterProvider so useLocation() works */}
       <GoogleAnalytics />
+      <Preloader />
+      <CustomCursor />
       <Navigation />
-      <main>
+      {/* Soft page-entrance on every route change */}
+      <motion.main
+        key={pathname}
+        initial={{ opacity: 0, y: 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
         <Outlet />
-      </main>
+      </motion.main>
       <Footer />
 
       {/* Floating WhatsApp Button */}

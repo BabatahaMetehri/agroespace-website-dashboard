@@ -47,6 +47,34 @@
   font-optical-sizing: auto;
 }
 
+/* Industrial display voice: Archivo stretched to its widest, heavy, tight.
+   Used for the oversized uppercase statements across the site. */
+@utility font-industrial {
+  font-family: var(--font-sans);
+  font-variation-settings: 'wdth' 125;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Outline (stroke-only) type for ghost headlines. */
+@utility text-stroke-lime {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(135, 169, 34, 0.4);
+}
+@utility text-stroke-white {
+  color: transparent;
+  -webkit-text-stroke: 1.5px rgba(255, 255, 255, 0.25);
+}
+
+/* Hide the native cursor where the custom cursor is active (pointer:fine).
+   Interactive elements keep their semantics; only the visual cursor changes. */
+@media (pointer: fine) {
+  .custom-cursor-active,
+  .custom-cursor-active * {
+    cursor: none !important;
+  }
+}
+
 /* Film-grain overlay — adds organic depth to large flat surfaces.
    Pure SVG data-URI: zero network cost. Apply alongside `relative` (or any
    positioned parent) so the pseudo-element anchors correctly. */

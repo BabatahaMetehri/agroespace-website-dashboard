@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { Phone } from 'lucide-react';
 import { useI18n } from '../i18n/I18nProvider';
 import { PivotField } from './fx/PivotField';
+import { MagneticButton } from './fx/MagneticButton';
 
 export const ReadyCTA = () => {
   const { t } = useI18n();
@@ -35,10 +36,10 @@ export const ReadyCTA = () => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.7 }}
-          className="text-4xl md:text-7xl font-display font-light text-white leading-[1.05] mb-8"
+          className="font-industrial uppercase text-white leading-[0.95] mb-8 text-[clamp(2.6rem,7.5vw,7rem)]"
         >
           {t('cta.ready.title.1')}{' '}
-          <span className="italic text-lime">{t('cta.ready.italic')}</span>{' '}
+          <span className="font-display normal-case italic font-light text-lime">{t('cta.ready.italic')}</span>{' '}
           {t('cta.ready.title.2')}
         </motion.h2>
 
@@ -59,23 +60,27 @@ export const ReadyCTA = () => {
           transition={{ delay: 0.2 }}
           className="flex flex-col sm:flex-row gap-4 justify-center"
         >
-          <a
-            href="https://wa.me/213661391012"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#1fad53] text-white px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-all hover:scale-[1.03] shadow-[0_0_60px_rgba(37,211,102,0.25)]"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2z" />
-            </svg>
-            {t('cta.ready.whatsapp')}
-          </a>
-          <a
-            href="tel:+213661391012"
-            className="inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white text-white hover:text-forest border border-white/20 hover:border-transparent px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-colors backdrop-blur-sm"
-          >
-            <Phone className="w-5 h-5" /> {t('cta.ready.call')}
-          </a>
+          <MagneticButton>
+            <a
+              href="https://wa.me/213661391012"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-3 bg-[#25D366] hover:bg-[#1fad53] text-white px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-colors shadow-[0_0_60px_rgba(37,211,102,0.25)]"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.4A10 10 0 1 0 12 2z" />
+              </svg>
+              {t('cta.ready.whatsapp')}
+            </a>
+          </MagneticButton>
+          <MagneticButton>
+            <a
+              href="tel:+213661391012"
+              className="inline-flex items-center justify-center gap-3 bg-white/10 hover:bg-white text-white hover:text-forest border border-white/20 hover:border-transparent px-8 py-5 rounded-full font-bold uppercase tracking-[0.1em] text-sm transition-colors backdrop-blur-sm"
+            >
+              <Phone className="w-5 h-5" /> {t('cta.ready.call')}
+            </a>
+          </MagneticButton>
         </motion.div>
       </div>
     </section>

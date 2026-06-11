@@ -1,10 +1,12 @@
 import { Hero } from '../components/Hero';
-import { Services } from '../components/Services';
+import { UspStrip } from '../components/UspStrip';
+import { Manifesto } from '../components/Manifesto';
+import { ExpertiseRail } from '../components/ExpertiseRail';
+import { PivotTech } from '../components/PivotTech';
 import { Products } from '../components/Products';
 import { VideoShowcase } from '../components/VideoShowcase';
 import { ManagerWord } from '../components/ManagerWord';
 import { Partners } from '../components/Partners';
-import { Gallery } from '../components/Gallery';
 import { Testimonials } from '../components/Testimonials';
 import { BlogPreview } from '../components/BlogPreview';
 import { Agencies } from '../components/Agencies';
@@ -12,17 +14,25 @@ import { ReadyCTA } from '../components/ReadyCTA';
 import { Contact } from '../components/Contact';
 import { PromoModal } from '../components/PromoModal';
 
+/**
+ * Home — cinematic chaptered narrative:
+ * hero film → guarantees → manifesto → expertise rail (01) →
+ * product story (02) → the machine in 3D (03) → showreel → partners →
+ * leadership → social proof → journal → call to action → network → contact.
+ */
 export const Home = () => {
   return (
     <>
       <PromoModal />
       <Hero />
-      <Services />
+      <UspStrip />
+      <Manifesto />
+      <ExpertiseRail />
       <Products />
+      <PivotTech />
       <VideoShowcase />
       <Partners />
       <ManagerWord />
-      <Gallery />
       <Testimonials />
       <BlogPreview />
       <ReadyCTA />

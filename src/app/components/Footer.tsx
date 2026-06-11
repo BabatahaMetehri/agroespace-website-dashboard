@@ -156,9 +156,9 @@ export const Footer = () => {
       >
         <div
           dir="ltr"
-          className="font-display font-semibold text-center whitespace-nowrap leading-[0.72]
-                     text-[clamp(3.2rem,11.5vw,10.5rem)] tracking-tight
-                     text-transparent [-webkit-text-stroke:1px_rgba(135,169,34,0.16)]"
+          className="font-industrial uppercase text-center whitespace-nowrap leading-[0.72]
+                     text-[clamp(3.2rem,11.5vw,10.5rem)]
+                     text-transparent [-webkit-text-stroke:1.5px_rgba(135,169,34,0.18)]"
         >
           AGROESPACE
         </div>

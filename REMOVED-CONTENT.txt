@@ -1,0 +1,56 @@
+AGROESPACE — Redesign 2026 : contenu retiré / remplacé
+=======================================================
+(Branche: redesign-2026. Rien n'est perdu — tout l'ancien code est sur `main`
+et dans l'historique git. Ce fichier liste ce qui a changé structurellement
+pour que vous puissiez récupérer ce que vous voulez.)
+
+PAGE D'ACCUEIL — sections remplacées
+------------------------------------
+1. "Services" (3 cartes blanches avec parallax)
+   → Remplacée par "ExpertiseRail" : chapitres plein-écran en défilement
+     horizontal épinglé (irrigation / fertilisation / vente au détail).
+     Les textes utilisent les MÊMES clés i18n (services.*) — rien à re-saisir.
+   Ancien fichier : src/app/components/Services.tsx (toujours présent dans le
+   repo, plus importé par la Home — supprimable plus tard si inutile).
+
+2. "Gallery" (grille bento de 4 photos)
+   → Son rôle visuel est absorbé par la section "Manifesto" : déclaration
+     éditoriale révélée mot à mot au scroll, avec 2 photos flottantes en
+     parallax (IMG_5967 + montage-pivot). Les 2 autres images de l'ancienne
+     galerie ne sont plus affichées :
+       - https://i.ibb.co/4RzQwm3q/freepik-2820216691.jpg
+       - https://i.ibb.co/XrNSGZJ5/b91915f018a2939da085763a9ab65c87.jpg
+   Ancien fichier : src/app/components/Gallery.tsx (toujours présent).
+
+3. Cartes USP dans le Hero
+   → Déplacées hors du hero dans une bande dédiée "UspStrip" sous le hero
+     (mêmes clés i18n usp.*). Le hero respire avec la typographie géante.
+
+NOUVELLES SECTIONS (textes à personnaliser si besoin)
+-----------------------------------------------------
+- Manifesto (src/app/components/Manifesto.tsx) : texte trilingue codé en dur
+  dans le fichier (constante TEXT) — modifiez-le librement.
+- PivotTech (src/app/components/PivotTech.tsx) : pivot Western en 3D temps
+  réel + 4 specs chiffrées (constante `specs` dans le fichier). Sur mobile /
+  reduced-motion / sans WebGL → photo drone à la place.
+- UspStrip (src/app/components/UspStrip.tsx).
+
+PAGE "EXPERTISE TECHNIQUE" (/technical)
+---------------------------------------
+- L'ancien hero photo plein écran est remplacé par une ouverture éditoriale +
+  la machine 3D (PivotTech). Les specs (technical.spec1..3) et le CTA sont
+  conservés, re-stylés.
+
+GLOBAL
+------
+- Préloader de marque (1,6 s, une fois par session) : Preloader.tsx
+- Curseur personnalisé (desktop uniquement) : CustomCursor.tsx
+- Transitions de page douces + scroll-to-top à chaque navigation : MainLayout
+- Boutons magnétiques : MagneticButton.tsx
+
+INTACT (aucun changement de logique)
+------------------------------------
+- Catalogue (fetch Logicom /public/products + featured), modales de devis,
+  formulaires de contact (Supabase + Formspree + WhatsApp), blog (données,
+  vues/likes/commentaires), i18n FR/AR/EN + RTL, dashboard admin, carte des
+  installations, fonctions edge.
