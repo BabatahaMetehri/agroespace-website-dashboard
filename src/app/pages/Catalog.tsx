@@ -63,7 +63,14 @@ export const Catalog = () => {
   const [featured, setFeatured] = useState<FeaturedRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
+  // Seed the search from /catalog?q=… (used by the 3D pivot parts explorer)
+  const [query, setQuery] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get("q") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [active, setActive] = useState<string>("Tous");
   const [quoteFor, setQuoteFor] = useState<Product | null>(null);
   const [featuredOpen, setFeaturedOpen] = useState<FeaturedRecord | null>(null);

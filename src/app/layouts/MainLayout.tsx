@@ -6,7 +6,6 @@ import { Navigation } from '../components/Navigation';
 import { Footer } from '../components/Footer';
 import { useI18n } from '../i18n/I18nProvider';
 import { GoogleAnalytics } from '../analytics/GoogleAnalytics';
-import { CustomCursor } from '../components/fx/CustomCursor';
 import { Preloader } from '../components/fx/Preloader';
 
 export const MainLayout = () => {
@@ -30,7 +29,6 @@ export const MainLayout = () => {
       {/* GA4 — needs to be inside RouterProvider so useLocation() works */}
       <GoogleAnalytics />
       <Preloader />
-      <CustomCursor />
       <Navigation />
       {/* Soft page-entrance on every route change */}
       <motion.main

@@ -44,9 +44,27 @@ PAGE "EXPERTISE TECHNIQUE" (/technical)
 GLOBAL
 ------
 - Préloader de marque (1,6 s, une fois par session) : Preloader.tsx
-- Curseur personnalisé (desktop uniquement) : CustomCursor.tsx
+- Curseur personnalisé : RETIRÉ (impact performance) — fichier CustomCursor.tsx
+  supprimé + CSS `cursor:none` retiré de tailwind.css.
 - Transitions de page douces + scroll-to-top à chaque navigation : MainLayout
 - Boutons magnétiques : MagneticButton.tsx
+
+PIVOT 3D v3 — EXPLORATEUR DE PIÈCES (CP-600)
+--------------------------------------------
+- PivotScene.tsx reconstruit d'après le manuel officiel "Western CP-600 Parts
+  Manual" : pyramide du point pivot, colonne montante + coudes, bague
+  collectrice, armoire de commande, travées 6"5/8 avec treillis à tirants,
+  tours motrices (motoréducteur, réducteurs UMC, arbres, roues 14.9-24),
+  boîtiers de tour, cannes + asperseurs tous les 3 m, porte-à-faux haubané
+  + canon Nelson + surpresseur.
+- Interaction : rotation à la souris, zoom (molette après un clic — pour ne
+  pas bloquer le défilement de la page), repères verts cliquables → fiche
+  composant avec références fabricant + bouton "Trouver dans le catalogue".
+- À PERSONNALISER : src/app/components/three/pivotParts.ts
+    · `catalogQuery` → terme de recherche du produit équivalent Logicom
+      (le bouton pointe vers /catalog?q=<terme> ; vide = /catalog).
+    · `image` → URL photo/média du composant (affichée en haut de la fiche).
+- /catalog accepte désormais ?q=<terme> pour pré-remplir la recherche.
 
 INTACT (aucun changement de logique)
 ------------------------------------
