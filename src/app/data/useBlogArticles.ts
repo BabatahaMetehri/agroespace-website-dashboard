@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { blogArticles as seed, type BlogArticle } from './blog';
 import { projectId, publicAnonKey } from '../../../utils/supabase/info';
+import { cachedGet } from './cachedGet';
 
 const API_BASE = `https://${projectId}.supabase.co/functions/v1/make-server-0c561120`;
 // The Supabase gateway verifies a JWT on every function request; the anon key
@@ -75,10 +76,13 @@ export const useBlogArticles = () => {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      fetch(`${API_BASE}/public/blog`, { headers: AUTH_HEADERS }).then(async (r) => (r.ok ? ((await r.json()) as RemotePost[]) : [])),
-      fetch(`${API_BASE}/public/blog/counters`, { headers: AUTH_HEADERS }).then(async (r) =>
-        r.ok ? ((await r.json()) as Counter[]) : []
-      ),
+      cachedGet<RemotePost[]>(`${API_BASE}/public/blog`, { headers: AUTH_HEADERS, fallback: [] }),
+      // Counters change when visitors view/like, so keep their TTL short.
+      cachedGet<Counter[]>(`${API_BASE}/public/blog/counters`, {
+        headers: AUTH_HEADERS,
+        ttlMs: 2 * 60_000,
+        fallback: [],
+      }),
     ])
       .then(([posts, cs]) => {
         if (cancelled) return;
