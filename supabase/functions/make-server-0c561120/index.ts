@@ -2885,26 +2885,181 @@ app.delete(`${WC}/products/by-sku/:sku`, requireApiKey, async (c) => {
   return c.json(result, 200);
 });
 
-// Bulk delete: WC supports POST /products/batch with {delete: [id1, id2, ...]}.
-// Logicom may use this when a bulk-sync detects missing items.
+// Order-independent deep compare — lets batch updates skip no-op KV writes.
+function stableStringify(v: any): string {
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null";
+  if (Array.isArray(v)) return "[" + v.map(stableStringify).join(",") + "]";
+  return (
+    "{" +
+    Object.keys(v)
+      .sort()
+      .map((key) => JSON.stringify(key) + ":" + stableStringify(v[key]))
+      .join(",") +
+    "}"
+  );
+}
+
+// WooCommerce batch endpoint. Lets a sync push many product changes in ONE
+// request — a SINGLE edge-function invocation instead of one-per-product:
+//   POST /products/batch
+//   { "create": [ {...} ], "update": [ {"id":123, ...} ], "delete": [ 456 ] }
+//
+// Using this instead of N separate POST/PUT calls is the single most effective
+// way to keep Edge Function invocation usage low (WooCommerce allows up to 100
+// items per array, so a 400-product catalog syncs in 4 requests instead of
+// 400). The single-product POST/PUT routes are unchanged and still work, so an
+// existing sync keeps running untouched until it's switched over to batching.
 app.post(`${WC}/products/batch`, requireApiKey, async (c) => {
   try {
     const body = await c.req.json();
     const force = parseForceFlag(c) || body.force === true;
-    const out: { deleted: any[]; create: any[]; update: any[] } = {
-      deleted: [],
+    const out: { create: any[]; update: any[]; deleted: any[] } = {
       create: [],
       update: [],
+      deleted: [],
     };
+
+    // ── create[] ────────────────────────────────────────────────────────────
+    if (Array.isArray(body.create)) {
+      for (const raw of body.create) {
+        const item = { ...raw };
+        if (item.images) item.images = await hydrateProductImages(item.images);
+        if (item.categories)
+          item.categories = await hydrateProductCategories(item.categories);
+
+        // Idempotent-by-SKU: merge instead of creating a duplicate when the
+        // SKU already exists (mirrors POST /products behaviour).
+        let handled = false;
+        if (item.sku) {
+          const map = (await kv.get(k.productSku(item.sku))) as {
+            id: number;
+          } | null;
+          if (map?.id != null) {
+            const existing = (await kv.get(k.product(map.id))) as any | null;
+            if (existing) {
+              const merged = {
+                ...existing,
+                ...item,
+                id: map.id,
+                date_modified: new Date().toISOString(),
+              };
+              merged.stock_status = deriveStockStatus(merged);
+              await kv.set(k.product(map.id), merged);
+              out.create.push(wcProductShape(merged));
+              handled = true;
+            }
+          }
+        }
+        if (handled) continue;
+
+        const id = await safeIncomingId("product", item.id);
+        const now = new Date().toISOString();
+        const product: any = {
+          id,
+          sku: item.sku ?? "",
+          name: item.name ?? "",
+          slug: item.slug ?? slugify(item.name ?? `product-${id}`),
+          description: item.description ?? "",
+          short_description: item.short_description ?? "",
+          regular_price: String(item.regular_price ?? ""),
+          sale_price: String(item.sale_price ?? ""),
+          manage_stock: item.manage_stock === true,
+          stock_quantity: Number(item.stock_quantity ?? 0),
+          stock_status: item.stock_status ?? "instock",
+          categories: item.categories ?? [],
+          attributes: item.attributes ?? [],
+          images: item.images ?? [],
+          meta_data: item.meta_data ?? [],
+          ...item,
+          id,
+          date_created: now,
+          date_modified: now,
+        };
+        product.stock_status = deriveStockStatus(product);
+        await kv.set(k.product(id), product);
+        if (product.sku) await kv.set(k.productSku(product.sku), { id });
+        out.create.push(wcProductShape(product));
+      }
+    }
+
+    // ── update[] ────────────────────────────────────────────────────────────
+    if (Array.isArray(body.update)) {
+      for (const raw of body.update) {
+        const pid = raw?.id;
+        if (pid == null) continue;
+        const existing = (await kv.get(k.product(pid))) as any | null;
+        if (!existing) {
+          out.update.push({
+            id: pid,
+            error: {
+              code: "woocommerce_rest_invalid_product_id",
+              message: "Invalid ID.",
+            },
+          });
+          continue;
+        }
+        const item = { ...raw };
+        if (item.categories)
+          item.categories = await hydrateProductCategories(item.categories);
+        let imgs: any[] | undefined;
+        if (item.images !== undefined) {
+          const hydrated = await hydrateProductImages(item.images);
+          imgs = mergeImages(
+            existing.images ?? [],
+            hydrated,
+            item.merge_images === true,
+          );
+        }
+        const next: any = {
+          ...existing,
+          ...item,
+          ...(imgs !== undefined ? { images: imgs } : {}),
+          id: Number(pid),
+        };
+        delete next.replace_images;
+        delete next.delete_existing_images;
+        delete next.merge_images;
+        next.stock_status = deriveStockStatus(next);
+
+        // Conditional write — skip the KV write when nothing actually changed
+        // (matches real WooCommerce, which only bumps date_modified on a real
+        // change). Spares the database from a sync that re-pushes unchanged rows.
+        const strip = (p: any) => {
+          const { date_modified, ...rest } = p;
+          return rest;
+        };
+        if (stableStringify(strip(next)) === stableStringify(strip(existing))) {
+          out.update.push(wcProductShape(existing));
+          continue;
+        }
+        next.date_modified = new Date().toISOString();
+        await kv.set(k.product(pid), next);
+        if (next.sku) await kv.set(k.productSku(next.sku), { id: Number(pid) });
+        out.update.push(wcProductShape(next));
+      }
+    }
+
+    // ── delete[] ────────────────────────────────────────────────────────────
     if (Array.isArray(body.delete)) {
       for (const rawId of body.delete) {
         const existing = await kv.get(k.product(rawId));
-        if (existing) {
+        if (existing)
           out.deleted.push(await deleteProductInternal(existing, force));
-        }
       }
     }
-    return c.json(out, 200);
+
+    // Respond with BOTH `delete` (WooCommerce-standard) and `deleted` (the
+    // legacy key this endpoint returned before) so any existing caller keeps
+    // working.
+    return c.json(
+      {
+        create: out.create,
+        update: out.update,
+        delete: out.deleted,
+        deleted: out.deleted,
+      },
+      200,
+    );
   } catch (e) {
     return wcError(c, "woocommerce_rest_invalid_payload", String(e), 400);
   }
