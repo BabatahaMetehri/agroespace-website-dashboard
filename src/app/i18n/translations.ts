@@ -14,6 +14,7 @@ type Dict = Record<string, string>;
 export const dictionaries: Record<Lang, Dict> = {
   fr: {
     'nav.expertise': 'Expertise',
+    'nav.estimator': 'Estimateur',
     'nav.products': 'Produits',
     'nav.activities': 'Nos Activités',
     'nav.about': 'À propos',
@@ -285,6 +286,7 @@ export const dictionaries: Record<Lang, Dict> = {
 
   ar: {
     'nav.expertise': 'الخبرة',
+    'nav.estimator': 'المقدّر',
     'nav.products': 'المنتجات',
     'nav.activities': 'نشاطاتنا',
     'nav.about': 'من نحن',
@@ -555,6 +557,7 @@ export const dictionaries: Record<Lang, Dict> = {
 
   en: {
     'nav.expertise': 'Expertise',
+    'nav.estimator': 'Estimator',
     'nav.products': 'Products',
     'nav.activities': 'Our Activities',
     'nav.about': 'About',

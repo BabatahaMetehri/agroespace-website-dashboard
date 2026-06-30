@@ -6,6 +6,7 @@ import { AdminLayout } from "./layouts/AdminLayout";
 import { Home } from "./pages/Home";
 import { Catalog } from "./pages/Catalog";
 import { Technical } from "./pages/Technical";
+import { Estimator } from "./pages/Estimator";
 import { ContactMap } from "./pages/ContactMap";
 import { Blog } from "./pages/Blog";
 import { BlogDetail } from "./pages/BlogDetail";
@@ -43,6 +44,7 @@ export const router = createBrowserRouter([
       },
       { path: "services/retail", element: <ServicePage service="retail" /> },
       { path: "catalog", Component: Catalog },
+      { path: "estimator", Component: Estimator },
       { path: "technical", Component: Technical },
       { path: "contact", Component: ContactMap },
       { path: "blog", Component: Blog },
