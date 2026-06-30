@@ -12,6 +12,10 @@ import {
   TriangleAlert,
   RotateCcw,
   Check,
+  Ruler,
+  Maximize2,
+  Info,
+  Layers,
 } from "lucide-react";
 import { useI18n } from "../i18n/I18nProvider";
 import { CountUp } from "../components/fx/CountUp";
@@ -20,6 +24,8 @@ import { parseKml } from "../lib/kml";
 import {
   estimate,
   radiusM,
+  diameterM,
+  cellHa,
   pivotSku,
   type Crop,
   type ObstacleLevel,
@@ -89,6 +95,32 @@ const T: Record<Lang, Record<string, string>> = {
     units: "ha",
     waterUnit: "m³/j",
     flowUnit: "L/s",
+    modeSurface: "Surface",
+    modeDims: "Dimensions (avancé)",
+    width: "Largeur",
+    height: "Longueur",
+    meters: "mètres",
+    dimsHint:
+      "Plus précis : la forme et la plus grande taille de pivot possible se déduisent des dimensions.",
+    derivedShape: "Forme déduite de vos dimensions",
+    detailTitle: "Détails techniques",
+    diameter: "Ø",
+    footprint: "Emprise",
+    summaryUsable: "Surface utile",
+    summaryWaste: "Pertes (coins/bords)",
+    summaryDims: "Dimensions estimées",
+    waterDepth: "Dose brute",
+    depthUnit: "mm/j",
+    seasonalWater: "Saison (120 j)",
+    whyTitle: "Pourquoi cette configuration ?",
+    why30:
+      "Le pivot 30 ha — le plus courant en Algérie et le meilleur rapport coût/hectare — est privilégié dès qu'il convient.",
+    whySaved:
+      "{n} machine(s) de moins qu'une solution composée uniquement de pivots 20 ha : moins de points de pivot, de pompes et d'installation.",
+    tooNarrow:
+      "Votre parcelle est trop étroite ({w} m) pour notre plus petit pivot (≈ 505 m de large). Un système linéaire ou une autre solution conviendrait mieux — contactez-nous.",
+    recommended: "Le + courant",
+    maxFitLabel: "Pivot max pour cette largeur",
   },
   ar: {
     eyebrow: "أداة مجانية",
@@ -149,6 +181,31 @@ const T: Record<Lang, Record<string, string>> = {
     units: "هكتار",
     waterUnit: "م³/يوم",
     flowUnit: "ل/ث",
+    modeSurface: "المساحة",
+    modeDims: "الأبعاد (متقدّم)",
+    width: "العرض",
+    height: "الطول",
+    meters: "متر",
+    dimsHint: "أدقّ: يُستنتج الشكل وأكبر محور ممكن من الأبعاد.",
+    derivedShape: "الشكل مستنتَج من أبعادك",
+    detailTitle: "تفاصيل تقنية",
+    diameter: "القطر",
+    footprint: "المساحة المشغولة",
+    summaryUsable: "المساحة المفيدة",
+    summaryWaste: "الفاقد (الزوايا/الحواف)",
+    summaryDims: "الأبعاد المقدّرة",
+    waterDepth: "الجرعة الإجمالية",
+    depthUnit: "مم/يوم",
+    seasonalWater: "الموسم (120 يوم)",
+    whyTitle: "لماذا هذه التركيبة؟",
+    why30:
+      "محور 30 هكتار — الأكثر شيوعًا في الجزائر وأفضل تكلفة لكل هكتار — يُفضَّل كلّما كان مناسبًا.",
+    whySaved:
+      "{n} آلة أقل مقارنةً بحلّ يعتمد فقط على محاور 20 هكتار: نقاط ارتكاز ومضخّات وتركيب أقل.",
+    tooNarrow:
+      "قطعتك ضيّقة جدًا ({w} م) على أصغر محور لدينا (عرض ≈ 505 م). نظام خطّي أو حلّ آخر قد يكون أنسب — تواصل معنا.",
+    recommended: "الأكثر شيوعًا",
+    maxFitLabel: "أكبر محور لهذا العرض",
   },
   en: {
     eyebrow: "Free tool",
@@ -209,6 +266,32 @@ const T: Record<Lang, Record<string, string>> = {
     units: "ha",
     waterUnit: "m³/day",
     flowUnit: "L/s",
+    modeSurface: "Surface",
+    modeDims: "Dimensions (advanced)",
+    width: "Width",
+    height: "Length",
+    meters: "metres",
+    dimsHint:
+      "More precise: the shape and the largest possible pivot are derived from the dimensions.",
+    derivedShape: "Shape derived from your dimensions",
+    detailTitle: "Technical details",
+    diameter: "Ø",
+    footprint: "Footprint",
+    summaryUsable: "Usable area",
+    summaryWaste: "Waste (corners/edges)",
+    summaryDims: "Estimated dimensions",
+    waterDepth: "Gross depth",
+    depthUnit: "mm/day",
+    seasonalWater: "Season (120 d)",
+    whyTitle: "Why this configuration?",
+    why30:
+      "The 30-ha pivot — Algeria's most common size and best cost-per-hectare — is favoured whenever it fits.",
+    whySaved:
+      "{n} fewer machine(s) than an all-20-ha layout: fewer pivot points, pumps and installations.",
+    tooNarrow:
+      "Your plot is too narrow ({w} m) for our smallest pivot (≈ 505 m wide). A linear system or another solution would suit better — contact us.",
+    recommended: "Most common",
+    maxFitLabel: "Largest pivot for this width",
   },
 };
 
@@ -240,22 +323,33 @@ const CROPS: { id: Crop; key: string }[] = [
 
 const TOTAL_STEPS = 4;
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
+const shapeKey = (s: Shape) => SHAPES.find((x) => x.id === s)?.key ?? "shapeSquare";
 
 export const Estimator = () => {
   const { lang, dir } = useI18n();
   const tr = (k: string) => T[lang][k] ?? T.fr[k] ?? k;
 
   const [step, setStep] = useState(1); // 1..4 inputs, 5 = results
+  const [mode, setMode] = useState<"surface" | "dims">("surface");
   const [landHa, setLandHa] = useState(60);
+  const [widthM, setWidthM] = useState(800);
+  const [heightM, setHeightM] = useState(800);
   const [shape, setShape] = useState<Shape>("square");
   const [obstacles, setObstacles] = useState<ObstacleLevel>("none");
   const [crop, setCrop] = useState<Crop>("cereals");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const result = useMemo(
-    () => estimate({ landHa, shape, obstacles, crop }),
-    [landHa, shape, obstacles, crop],
+    () =>
+      estimate(
+        mode === "dims"
+          ? { landHa: 0, shape, obstacles, crop, widthM, heightM }
+          : { landHa, shape, obstacles, crop },
+      ),
+    [mode, landHa, widthM, heightM, shape, obstacles, crop],
   );
+
+  const canProceed = mode === "dims" ? widthM > 0 && heightM > 0 : landHa > 0;
 
   const onKml = async (file: File | undefined) => {
     if (!file) return;
@@ -264,6 +358,7 @@ export const Estimator = () => {
       toast.error(tr("kmlErr"));
       return;
     }
+    setMode("surface");
     setLandHa(parsed.areaHa);
     setShape(parsed.shape);
     toast.success(tr("kmlOk").replace("{a}", String(parsed.areaHa)));
@@ -324,29 +419,81 @@ export const Estimator = () => {
                 exit={{ opacity: 0, x: -18 }}
                 transition={{ duration: 0.3 }}
               >
-                {/* STEP 1 — land size + KML */}
+                {/* STEP 1 — land size / dimensions + KML */}
                 {step === 1 && (
                   <div>
                     <StepHead title={tr("s1")} sub={tr("s1sub")} />
-                    <div className="flex items-end gap-4 mb-6">
-                      <input
-                        type="number"
-                        min={1}
-                        value={landHa}
-                        onChange={(e) => setLandHa(Math.max(0, Number(e.target.value) || 0))}
-                        className="w-40 bg-white/5 border border-white/15 rounded-2xl px-5 py-4 text-4xl font-industrial focus:outline-none focus:border-lime"
-                      />
-                      <span className="text-white/50 pb-4">{tr("hectares")}</span>
+
+                    {/* mode toggle */}
+                    <div className="inline-flex p-1 bg-white/5 border border-white/10 rounded-full mb-6">
+                      {(["surface", "dims"] as const).map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => setMode(m)}
+                          className={`px-4 py-2 rounded-full text-xs font-semibold uppercase tracking-[0.08em] transition-colors ${
+                            mode === m ? "bg-lime text-white" : "text-white/55 hover:text-white"
+                          }`}
+                        >
+                          {tr(m === "surface" ? "modeSurface" : "modeDims")}
+                        </button>
+                      ))}
                     </div>
-                    <input
-                      type="range"
-                      min={5}
-                      max={500}
-                      step={5}
-                      value={Math.min(500, landHa)}
-                      onChange={(e) => setLandHa(Number(e.target.value))}
-                      className="w-full accent-lime"
-                    />
+
+                    {mode === "surface" ? (
+                      <>
+                        <div className="flex items-end gap-4 mb-6">
+                          <input
+                            type="number"
+                            min={1}
+                            value={landHa}
+                            onChange={(e) => setLandHa(Math.max(0, Number(e.target.value) || 0))}
+                            className="w-40 bg-white/5 border border-white/15 rounded-2xl px-5 py-4 text-4xl font-industrial focus:outline-none focus:border-lime"
+                          />
+                          <span className="text-white/50 pb-4">{tr("hectares")}</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={5}
+                          max={500}
+                          step={5}
+                          value={Math.min(500, landHa)}
+                          onChange={(e) => setLandHa(Number(e.target.value))}
+                          className="w-full accent-lime"
+                        />
+                      </>
+                    ) : (
+                      <div>
+                        <p className="text-xs text-white/40 mb-4 flex items-start gap-2">
+                          <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-lime/70" />
+                          {tr("dimsHint")}
+                        </p>
+                        <div className="grid grid-cols-2 gap-3">
+                          {(
+                            [
+                              ["width", widthM, setWidthM],
+                              ["height", heightM, setHeightM],
+                            ] as const
+                          ).map(([key, val, setter]) => (
+                            <label key={key} className="block">
+                              <span className="text-xs text-white/50 uppercase tracking-[0.1em]">
+                                {tr(key)} ({tr("meters")})
+                              </span>
+                              <input
+                                type="number"
+                                min={0}
+                                value={val}
+                                onChange={(e) => setter(Math.max(0, Number(e.target.value) || 0))}
+                                className="mt-1.5 w-full bg-white/5 border border-white/15 rounded-2xl px-4 py-3.5 text-2xl font-industrial focus:outline-none focus:border-lime"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        <div className="mt-4 text-sm text-white/50">
+                          ≈ <span className="text-white font-semibold">{fmt((widthM * heightM) / 10_000)}</span>{" "}
+                          {tr("hectares")}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="mt-8 border border-dashed border-white/15 rounded-2xl p-5 hover:border-lime/50 transition-colors">
                       <input
@@ -372,24 +519,38 @@ export const Estimator = () => {
                   </div>
                 )}
 
-                {/* STEP 2 — shape */}
+                {/* STEP 2 — shape (derived & read-only in dimensions mode) */}
                 {step === 2 && (
                   <div>
                     <StepHead title={tr("s2")} sub={tr("s2sub")} />
-                    <div className="grid grid-cols-2 gap-3">
-                      {SHAPES.map((s) => (
-                        <SelectCard
-                          key={s.id}
-                          active={shape === s.id}
-                          onClick={() => setShape(s.id)}
-                        >
-                          <svg viewBox="0 0 32 32" className="w-10 h-10 mb-3 fill-current">
-                            {s.icon}
-                          </svg>
-                          <span className="text-sm font-medium">{tr(s.key)}</span>
-                        </SelectCard>
-                      ))}
-                    </div>
+                    {mode === "dims" ? (
+                      <div className="rounded-2xl border border-lime/40 bg-lime/10 p-6">
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-lime/80 mb-2 flex items-center gap-2">
+                          <Info className="w-3.5 h-3.5" /> {tr("derivedShape")}
+                        </div>
+                        <div className="text-xl font-display font-medium">
+                          {tr(shapeKey(result.shape))}
+                        </div>
+                        <div className="text-xs text-white/45 font-mono mt-1">
+                          {fmt(result.widthM)} × {fmt(result.heightM)} m
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-3">
+                        {SHAPES.map((s) => (
+                          <SelectCard
+                            key={s.id}
+                            active={shape === s.id}
+                            onClick={() => setShape(s.id)}
+                          >
+                            <svg viewBox="0 0 32 32" className="w-10 h-10 mb-3 fill-current">
+                              {s.icon}
+                            </svg>
+                            <span className="text-sm font-medium">{tr(s.key)}</span>
+                          </SelectCard>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -456,7 +617,7 @@ export const Estimator = () => {
                 )}
                 <button
                   onClick={() => setStep((s) => Math.min(5, s + 1))}
-                  disabled={landHa <= 0}
+                  disabled={!canProceed}
                   className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-lime hover:bg-lime-deep disabled:opacity-40 text-white font-bold uppercase tracking-[0.1em] text-xs transition-colors"
                 >
                   {step === TOTAL_STEPS ? tr("seeResult") : tr("next")}
@@ -470,7 +631,7 @@ export const Estimator = () => {
           <div className="lg:sticky lg:top-28">
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
               <div className="h-64 md:h-80 w-full">
-                <EstimatorField result={result} shape={shape} obstacles={obstacles} />
+                <EstimatorField result={result} obstacles={obstacles} />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/10 mt-4 rounded-xl overflow-hidden">
                 {liveKpis.map((k) => (
@@ -564,25 +725,34 @@ const ResultsPanel = ({
   onRestart: () => void;
 }) => {
   if (!result.feasible) {
+    const msg =
+      result.note === "too-narrow"
+        ? tr("tooNarrow").replace(
+            "{w}",
+            String(Math.round(Math.min(result.widthM, result.heightM))),
+          )
+        : tr("tooSmall");
     return (
       <div>
         <StepHead title={tr("resultTitle")} sub="" />
         <div className="rounded-2xl border border-amber-400/30 bg-amber-400/5 p-6 text-white/80">
           <TriangleAlert className="w-6 h-6 text-amber-400 mb-3" />
-          {tr("tooSmall")}
+          {msg}
         </div>
-        <Link
-          to="/contact"
-          className="mt-6 inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-lime hover:bg-lime-deep text-white font-bold uppercase tracking-[0.1em] text-xs transition-colors"
-        >
-          {tr("ctaStudy")} <ArrowRight className="w-4 h-4 rtl:-scale-x-100" />
-        </Link>
-        <button
-          onClick={onRestart}
-          className="mt-3 ms-3 inline-flex items-center gap-2 text-white/50 hover:text-white text-xs"
-        >
-          <RotateCcw className="w-3.5 h-3.5" /> {tr("restart")}
-        </button>
+        <div className="flex flex-wrap items-center gap-3 mt-6">
+          <Link
+            to="/contact"
+            className="inline-flex items-center gap-2 px-7 py-3.5 rounded-full bg-lime hover:bg-lime-deep text-white font-bold uppercase tracking-[0.1em] text-xs transition-colors"
+          >
+            {tr("ctaStudy")} <ArrowRight className="w-4 h-4 rtl:-scale-x-100" />
+          </Link>
+          <button
+            onClick={onRestart}
+            className="inline-flex items-center gap-2 text-white/50 hover:text-white text-xs"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> {tr("restart")}
+          </button>
+        </div>
       </div>
     );
   }
@@ -592,6 +762,15 @@ const ResultsPanel = ({
     { icon: Gauge, label: tr("kEfficiency"), value: `${Math.round(result.efficiencyPct)} %` },
     { icon: Droplets, label: tr("kWater"), value: `${fmt(result.dailyWaterM3)} ${tr("waterUnit")}` },
     { icon: Gauge, label: tr("kFlow"), value: `${fmt(result.flowLps)} ${tr("flowUnit")}` },
+  ];
+
+  const details = [
+    { icon: Sprout, label: tr("summaryUsable"), value: `${fmt(result.usableBlockHa)} ${tr("units")}` },
+    { icon: Layers, label: tr("kWaste"), value: `${fmt(result.wasteHa)} ${tr("units")}` },
+    { icon: Droplets, label: tr("waterDepth"), value: `${result.grossDepthMm.toFixed(1)} ${tr("depthUnit")}` },
+    { icon: Droplets, label: tr("seasonalWater"), value: `${fmt(result.dailyWaterM3 * 120)} ${tr("waterUnit").split("/")[0]}` },
+    { icon: Maximize2, label: tr("summaryDims"), value: `${fmt(result.widthM)}×${fmt(result.heightM)} m` },
+    { icon: Ruler, label: tr("maxFitLabel"), value: `${result.effectiveMaxSize} ${tr("units")}` },
   ];
 
   return (
@@ -616,11 +795,17 @@ const ResultsPanel = ({
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-display text-lg">
+              <div className="font-display text-lg flex items-center gap-2 flex-wrap">
                 {p.count}× {tr("coverage")} {p.size} ha
+                {p.size === 30 && (
+                  <span className="text-[9px] uppercase tracking-[0.1em] bg-lime/20 text-lime border border-lime/30 rounded-full px-2 py-0.5">
+                    {tr("recommended")}
+                  </span>
+                )}
               </div>
               <div className="text-xs text-white/45 font-mono">
-                {pivotSku(p.size)} · {tr("radius")} ≈ {Math.round(radiusM(p.size))} m
+                {pivotSku(p.size)} · {tr("radius")} {Math.round(radiusM(p.size))} m · {tr("diameter")}{" "}
+                {Math.round(diameterM(p.size))} m · {tr("footprint")} {cellHa(p.size).toFixed(1)} ha
               </div>
             </div>
             <Link
@@ -633,8 +818,8 @@ const ResultsPanel = ({
         ))}
       </div>
 
-      {/* KPI grid with count-up */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden mb-8">
+      {/* Headline KPIs with count-up */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/10 rounded-2xl overflow-hidden mb-6">
         {bigKpis.map((k, i) => (
           <div key={i} className="bg-ink p-5">
             <k.icon className="w-4 h-4 text-lime/70 mb-2" />
@@ -646,6 +831,37 @@ const ResultsPanel = ({
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Technical detail grid */}
+      <p className="text-[11px] uppercase tracking-[0.2em] text-white/40 mb-2">{tr("detailTitle")}</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-white/10 rounded-2xl overflow-hidden mb-8">
+        {details.map((d, i) => (
+          <div key={i} className="bg-ink px-4 py-3.5">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-white/40 mb-1">
+              <d.icon className="w-3 h-3 text-lime/60" /> {d.label}
+            </div>
+            <div dir="ltr" className="font-medium text-sm">{d.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Why this configuration */}
+      <div className="rounded-2xl border border-lime/20 bg-lime/[0.06] p-5 mb-8">
+        <div className="flex items-center gap-2 text-lime text-sm font-semibold mb-3">
+          <Info className="w-4 h-4" /> {tr("whyTitle")}
+        </div>
+        <ul className="space-y-2 text-sm text-white/70">
+          <li className="flex items-start gap-2">
+            <span className="text-lime mt-1">•</span> {tr("why30")}
+          </li>
+          {result.machinesSaved > 0 && (
+            <li className="flex items-start gap-2">
+              <span className="text-lime mt-1">•</span>
+              {tr("whySaved").replace("{n}", String(result.machinesSaved))}
+            </li>
+          )}
+        </ul>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

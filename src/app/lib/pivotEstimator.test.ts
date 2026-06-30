@@ -10,6 +10,9 @@ import {
   expandPicks,
   estimate,
   fieldDims,
+  pivotCost,
+  maxSizeForWidth,
+  shapeFromAspect,
   SHAPE_MAX,
   type EstimateInput,
 } from "./pivotEstimator";
@@ -51,6 +54,11 @@ describe("packPivots", () => {
     const picks = packPivots(70, 50);
     const irrigated = picks.reduce((s, p) => s + p.size * p.count, 0);
     expect(irrigated).toBeGreaterThanOrEqual(55);
+  });
+
+  it("prefers the 30-ha sweet spot when it's the cheapest equal-coverage mix", () => {
+    // 76.4 ha block: 2×30 and 40+20 both irrigate 60 ha — 2×30 is cheaper.
+    expect(packPivots(76.4, 50)).toEqual([{ size: 30, count: 2 }]);
   });
 
   it("never exceeds the block budget and respects the size cap", () => {
@@ -136,5 +144,70 @@ describe("fieldDims", () => {
     const { wM, hM } = fieldDims(50, "rectangular");
     expect((wM * hM) / 10_000).toBeCloseTo(50, 3);
     expect(wM / hM).toBeCloseTo(1.6, 3);
+  });
+});
+
+describe("cost model", () => {
+  it("makes one big pivot cheaper than many small ones for the same coverage", () => {
+    // Cover ~60 ha: 2×30 vs 3×20. Fewer machines = lower cost (fixed cost/machine).
+    expect(2 * pivotCost(30)).toBeLessThan(3 * pivotCost(20));
+  });
+
+  it("reports the machines saved vs a naive all-20-ha layout", () => {
+    const r = estimate({
+      landHa: 220,
+      shape: "square",
+      obstacles: "none",
+      crop: "cereals",
+    });
+    expect(r.smallPlanMachines).toBeGreaterThan(0);
+    expect(r.machinesSaved).toBeGreaterThanOrEqual(0);
+    expect(r.smallPlanMachines - r.pivotCount).toBe(r.machinesSaved);
+    expect(r.costIndex).toBeGreaterThan(0);
+    expect(r.costPerHaIndex).toBeCloseTo(r.costIndex / r.irrigatedHa, 6);
+  });
+});
+
+describe("advanced dimensions (width × height)", () => {
+  it("classifies shape from aspect ratio", () => {
+    expect(shapeFromAspect(1.0)).toBe("square");
+    expect(shapeFromAspect(1.6)).toBe("rectangular");
+    expect(shapeFromAspect(3.0)).toBe("narrow");
+  });
+
+  it("caps the pivot size to what physically fits the plot width", () => {
+    // 600 m min dimension: a 30-ha pivot is 618 m wide → won't fit; 25 ha (564 m) does.
+    expect(maxSizeForWidth(600)).toBe(25);
+    expect(maxSizeForWidth(800)).toBe(50);
+    expect(maxSizeForWidth(400)).toBeNull();
+  });
+
+  it("derives area + shape + size cap from dimensions", () => {
+    const r = estimate({
+      landHa: 0, // ignored when dims are present
+      shape: "square",
+      obstacles: "none",
+      crop: "cereals",
+      widthM: 600,
+      heightM: 600,
+    });
+    expect(r.landHa).toBeCloseTo(36, 3);
+    expect(r.shape).toBe("square");
+    expect(r.effectiveMaxSize).toBe(25);
+    for (const p of r.picks) expect(p.size).toBeLessThanOrEqual(25);
+    expect(r.widthM).toBeCloseTo(600, 3);
+  });
+
+  it("flags a plot too narrow for any pivot", () => {
+    const r = estimate({
+      landHa: 0,
+      shape: "square",
+      obstacles: "none",
+      crop: "cereals",
+      widthM: 400,
+      heightM: 2000,
+    });
+    expect(r.feasible).toBe(false);
+    expect(r.note).toBe("too-narrow");
   });
 });

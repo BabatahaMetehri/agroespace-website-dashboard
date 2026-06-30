@@ -20,7 +20,7 @@ const NavLinkItem = ({
   <Link
     to={to}
     onClick={onClick}
-    className={`relative group uppercase tracking-[0.15em] text-xs transition-colors ${
+    className={`relative group whitespace-nowrap uppercase tracking-[0.15em] text-xs transition-colors ${
       active ? 'text-white' : 'text-white/70 hover:text-white'
     }`}
   >
@@ -127,15 +127,15 @@ export const Navigation = () => {
           </span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-9 text-sm font-medium">
+        <div className="hidden lg:flex items-center gap-6 xl:gap-8 text-sm font-medium flex-nowrap">
           <div
-            className="relative"
+            className="relative shrink-0"
             onMouseEnter={openActivities}
             onMouseLeave={scheduleCloseActivities}
           >
             <button
               onClick={() => setActivitiesOpen((o) => !o)}
-              className={`relative group flex items-center gap-1.5 uppercase tracking-[0.15em] text-xs transition-colors ${
+              className={`relative group flex items-center gap-1.5 whitespace-nowrap uppercase tracking-[0.15em] text-xs transition-colors ${
                 location.pathname.startsWith('/services') ? 'text-white' : 'text-white/70 hover:text-white'
               }`}
             >
@@ -193,19 +193,19 @@ export const Navigation = () => {
 
           <Link
             to="/contact"
-            className="px-6 py-2.5 bg-white text-forest rounded-full hover:bg-lime hover:text-white transition-all uppercase tracking-[0.1em] text-xs font-bold"
+            className="shrink-0 whitespace-nowrap px-5 xl:px-6 py-2.5 bg-white text-forest rounded-full hover:bg-lime hover:text-white transition-all uppercase tracking-[0.1em] text-xs font-bold"
           >
             {t('nav.contact')}
           </Link>
 
           <LanguageSwitcher variant="dark" />
 
-          <Link to="/admin" className="text-white/40 hover:text-white transition-colors" title={t('nav.admin')}>
+          <Link to="/admin" className="shrink-0 text-white/40 hover:text-white transition-colors" title={t('nav.admin')}>
             <Lock className="w-4 h-4" />
           </Link>
         </div>
 
-        <div className="md:hidden flex items-center gap-3">
+        <div className="lg:hidden flex items-center gap-3">
           <LanguageSwitcher variant="dark" compact />
           <button className="text-white" onClick={() => setIsOpen(!isOpen)} aria-label="menu">
             {isOpen ? <X /> : <Menu />}

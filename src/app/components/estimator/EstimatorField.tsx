@@ -3,29 +3,26 @@ import { motion } from "motion/react";
 import {
   diameterM,
   expandPicks,
-  fieldDims,
   type EstimateResult,
   type ObstacleLevel,
-  type Shape,
 } from "../../lib/pivotEstimator";
 
 /**
  * Illustrative top-down view of the farmer's plot: the parcel rectangle (dry
  * land) with the recommended pivots drawn as irrigated circles, shelf-packed at
  * true scale. The sand showing between the circles IS the corner waste — the
- * whole point of the estimate, made visible. Drawn in metre coordinates so the
- * SVG viewBox handles all scaling.
+ * whole point of the estimate, made visible. Drawn in metre coordinates (the
+ * exact plot dimensions the estimate derived) so the SVG viewBox handles scaling.
  */
 export const EstimatorField = ({
   result,
-  shape,
   obstacles,
 }: {
   result: EstimateResult;
-  shape: Shape;
   obstacles: ObstacleLevel;
 }) => {
-  const { wM, hM } = fieldDims(result.landHa || 1, shape);
+  const wM = result.widthM || 1;
+  const hM = result.heightM || 1;
 
   const placed = useMemo(() => {
     const dias = expandPicks(result.picks).map((size) => ({

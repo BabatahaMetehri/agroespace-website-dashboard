@@ -88,6 +88,49 @@ export const APP_EFFICIENCY = 0.85;
 /** Operating hours per day used to convert daily volume → system flow. */
 export const DAILY_HOURS = 22;
 
+// ── Cost model (relative units — calibrate to real DA prices if desired) ─────
+// A pivot's installed cost has a large FIXED part per machine (pivot point,
+// control panel, electrical hookup, civil works, transport, installation) plus
+// a per-hectare structural part. That fixed part is WHY fewer/larger machines —
+// and the popular 30-ha size — come out cheaper than many small pivots for the
+// same job. The optimiser uses this to break ties between equal-coverage plans.
+export const MACHINE_FIXED_COST = 8;
+/**
+ * Per-hectare structural cost, U-shaped with its minimum at the 30-ha sweet
+ * spot: the most common, best-supported size with the easiest water supply.
+ * Very large pivots need heavier structures and higher pressure, nudging their
+ * per-ha cost back up.
+ */
+export const SIZE_VAR_COST: Record<PivotSize, number> = {
+  20: 1.02,
+  25: 0.97,
+  30: 0.9,
+  40: 0.95,
+  50: 1.0,
+};
+/** Relative installed cost of one pivot of a given size. */
+export function pivotCost(size: PivotSize): number {
+  return MACHINE_FIXED_COST + size * SIZE_VAR_COST[size];
+}
+
+// ── Dimension helpers (advanced width × height input) ────────────────────────
+/** Classify a rectangle from its width/height aspect ratio. */
+export function shapeFromAspect(aspect: number): Shape {
+  if (aspect >= 2.2) return "narrow";
+  if (aspect >= 1.35) return "rectangular";
+  return "square";
+}
+/**
+ * Largest inventory pivot whose irrigated diameter fits within `minDimM`
+ * metres, or null if even the smallest (20 ha → 505 m) is too wide. A hard
+ * geometric constraint a qualitative shape can't capture.
+ */
+export function maxSizeForWidth(minDimM: number): PivotSize | null {
+  let best: PivotSize | null = null;
+  for (const s of INVENTORY) if (diameterM(s) <= minDimM + 1e-6) best = s;
+  return best;
+}
+
 // ── Packing ────────────────────────────────────────────────────────────────
 export interface PivotPick {
   size: PivotSize;
@@ -109,34 +152,43 @@ function packGreedy(usableBlockHa: number, maxSize: PivotSize): PivotPick[] {
 }
 
 /**
- * Exact min-leftover packing via unbounded knapsack on a 0.1 ha grid. Because
- * every pivot has the same circle/cell ratio, minimising leftover block land
- * == maximising irrigated hectares. Used for realistic farm sizes; very large
- * inputs fall back to greedy (fragmentation is negligible at that scale).
+ * Lexicographic packing via unbounded knapsack on a 0.1 ha grid:
+ *   1. PRIMARY — maximise irrigated coverage (== filled block area, since every
+ *      pivot fills the same π/4 of its cell).
+ *   2. TIE-BREAK — among equal-coverage plans, minimise installed cost
+ *      (`pivotCost`), which bakes in the fixed cost per machine + the 30-ha
+ *      sweet spot. So the cheapest way to water the most land wins: fewer,
+ *      larger, 30-ha-leaning machines instead of many small ones.
+ * Used for realistic farm sizes; very large inputs fall back to greedy.
  */
 function packDP(usableBlockHa: number, maxSize: PivotSize): PivotPick[] {
   const sizes = INVENTORY.filter((s) => s <= maxSize);
   const step = 0.1;
   const B = Math.floor(usableBlockHa / step);
   if (B <= 0) return [];
-  const cells = sizes.map((s) => ({ s, w: Math.max(1, Math.round(cellHa(s) / step)) }));
-  const fill = new Float64Array(B + 1); // best filled area (in steps)
-  const machines = new Int32Array(B + 1); // machine count for that best fill
+  const cells = sizes.map((s) => ({
+    s,
+    w: Math.max(1, Math.round(cellHa(s) / step)),
+    cost: pivotCost(s),
+  }));
+  const fill = new Float64Array(B + 1); // best filled block area (in steps)
+  const cost = new Float64Array(B + 1); // installed cost achieving that fill
   const choice = new Int8Array(B + 1).fill(-1); // index into `cells`, or -1 = carry
   for (let b = 1; b <= B; b++) {
-    // carry the previous best (this 0.1 ha stays empty — no new machine)
+    // carry the previous best (this 0.1 ha stays empty — same fill, same cost)
     fill[b] = fill[b - 1];
-    machines[b] = machines[b - 1];
+    cost[b] = cost[b - 1];
     for (let i = 0; i < cells.length; i++) {
       const w = cells[i].w;
       if (w > b) continue;
       const f = fill[b - w] + w;
-      const m = machines[b - w] + 1;
-      // Primary: maximise irrigated area (== filled block). Tie-break: use the
-      // fewest machines (lower capex / fewer drive trains).
-      if (f > fill[b] || (f === fill[b] && m < machines[b])) {
+      const c = cost[b - w] + cells[i].cost;
+      if (
+        f > fill[b] + 1e-9 ||
+        (Math.abs(f - fill[b]) < 1e-9 && c < cost[b] - 1e-9)
+      ) {
         fill[b] = f;
-        machines[b] = m;
+        cost[b] = c;
         choice[b] = i;
       }
     }
@@ -149,9 +201,8 @@ function packDP(usableBlockHa: number, maxSize: PivotSize): PivotPick[] {
       b -= 1;
       continue;
     }
-    const cell = cells[c];
-    counts.set(cell.s, (counts.get(cell.s) ?? 0) + 1);
-    b -= cell.w;
+    counts.set(cells[c].s, (counts.get(cells[c].s) ?? 0) + 1);
+    b -= cells[c].w;
   }
   return toPicks(counts);
 }
@@ -184,11 +235,22 @@ export interface EstimateInput {
   shape: Shape;
   obstacles: ObstacleLevel;
   crop: Crop;
+  /**
+   * Advanced: exact plot dimensions in metres. When BOTH are set they override
+   * landHa + shape — the area, shape and the largest pivot that physically fits
+   * the plot width are all derived from them.
+   */
+  widthM?: number;
+  heightM?: number;
 }
 
 export interface EstimateResult {
   landHa: number;
   usableBlockHa: number;
+  shape: Shape; // effective shape (derived from dimensions when supplied)
+  widthM: number; // drawn / derived plot dimensions
+  heightM: number;
+  effectiveMaxSize: PivotSize; // largest size allowed by shape + plot width
   picks: PivotPick[];
   pivotCount: number;
   irrigatedHa: number;
@@ -197,22 +259,80 @@ export interface EstimateResult {
   grossDepthMm: number; // gross daily application depth
   dailyWaterM3: number;
   flowLps: number; // suggested system flow at DAILY_HOURS h/day
+  costIndex: number; // Σ pivotCost — relative installed cost
+  costPerHaIndex: number; // costIndex / irrigated ha
+  smallPlanMachines: number; // machines a naive all-20-ha layout would need
+  machinesSaved: number; // smallPlanMachines − pivotCount (≥ 0)
   feasible: boolean;
-  note?: "too-small" | "tight" | "ok";
+  note?: "too-small" | "tight" | "too-narrow" | "ok";
 }
 
 export function estimate(input: EstimateInput): EstimateResult {
-  const landHa = Math.max(0, input.landHa || 0);
-  const usableBlockHa =
-    landHa * SHAPE_ETA[input.shape] * OBSTACLE_ETA[input.obstacles];
-  const maxSize = SHAPE_MAX[input.shape];
+  const hasDims =
+    !!input.widthM && !!input.heightM && input.widthM > 0 && input.heightM > 0;
 
-  let picks = packPivots(usableBlockHa, maxSize);
+  let landHa: number;
+  let shape: Shape;
+  let widthM: number;
+  let heightM: number;
+  let dimCap: PivotSize | null = null;
+
+  if (hasDims) {
+    widthM = input.widthM as number;
+    heightM = input.heightM as number;
+    landHa = (widthM * heightM) / HA_M2;
+    shape = shapeFromAspect(
+      Math.max(widthM, heightM) / Math.min(widthM, heightM),
+    );
+    dimCap = maxSizeForWidth(Math.min(widthM, heightM));
+  } else {
+    landHa = Math.max(0, input.landHa || 0);
+    shape = input.shape;
+    const d = fieldDims(landHa, shape);
+    widthM = d.wM;
+    heightM = d.hM;
+  }
+
+  const usableBlockHa = landHa * SHAPE_ETA[shape] * OBSTACLE_ETA[input.obstacles];
+  const effectiveMaxSize: PivotSize =
+    hasDims && dimCap
+      ? (Math.min(SHAPE_MAX[shape], dimCap) as PivotSize)
+      : SHAPE_MAX[shape];
+
+  const water = (irrigatedHa: number) => {
+    const etc = ET0_PEAK_MM * CROP_KC[input.crop];
+    const grossDepthMm = etc / APP_EFFICIENCY;
+    // 1 mm of depth over 1 ha = 10 m³.
+    const dailyWaterM3 = irrigatedHa * grossDepthMm * 10;
+    const flowLps = (dailyWaterM3 * 1000) / (DAILY_HOURS * 3600);
+    return { grossDepthMm, dailyWaterM3, flowLps };
+  };
+
+  const base = { landHa, usableBlockHa, shape, widthM, heightM, effectiveMaxSize };
+
+  // Dimensions given, but the plot is narrower than our smallest pivot (505 m).
+  if (hasDims && dimCap === null) {
+    return {
+      ...base,
+      picks: [],
+      pivotCount: 0,
+      irrigatedHa: 0,
+      efficiencyPct: 0,
+      wasteHa: landHa,
+      ...water(0),
+      costIndex: 0,
+      costPerHaIndex: 0,
+      smallPlanMachines: 0,
+      machinesSaved: 0,
+      feasible: false,
+      note: "too-narrow",
+    };
+  }
+
+  let picks = packPivots(usableBlockHa, effectiveMaxSize);
   let note: EstimateResult["note"] = "ok";
-
   if (picks.length === 0) {
-    // Too small for even a 20-ha pivot block (needs ~25.5 ha). If the parcel is
-    // close, suggest a single 20-ha machine (it may slightly over/under-fill).
+    // Too small for even a 20-ha pivot block (~25.5 ha). If close, suggest one.
     if (landHa >= 16) {
       picks = [{ size: 20, count: 1 }];
       note = "tight";
@@ -227,24 +347,25 @@ export function estimate(input: EstimateInput): EstimateResult {
 
   const efficiencyPct = landHa > 0 ? (irrigatedHa / landHa) * 100 : 0;
   const wasteHa = Math.max(0, landHa - irrigatedHa);
-
-  const etc = ET0_PEAK_MM * CROP_KC[input.crop];
-  const grossDepthMm = etc / APP_EFFICIENCY;
-  // 1 mm of depth over 1 ha = 10 m³.
-  const dailyWaterM3 = irrigatedHa * grossDepthMm * 10;
-  const flowLps = (dailyWaterM3 * 1000) / (DAILY_HOURS * 3600);
+  const costIndex = picks.reduce((s, p) => s + pivotCost(p.size) * p.count, 0);
+  const costPerHaIndex = irrigatedHa > 0 ? costIndex / irrigatedHa : 0;
+  // How many machines a naive "just buy 20-ha pivots" layout would need —
+  // the tangible saving from our cost-aware mix.
+  const smallPlanMachines = Math.floor(usableBlockHa / cellHa(20));
+  const machinesSaved = Math.max(0, smallPlanMachines - pivotCount);
 
   return {
-    landHa,
-    usableBlockHa,
+    ...base,
     picks,
     pivotCount,
     irrigatedHa,
     efficiencyPct,
     wasteHa,
-    grossDepthMm,
-    dailyWaterM3,
-    flowLps,
+    ...water(irrigatedHa),
+    costIndex,
+    costPerHaIndex,
+    smallPlanMachines,
+    machinesSaved,
     feasible: pivotCount > 0,
     note,
   };

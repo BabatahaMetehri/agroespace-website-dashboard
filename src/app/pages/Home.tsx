@@ -3,6 +3,7 @@ import { UspStrip } from '../components/UspStrip';
 import { Manifesto } from '../components/Manifesto';
 import { ExpertiseRail } from '../components/ExpertiseRail';
 import { PivotTech } from '../components/PivotTech';
+import { EstimatorBanner } from '../components/EstimatorBanner';
 import { Products } from '../components/Products';
 import { VideoShowcase } from '../components/VideoShowcase';
 import { ManagerWord } from '../components/ManagerWord';
@@ -29,6 +30,7 @@ export const Home = () => {
       <Manifesto />
       <ExpertiseRail />
       <Products />
+      <EstimatorBanner />
       <PivotTech />
       <VideoShowcase />
       <Partners />
