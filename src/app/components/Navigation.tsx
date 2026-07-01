@@ -64,11 +64,13 @@ export const Navigation = () => {
     ? 'bg-transparent py-6 border-b border-transparent'
     : 'bg-forest/90 backdrop-blur-xl py-4 border-b border-white/10';
 
+  // The estimator lives at /estimator and is reached from the home-page banner
+  // (and its own shareable URL). Kept out of the top nav to avoid crowding —
+  // a "Tools" menu can group it with future tools later.
   const links: { to: string; label: string }[] = [
     { to: '/about', label: t('nav.about') },
     { to: '/technical', label: t('nav.expertise') },
     { to: '/catalog', label: t('nav.products') },
-    { to: '/estimator', label: t('nav.estimator') },
     { to: '/blog', label: t('nav.blog') },
   ];
 
@@ -112,7 +114,7 @@ export const Navigation = () => {
           transparentTop ? '[text-shadow:0_1px_12px_rgba(0,0,0,0.7)]' : ''
         }`}
       >
-        <Link to="/" className="flex items-center gap-4 group">
+        <Link to="/" className="flex items-center gap-4 group shrink-0 me-6">
           <motion.img
             src={logoImg}
             alt="AGROESPACE"
@@ -122,7 +124,9 @@ export const Navigation = () => {
             whileHover={{ rotate: 6, scale: 1.08 }}
             transition={{ type: 'spring', stiffness: 220, damping: 14 }}
           />
-          <span className="text-white text-2xl font-bold tracking-tight hidden sm:block font-serif">
+          {/* Wordmark only once there's clear room (xl+), so the tabs never
+              crowd the logo on medium-desktop widths. */}
+          <span className="text-white text-2xl font-bold tracking-tight hidden xl:block font-serif">
             AGROESPACE
           </span>
         </Link>
