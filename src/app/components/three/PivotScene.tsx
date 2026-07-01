@@ -51,6 +51,8 @@ const CONCRETE = new THREE.MeshStandardMaterial({ color: '#6a6f66', roughness: 1
 const PLATES = ['#2563c9', '#d8262b', '#e3a008', '#7c3aed'].map(
   (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }),
 );
+// Western's signature red — used on the pivot nameplate + end-tower marker.
+const RED = new THREE.MeshStandardMaterial({ color: '#c0212a', metalness: 0.3, roughness: 0.5 });
 
 // ------------------------------------------------------------- marker icons
 let _markerMat: THREE.SpriteMaterial | null = null;
@@ -224,6 +226,21 @@ const PivotPoint = () => {
       {/* torsional diagonals */}
       <Rod a={[-lvl(0.8), 0.8, lvl(0.8)]} b={[lvl(1.6), 1.6, lvl(1.6)]} r={0.02} mat={STEEL_DARK} />
       <Rod a={[lvl(0.8), 0.8, -lvl(0.8)]} b={[-lvl(1.6), 1.6, -lvl(1.6)]} r={0.02} mat={STEEL_DARK} />
+      {/* access ladder (galvanized) — leaflet: "ladder" at the pivot point */}
+      <Rod a={[0.16, 0.45, 0.52]} b={[0.16, 3.25, 0.52]} r={0.017} mat={STEEL_DARK} />
+      <Rod a={[-0.16, 0.45, 0.52]} b={[-0.16, 3.25, 0.52]} r={0.017} mat={STEEL_DARK} />
+      {[0.8, 1.2, 1.6, 2.0, 2.4, 2.8, 3.15].map((yy) => (
+        <Rod key={yy} a={[-0.16, yy, 0.52]} b={[0.16, yy, 0.52]} r={0.011} mat={STEEL_DARK} />
+      ))}
+      {/* Western red nameplate sign (faces outward) */}
+      <group position={[0, 3.02, -0.5]}>
+        <mesh material={RED}>
+          <boxGeometry args={[0.66, 0.3, 0.05]} />
+        </mesh>
+        <mesh position={[0, 0, -0.035]} material={PANEL}>
+          <boxGeometry args={[0.5, 0.08, 0.02]} />
+        </mesh>
+      </group>
     </Part>
   );
 };
@@ -451,15 +468,25 @@ const DriveTower = ({ tx, markers }: { tx: number; markers: boolean }) => {
         <mesh position={[tx, beamY, 0]} material={STEEL}>
           <boxGeometry args={[3.3, 0.16, 0.16]} />
         </mesh>
-        <mesh position={[tx, PIPE_H - 0.14, 0]} material={STEEL_DARK}>
+        {/* top yoke — red on the end tower (Western safety marker) */}
+        <mesh position={[tx, PIPE_H - 0.14, 0]} material={tx === T2 ? RED : STEEL_DARK}>
           <boxGeometry args={[0.32, 0.14, 0.3]} />
         </mesh>
+        {/* ball & socket flex joint carrying the span (leaflet: stress-free flex) */}
+        <mesh position={[tx, PIPE_H, 0]} material={GEAR_DARK}>
+          <sphereGeometry args={[0.12, 14, 14]} />
+        </mesh>
+        {/* reinforced A-frame legs */}
         <Rod a={[tx - 0.1, PIPE_H - 0.1, 0]} b={[tx - legX, 0.74, 0]} r={0.045} />
         <Rod a={[tx + 0.1, PIPE_H - 0.1, 0]} b={[tx + legX, 0.74, 0]} r={0.045} />
-        <Rod a={[tx - xAt(1.8), 1.8, 0]} b={[tx + xAt(1.8), 1.8, 0]} r={0.026} mat={STEEL_DARK} />
-        <Rod a={[tx - xAt(2.7), 2.7, 0]} b={[tx + xAt(2.7), 2.7, 0]} r={0.026} mat={STEEL_DARK} />
-        <Rod a={[tx - xAt(1.8), 1.8, 0]} b={[tx + xAt(2.7), 2.7, 0]} r={0.02} mat={STEEL_DARK} />
-        <Rod a={[tx + xAt(1.8), 1.8, 0]} b={[tx - xAt(2.7), 2.7, 0]} r={0.02} mat={STEEL_DARK} />
+        {/* leaflet: reinforced legs with 4 cross-ties and one diagonal brace */}
+        {[1.15, 1.85, 2.55, 3.2].map((y) => (
+          <Rod key={y} a={[tx - xAt(y), y, 0]} b={[tx + xAt(y), y, 0]} r={0.024} mat={STEEL_DARK} />
+        ))}
+        <Rod a={[tx - xAt(1.15), 1.15, 0]} b={[tx + xAt(3.2), 3.2, 0]} r={0.021} mat={STEEL_DARK} />
+        {/* fore-aft braces — "maximize roll resistance" */}
+        <Rod a={[tx - legX, 0.74, 0]} b={[tx, 1.95, 0.4]} r={0.017} mat={STEEL_DARK} />
+        <Rod a={[tx + legX, 0.74, 0]} b={[tx, 1.95, -0.4]} r={0.017} mat={STEEL_DARK} />
       </Part>
 
       {/* center drive gearmotor under its fiberglass cover */}

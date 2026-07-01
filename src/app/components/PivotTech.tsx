@@ -50,7 +50,6 @@ const UI = {
 } as const;
 
 export const PivotTech = () => {
-  return null;
   const { lang } = useI18n();
   const hostRef = useRef<HTMLDivElement>(null);
   const [mount3D, setMount3D] = useState(false);
