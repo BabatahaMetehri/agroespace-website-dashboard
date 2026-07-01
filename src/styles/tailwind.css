@@ -87,3 +87,40 @@
     animation: none !important;
   }
 }
+
+/* ── CRM tool (admin dark theme) — shared input + icon-button ─────────────── */
+.crm-input {
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8125rem;
+  color: #ffffff;
+  outline: none;
+}
+.crm-input:focus {
+  border-color: #87a922;
+}
+.crm-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.icon-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
+  transition:
+    color 0.15s,
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.icon-btn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.05);
+}

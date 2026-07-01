@@ -15,6 +15,7 @@ import { Activities } from "./pages/Activities";
 import { ServicePage } from "./pages/services/ServicePage";
 import { Legal } from "./pages/Legal";
 import { NotFound } from "./pages/NotFound";
+import { CrmPreview } from "./pages/CrmPreview";
 
 import { Dashboard } from "./admin/pages/Dashboard";
 import { Quotes } from "./admin/pages/Quotes";
@@ -25,6 +26,7 @@ import { Featured } from "./admin/pages/Featured";
 import { Settings } from "./admin/pages/Settings";
 import { Promo } from "./admin/pages/Promo";
 import { Documents } from "./admin/pages/Documents";
+import { Crm } from "./admin/pages/Crm";
 
 export const router = createBrowserRouter([
   {
@@ -55,12 +57,15 @@ export const router = createBrowserRouter([
       { path: "*", Component: NotFound },
     ],
   },
+  // Login-free CRM preview (demo data). Standalone — no marketing chrome.
+  { path: "/crm-preview", Component: CrmPreview },
   {
     path: "/admin",
     Component: AdminLayout,
     children: [
       { index: true, Component: Dashboard },
       { path: "quotes", Component: Quotes },
+      { path: "crm", Component: Crm },
       { path: "documents", Component: Documents },
       { path: "blog", Component: BlogList },
       { path: "blog/new", Component: BlogEditor },
