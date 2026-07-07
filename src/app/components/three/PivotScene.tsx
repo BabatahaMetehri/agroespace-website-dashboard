@@ -10,6 +10,7 @@ import {
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 
 /**
  * Western CP-600 — procedural digital twin, dimensioned from the official
@@ -53,6 +54,10 @@ const PLATES = ['#2563c9', '#d8262b', '#e3a008', '#7c3aed'].map(
 );
 // Western's signature red — used on the pivot nameplate + end-tower marker.
 const RED = new THREE.MeshStandardMaterial({ color: '#c0212a', metalness: 0.3, roughness: 0.5 });
+// Keep image-based reflections subtle so the desert-night palette isn't washed out.
+[STEEL, STEEL_DARK, TIRE, GEAR_DARK, CREAM, PANEL, PANEL_FACE, BRASS, PUMP, CONCRETE, RED, ...PLATES].forEach(
+  (m) => (m.envMapIntensity = 0.45),
+);
 
 // ------------------------------------------------------------- marker icons
 let _markerMat: THREE.SpriteMaterial | null = null;
@@ -423,6 +428,20 @@ const DriveTower = ({ tx, markers }: { tx: number; markers: boolean }) => {
           <mesh position={[bx, 0.62, 0]} rotation={[0, Math.PI / 2, 0]} material={TIRE}>
             <torusGeometry args={[0.43, 0.2, 12, 26]} />
           </mesh>
+          {/* agricultural tread lugs around the tire */}
+          {Array.from({ length: 10 }, (_, k) => {
+            const a = (k / 10) * Math.PI * 2;
+            return (
+              <mesh
+                key={k}
+                position={[bx, 0.62 + Math.cos(a) * 0.6, Math.sin(a) * 0.6]}
+                rotation={[a, 0, 0]}
+                material={TIRE}
+              >
+                <boxGeometry args={[0.32, 0.07, 0.12]} />
+              </mesh>
+            );
+          })}
           <mesh position={[bx, 0.62, 0]} rotation={[0, 0, Math.PI / 2]} material={STEEL}>
             <cylinderGeometry args={[0.3, 0.3, 0.18, 16]} />
           </mesh>
@@ -503,14 +522,21 @@ const DriveTower = ({ tx, markers }: { tx: number; markers: boolean }) => {
         </mesh>
       </Part>
 
-      {/* tower junction box on the leg */}
+      {/* tower junction box — centred on TOP of the tower (like the collector
+          ring on the pivot point), on a short galvanized mast */}
       <Part
         id="tower-box"
-        marker={markers && tx === T1 ? [tx - xAt(2.4) - 0.1, 2.85, 0.3] : undefined}
-        hit={[{ pos: [tx - xAt(2.4), 2.4, 0.13], r: 0.3 }]}
+        marker={markers && tx === T2 ? [tx, PIPE_H + 1.05, 0] : undefined}
+        hit={[{ pos: [tx, PIPE_H + 0.5, 0], r: 0.35 }]}
       >
-        <mesh position={[tx - xAt(2.4), 2.4, 0.13]} material={PANEL}>
-          <boxGeometry args={[0.2, 0.3, 0.13]} />
+        <mesh position={[tx, PIPE_H + 0.2, 0]} material={STEEL_DARK}>
+          <cylinderGeometry args={[0.022, 0.022, 0.28, 8]} />
+        </mesh>
+        <mesh position={[tx, PIPE_H + 0.5, 0]} material={PANEL}>
+          <boxGeometry args={[0.26, 0.32, 0.16]} />
+        </mesh>
+        <mesh position={[tx, PIPE_H + 0.5, -0.085]} material={PANEL_FACE}>
+          <boxGeometry args={[0.18, 0.22, 0.02]} />
         </mesh>
       </Part>
 
@@ -718,6 +744,13 @@ export default function PivotScene({
       gl={{ antialias: true, alpha: false, powerPreference: 'high-performance' }}
       onCreated={({ gl, scene }) => {
         gl.setClearColor('#0a1c12');
+        // Filmic tone mapping + image-based lighting: galvanized steel reads
+        // as real metal instead of flat grey.
+        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMappingExposure = 1.1;
+        const pmrem = new THREE.PMREMGenerator(gl);
+        scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmrem.dispose();
         scene.fog = new THREE.Fog('#0a1c12', 60, 190);
         gl.domElement.addEventListener('pointerdown', (e) => {
           downRef.current = [e.clientX, e.clientY];
