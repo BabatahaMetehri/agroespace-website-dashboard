@@ -1,35 +1,43 @@
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { motion } from "motion/react";
-import {
-  diameterM,
-  expandPicks,
-  type EstimateResult,
-  type ObstacleLevel,
-} from "../../lib/pivotEstimator";
+import { diameterM, expandPicks, type EstimateResult } from "../../lib/pivotEstimator";
+import { OBSTACLE_SPECS, type Obstacle, type Placement } from "../../lib/pivotPlacement";
 
 /**
- * Illustrative top-down view of the farmer's plot: the parcel rectangle (dry
- * land) with the recommended pivots drawn as irrigated circles, shelf-packed at
- * true scale. The sand showing between the circles IS the corner waste — the
- * whole point of the estimate, made visible. Drawn in metre coordinates (the
- * exact plot dimensions the estimate derived) so the SVG viewBox handles scaling.
+ * Top-down plan of the farmer's plot, drawn in metre coordinates.
+ * Two modes:
+ *  · exact — `placements` from the geometric engine are drawn at their true
+ *    positions together with the user's obstacles;
+ *  · fallback — no placements: the recommended mix is shelf-packed for a
+ *    quick illustrative layout.
+ * When `editable`, clicking the plan places the selected obstacle (via
+ * `onPlace`) and clicking an obstacle removes it (via `onRemove`).
  */
 export const EstimatorField = ({
   result,
-  obstacles,
+  obstacles = [],
+  placements,
+  editable,
+  onPlace,
+  onRemove,
 }: {
   result: EstimateResult;
-  obstacles: ObstacleLevel;
+  obstacles?: Obstacle[];
+  placements?: Placement[];
+  editable?: boolean;
+  onPlace?: (x: number, y: number) => void;
+  onRemove?: (id: string) => void;
 }) => {
   const wM = result.widthM || 1;
   const hM = result.heightM || 1;
+  const pad = Math.max(wM, hM) * 0.02;
+  const stroke = Math.max(wM, hM) * 0.004;
+  const svgRef = useRef<SVGSVGElement>(null);
 
-  const placed = useMemo(() => {
-    const dias = expandPicks(result.picks).map((size) => ({
-      size,
-      d: diameterM(size),
-    }));
-    const out: { cx: number; cy: number; d: number; size: number }[] = [];
+  // Fallback layout when the geometric engine didn't run.
+  const shelf = useMemo(() => {
+    const dias = expandPicks(result.picks).map((size) => ({ size, d: diameterM(size) }));
+    const out: Placement[] = [];
     let x = 0;
     let y = 0;
     let rowH = 0;
@@ -39,38 +47,47 @@ export const EstimatorField = ({
         y += rowH;
         rowH = 0;
       }
-      if (y + d > hM + 1e-6) break; // ran out of vertical room
-      out.push({ cx: x + d / 2, cy: y + d / 2, d, size });
+      if (y + d > hM + 1e-6) break;
+      out.push({ x: x + d / 2, y: y + d / 2, r: d / 2, size });
       x += d;
       rowH = Math.max(rowH, d);
     }
     return out;
   }, [result.picks, wM, hM]);
 
-  const stroke = Math.max(wM, hM) * 0.004;
-  const pad = Math.max(wM, hM) * 0.02;
+  const circles = placements ?? shelf;
 
-  // A few obstacle markers, purely decorative, scaled by severity.
-  const obstacleMarks = useMemo(() => {
-    const n = { none: 0, light: 3, moderate: 5, heavy: 7 }[obstacles];
-    const marks: { x: number; y: number }[] = [];
-    let seed = 7;
-    const rnd = () => {
-      seed = (seed * 9301 + 49297) % 233280;
-      return seed / 233280;
-    };
-    for (let i = 0; i < n; i++)
-      marks.push({ x: pad + rnd() * (wM - 2 * pad), y: pad + rnd() * (hM - 2 * pad) });
-    return marks;
-  }, [obstacles, wM, hM, pad]);
+  /** Convert a mouse event to field metres (accounts for meet letterboxing). */
+  const toMeters = (e: React.MouseEvent): [number, number] | null => {
+    const svg = svgRef.current;
+    if (!svg) return null;
+    const rect = svg.getBoundingClientRect();
+    const vw = wM + 2 * pad;
+    const vh = hM + 2 * pad;
+    const scale = Math.min(rect.width / vw, rect.height / vh);
+    const ox = (rect.width - vw * scale) / 2;
+    const oy = (rect.height - vh * scale) / 2;
+    const x = (e.clientX - rect.left - ox) / scale - pad;
+    const y = (e.clientY - rect.top - oy) / scale - pad;
+    if (x < 0 || y < 0 || x > wM || y > hM) return null;
+    return [x, y];
+  };
+
+  const mark = Math.max(6, Math.max(wM, hM) * 0.012);
 
   return (
     <svg
+      ref={svgRef}
       viewBox={`${-pad} ${-pad} ${wM + 2 * pad} ${hM + 2 * pad}`}
-      className="w-full h-full"
+      className={`w-full h-full ${editable ? "cursor-crosshair" : ""}`}
       preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label="Aperçu du champ et des pivots"
+      onClick={(e) => {
+        if (!editable || !onPlace) return;
+        const m = toMeters(e);
+        if (m) onPlace(m[0], m[1]);
+      }}
     >
       <defs>
         <radialGradient id="disc" cx="50%" cy="50%" r="50%">
@@ -94,42 +111,26 @@ export const EstimatorField = ({
         strokeDasharray={`${stroke * 4} ${stroke * 3}`}
       />
 
-      {/* Obstacles */}
-      {obstacleMarks.map((m, i) => (
-        <rect
-          key={i}
-          x={m.x}
-          y={m.y}
-          width={Math.max(wM, hM) * 0.018}
-          height={Math.max(wM, hM) * 0.018}
-          fill="#e3a008"
-          opacity={0.8}
-          transform={`rotate(45 ${m.x} ${m.y})`}
-        />
-      ))}
-
       {/* Irrigated pivot circles */}
-      {placed.map((p, i) => (
-        <g key={i}>
+      {circles.map((p, i) => (
+        <g key={`${p.x}-${p.y}-${i}`} pointerEvents="none">
           <motion.circle
-            cx={p.cx}
-            cy={p.cy}
+            cx={p.x}
+            cy={p.y}
             initial={{ r: 0, opacity: 0 }}
-            whileInView={{ r: p.d / 2, opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.05, duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+            animate={{ r: p.r, opacity: 1 }}
+            transition={{ delay: i * 0.04, duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
             fill="url(#disc)"
             stroke="#87a922"
             strokeOpacity={0.7}
             strokeWidth={stroke}
           />
-          {/* pivot point */}
-          <circle cx={p.cx} cy={p.cy} r={Math.max(wM, hM) * 0.006} fill="#eaf6c6" />
+          <circle cx={p.x} cy={p.y} r={Math.max(wM, hM) * 0.006} fill="#eaf6c6" />
           <text
-            x={p.cx}
-            y={p.cy + p.d * 0.16}
+            x={p.x}
+            y={p.y + p.r * 0.32}
             textAnchor="middle"
-            fontSize={p.d * 0.16}
+            fontSize={p.r * 0.32}
             fontWeight={800}
             fill="#eaf6c6"
             opacity={0.9}
@@ -138,6 +139,56 @@ export const EstimatorField = ({
           </text>
         </g>
       ))}
+
+      {/* Obstacles (click to remove when editing) */}
+      {obstacles.map((o) => {
+        const common = {
+          onClick: (e: React.MouseEvent) => {
+            e.stopPropagation();
+            if (editable) onRemove?.(o.id);
+          },
+          className: editable ? "cursor-pointer" : undefined,
+        };
+        if (o.type === "road") {
+          const w = OBSTACLE_SPECS.road.r * 2;
+          return o.orient === "h" ? (
+            <rect key={o.id} x={0} y={o.y - w / 2} width={wM} height={w} fill="#8a8f98" opacity={0.75} {...common} />
+          ) : (
+            <rect key={o.id} x={o.x - w / 2} y={0} width={w} height={hM} fill="#8a8f98" opacity={0.75} {...common} />
+          );
+        }
+        if (o.type === "building")
+          return (
+            <rect
+              key={o.id}
+              x={o.x - 15}
+              y={o.y - 15}
+              width={30}
+              height={30}
+              fill="#b0855b"
+              stroke="#e0b287"
+              strokeWidth={stroke}
+              {...common}
+            />
+          );
+        if (o.type === "trees")
+          return (
+            <circle key={o.id} cx={o.x} cy={o.y} r={12} fill="#2f6b33" stroke="#4c9552" strokeWidth={stroke} {...common} />
+          );
+        // pole
+        return (
+          <rect
+            key={o.id}
+            x={o.x - mark / 2}
+            y={o.y - mark / 2}
+            width={mark}
+            height={mark}
+            fill="#e3a008"
+            transform={`rotate(45 ${o.x} ${o.y})`}
+            {...common}
+          />
+        );
+      })}
     </svg>
   );
 };

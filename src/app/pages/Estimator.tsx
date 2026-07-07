@@ -27,10 +27,21 @@ import {
   diameterM,
   cellHa,
   pivotSku,
+  fieldDims,
+  maxSizeForWidth,
+  shapeFromAspect,
+  SHAPE_MAX,
   type Crop,
   type ObstacleLevel,
+  type PivotSize,
   type Shape,
 } from "../lib/pivotEstimator";
+import {
+  estimateWithObstacles,
+  OBSTACLE_SPECS,
+  type Obstacle,
+  type ObstacleType,
+} from "../lib/pivotPlacement";
 
 type Lang = "fr" | "ar" | "en";
 
@@ -121,6 +132,11 @@ const T: Record<Lang, Record<string, string>> = {
       "Votre parcelle est trop étroite ({w} m) pour notre plus petit pivot (≈ 505 m de large). Un système linéaire ou une autre solution conviendrait mieux — contactez-nous.",
     recommended: "Le + courant",
     maxFitLabel: "Pivot max pour cette largeur",
+    obsPlaceHint:
+      "Choisissez un type puis cliquez sur le plan à droite pour placer l'obstacle exactement. Cliquez sur un obstacle placé pour le retirer. Dès qu'un obstacle est placé, le calcul devient géométrique et exact.",
+    obsClear: "Tout effacer",
+    geoNote:
+      "Plan géométrique exact : chaque cercle est positionné en évitant vos obstacles et les limites du terrain.",
   },
   ar: {
     eyebrow: "أداة مجانية",
@@ -206,6 +222,10 @@ const T: Record<Lang, Record<string, string>> = {
       "قطعتك ضيّقة جدًا ({w} م) على أصغر محور لدينا (عرض ≈ 505 م). نظام خطّي أو حلّ آخر قد يكون أنسب — تواصل معنا.",
     recommended: "الأكثر شيوعًا",
     maxFitLabel: "أكبر محور لهذا العرض",
+    obsPlaceHint:
+      "اختر نوعًا ثم انقر على المخطط لوضع العائق في مكانه الحقيقي. انقر على عائق لإزالته. بمجرد وضع عائق يصبح الحساب هندسيًا دقيقًا.",
+    obsClear: "مسح الكل",
+    geoNote: "مخطط هندسي دقيق: كل دائرة موضوعة مع تفادي عوائقك وحدود الأرض.",
   },
   en: {
     eyebrow: "Free tool",
@@ -292,6 +312,11 @@ const T: Record<Lang, Record<string, string>> = {
       "Your plot is too narrow ({w} m) for our smallest pivot (≈ 505 m wide). A linear system or another solution would suit better — contact us.",
     recommended: "Most common",
     maxFitLabel: "Largest pivot for this width",
+    obsPlaceHint:
+      "Pick a type then click the plan on the right to place the obstacle exactly. Click a placed obstacle to remove it. Once an obstacle is placed the calculation becomes exact geometry.",
+    obsClear: "Clear all",
+    geoNote:
+      "Exact geometric plan: every circle is positioned avoiding your obstacles and the field limits.",
   },
 };
 
@@ -321,6 +346,13 @@ const CROPS: { id: Crop; key: string }[] = [
   { id: "vegetables", key: "cropVegetables" },
 ];
 
+const OB_LABELS: Record<ObstacleType, Record<Lang, string>> = {
+  pole: { fr: "Poteau", ar: "عمود", en: "Pole" },
+  building: { fr: "Bâtiment", ar: "مبنى", en: "Building" },
+  trees: { fr: "Arbres", ar: "أشجار", en: "Trees" },
+  road: { fr: "Route", ar: "طريق", en: "Road" },
+};
+
 const TOTAL_STEPS = 4;
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
 const shapeKey = (s: Shape) => SHAPES.find((x) => x.id === s)?.key ?? "shapeSquare";
@@ -336,18 +368,38 @@ export const Estimator = () => {
   const [heightM, setHeightM] = useState(800);
   const [shape, setShape] = useState<Shape>("square");
   const [obstacles, setObstacles] = useState<ObstacleLevel>("none");
+  const [obsList, setObsList] = useState<Obstacle[]>([]);
+  const [obsType, setObsType] = useState<ObstacleType>("pole");
+  const [roadOrient, setRoadOrient] = useState<"h" | "v">("v");
   const [crop, setCrop] = useState<Crop>("cereals");
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const result = useMemo(
-    () =>
-      estimate(
+  const result = useMemo(() => {
+    // With placed obstacles we switch to the exact geometric engine:
+    // real rectangle, real circles, per-obstacle clearances.
+    if (obsList.length > 0) {
+      const d = mode === "dims" ? { wM: widthM, hM: heightM } : fieldDims(landHa, shape);
+      const effShape =
         mode === "dims"
-          ? { landHa: 0, shape, obstacles, crop, widthM, heightM }
-          : { landHa, shape, obstacles, crop },
-      ),
-    [mode, landHa, widthM, heightM, shape, obstacles, crop],
-  );
+          ? shapeFromAspect(Math.max(d.wM, d.hM) / Math.max(1, Math.min(d.wM, d.hM)))
+          : shape;
+      const cap = maxSizeForWidth(Math.min(d.wM, d.hM));
+      const maxSize = (cap ? Math.min(cap, SHAPE_MAX[effShape]) : 20) as PivotSize;
+      return estimateWithObstacles({
+        wM: d.wM,
+        hM: d.hM,
+        shape: effShape,
+        crop,
+        obstacles: obsList,
+        maxSize,
+      });
+    }
+    return estimate(
+      mode === "dims"
+        ? { landHa: 0, shape, obstacles, crop, widthM, heightM }
+        : { landHa, shape, obstacles, crop },
+    );
+  }, [mode, landHa, widthM, heightM, shape, obstacles, crop, obsList]);
 
   const canProceed = mode === "dims" ? widthM > 0 && heightM > 0 : landHa > 0;
 
@@ -554,19 +606,66 @@ export const Estimator = () => {
                   </div>
                 )}
 
-                {/* STEP 3 — obstacles */}
+                {/* STEP 3 — obstacles: qualitative level OR exact placement */}
                 {step === 3 && (
                   <div>
                     <StepHead title={tr("s3")} sub={tr("s3sub")} />
-                    <div className="space-y-3">
-                      {OBSTACLES.map((o) => (
-                        <SelectRow
-                          key={o.id}
-                          active={obstacles === o.id}
-                          onClick={() => setObstacles(o.id)}
-                          label={tr(o.key)}
-                        />
-                      ))}
+                    {obsList.length === 0 && (
+                      <div className="space-y-3 mb-6">
+                        {OBSTACLES.map((o) => (
+                          <SelectRow
+                            key={o.id}
+                            active={obstacles === o.id}
+                            onClick={() => setObstacles(o.id)}
+                            label={tr(o.key)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    <div className="rounded-2xl border border-lime/25 bg-lime/[0.05] p-4">
+                      <p className="text-xs text-white/55 leading-relaxed mb-3">
+                        {tr("obsPlaceHint")}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(Object.keys(OBSTACLE_SPECS) as ObstacleType[]).map((t) => (
+                          <button
+                            key={t}
+                            onClick={() => setObsType(t)}
+                            className={`px-3.5 py-2 rounded-full border text-xs font-medium transition-colors ${
+                              obsType === t
+                                ? "bg-lime text-white border-transparent"
+                                : "bg-white/5 border-white/15 text-white/70 hover:text-white"
+                            }`}
+                          >
+                            {OB_LABELS[t][lang]}
+                          </button>
+                        ))}
+                        {obsType === "road" && (
+                          <span className="inline-flex rounded-full border border-white/15 overflow-hidden">
+                            {(["v", "h"] as const).map((o) => (
+                              <button
+                                key={o}
+                                onClick={() => setRoadOrient(o)}
+                                className={`px-3 py-2 text-xs ${
+                                  roadOrient === o
+                                    ? "bg-lime text-white"
+                                    : "text-white/60 hover:text-white"
+                                }`}
+                              >
+                                {o === "v" ? "↕" : "↔"}
+                              </button>
+                            ))}
+                          </span>
+                        )}
+                      </div>
+                      {obsList.length > 0 && (
+                        <button
+                          onClick={() => setObsList([])}
+                          className="mt-3 text-xs text-white/40 hover:text-red-300 transition-colors"
+                        >
+                          {tr("obsClear")} ({obsList.length})
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -631,7 +730,25 @@ export const Estimator = () => {
           <div className="lg:sticky lg:top-28">
             <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-4 md:p-6">
               <div className="h-64 md:h-80 w-full">
-                <EstimatorField result={result} obstacles={obstacles} />
+                <EstimatorField
+                  result={result}
+                  obstacles={obsList}
+                  placements={"placements" in result ? result.placements : undefined}
+                  editable={step === 3}
+                  onPlace={(x, y) =>
+                    setObsList((l) => [
+                      ...l,
+                      {
+                        id: crypto.randomUUID(),
+                        type: obsType,
+                        x,
+                        y,
+                        orient: obsType === "road" ? roadOrient : undefined,
+                      },
+                    ])
+                  }
+                  onRemove={(id) => setObsList((l) => l.filter((o) => o.id !== id))}
+                />
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-white/10 mt-4 rounded-xl overflow-hidden">
                 {liveKpis.map((k) => (
@@ -779,6 +896,9 @@ const ResultsPanel = ({
 
       {result.note === "tight" && (
         <p className="text-xs text-amber-300/80 -mt-3 mb-5">{tr("tight")}</p>
+      )}
+      {"placements" in result && result.feasible && (
+        <p className="text-xs text-lime/80 -mt-3 mb-5">{tr("geoNote")}</p>
       )}
 
       {/* Pivot product cards */}
