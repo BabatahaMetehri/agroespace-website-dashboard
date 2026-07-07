@@ -18,8 +18,12 @@ import {
   Users,
   TrendingUp,
   CircleDollarSign,
-  ChevronRight,
+  Download,
+  LayoutGrid,
+  List,
+  Calendar,
 } from "lucide-react";
+import { Link } from "react-router";
 import { useCrmStore } from "./useCrmStore";
 import {
   CLIENT_STATUSES,
@@ -46,27 +50,67 @@ const fmtDateTime = (iso: string) =>
   new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 const digits = (s?: string) => (s ?? "").replace(/[^\d+]/g, "");
 
-export const ClientsCRM = ({ author }: { author?: string }) => {
+/** A follow-up is overdue when its date is past and the client isn't lost. */
+const isOverdue = (c: CrmClient) =>
+  !!c.nextActionAt &&
+  new Date(c.nextActionAt).getTime() < Date.now() &&
+  c.status !== "lost";
+
+/** Excel-friendly CSV export (BOM + semicolons for the FR locale). */
+const exportCsv = (clients: CrmClient[]) => {
+  const esc = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const rows = [
+    ["Société", "Contact", "Téléphone", "Email", "Wilaya", "Statut", "Relance", "Documents (DA)", "Notes"],
+    ...clients.map((c) => [
+      c.company,
+      c.contact,
+      c.phone,
+      c.email,
+      c.wilaya,
+      statusMeta(c.status).label,
+      c.nextActionAt ? fmtDate(c.nextActionAt) : "",
+      c.documents.reduce((s, d) => s + d.amountDA, 0),
+      c.notes.length,
+    ]),
+  ];
+  const csv = "﻿" + rows.map((r) => r.map(esc).join(";")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "clients-crm.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
+export const ClientsCRM = ({ author, inAdmin }: { author?: string; inAdmin?: boolean }) => {
   const store = useCrmStore();
   const { clients } = store;
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ClientStatus | "all">("all");
+  const [sort, setSort] = useState<"recent" | "name" | "action">("recent");
+  const [view, setView] = useState<"list" | "kanban">("list");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [formFor, setFormFor] = useState<CrmClient | "new" | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return clients.filter((c) => {
+    const arr = clients.filter((c) => {
       if (filter !== "all" && c.status !== filter) return false;
       if (!q) return true;
       return (
         c.company.toLowerCase().includes(q) ||
         c.contact.toLowerCase().includes(q) ||
         (c.wilaya ?? "").toLowerCase().includes(q) ||
-        (c.phone ?? "").includes(q)
+        (c.phone ?? "").includes(q) ||
+        c.notes.some((n) => n.body.toLowerCase().includes(q))
       );
     });
-  }, [clients, query, filter]);
+    if (sort === "name") arr.sort((a, b) => a.company.localeCompare(b.company, "fr"));
+    else if (sort === "action")
+      arr.sort((a, b) => (a.nextActionAt ?? "9999").localeCompare(b.nextActionAt ?? "9999"));
+    else arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return arr;
+  }, [clients, query, filter, sort]);
 
   const selected = clients.find((c) => c.id === selectedId) ?? null;
 
@@ -82,7 +126,8 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
         if (d.kind === "facture" && d.status === "paid") invoiced += d.amountDA;
         if (d.kind === "proforma" && d.status === "sent") pending += d.amountDA;
       }
-    return { total: clients.length, won, active, invoiced, pending };
+    const overdue = clients.filter(isOverdue).length;
+    return { total: clients.length, won, active, invoiced, pending, overdue };
   }, [clients]);
 
   return (
@@ -98,12 +143,13 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
         <Stat icon={Users} label="Clients" value={String(stats.total)} />
         <Stat icon={TrendingUp} label="Pipeline actif" value={String(stats.active)} />
         <Stat icon={Building2} label="Clients gagnés" value={String(stats.won)} />
         <Stat icon={CircleDollarSign} label="CA facturé" value={fmtDA(stats.invoiced)} tint />
         <Stat icon={ReceiptText} label="Proformas en cours" value={fmtDA(stats.pending)} />
+        <Stat icon={Calendar} label="Relances en retard" value={String(stats.overdue)} />
       </div>
 
       {/* Toolbar */}
@@ -128,6 +174,39 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
               <option key={s.value} value={s.value}>{s.label}</option>
             ))}
           </select>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="bg-white/5 border border-white/10 rounded-xl py-2.5 px-3 text-sm text-white focus:outline-none focus:border-lime"
+          >
+            <option value="recent">Plus récents</option>
+            <option value="name">Nom A→Z</option>
+            <option value="action">Prochaine relance</option>
+          </select>
+          <span className="inline-flex rounded-xl border border-white/10 overflow-hidden">
+            {(
+              [
+                ["list", List],
+                ["kanban", LayoutGrid],
+              ] as const
+            ).map(([v, Icon]) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                title={v === "list" ? "Liste" : "Pipeline"}
+                className={`px-3 py-2.5 ${view === v ? "bg-lime text-white" : "text-white/50 hover:text-white"}`}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            ))}
+          </span>
+          <button
+            onClick={() => exportCsv(filtered)}
+            title="Exporter en CSV"
+            className="inline-flex items-center gap-2 px-3 py-2.5 rounded-xl border border-white/10 text-white/60 hover:text-white hover:bg-white/5 text-sm transition-colors"
+          >
+            <Download className="w-4 h-4" />
+          </button>
           <button
             onClick={() => store.resetDemo()}
             title="Réinitialiser les données de démonstration"
@@ -144,7 +223,72 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
         </div>
       </div>
 
-      {/* Master–detail */}
+      {/* Pipeline (kanban) view */}
+      {view === "kanban" && (
+        <div className="flex gap-3 overflow-x-auto pb-4">
+          {CLIENT_STATUSES.map((s) => {
+            const col = filtered.filter((c) => c.status === s.value);
+            return (
+              <div key={s.value} className="w-64 shrink-0">
+                <div className="flex items-center gap-2 mb-3 text-[11px] uppercase tracking-[0.1em] text-white/50">
+                  <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                  {s.label}
+                  <span className="text-white/30">({col.length})</span>
+                </div>
+                <div className="space-y-2 min-h-16">
+                  {col.map((c) => (
+                    <div
+                      key={c.id}
+                      className="rounded-xl bg-white/[0.04] border border-white/10 p-3 hover:border-lime/40 transition-colors"
+                    >
+                      <button
+                        onClick={() => {
+                          setSelectedId(c.id);
+                          setView("list");
+                        }}
+                        className="text-left w-full"
+                      >
+                        <div className="text-sm text-white font-medium truncate">{c.company}</div>
+                        <div className="text-[11px] text-white/40 truncate">
+                          {c.contact}
+                          {c.wilaya ? ` · ${c.wilaya}` : ""}
+                        </div>
+                      </button>
+                      <div className="flex items-center justify-between mt-2 gap-2">
+                        {c.nextActionAt ? (
+                          <span
+                            className={`inline-flex items-center gap-1 text-[10px] ${
+                              isOverdue(c) ? "text-red-300" : "text-white/40"
+                            }`}
+                          >
+                            <Calendar className="w-3 h-3" /> {fmtDate(c.nextActionAt)}
+                          </span>
+                        ) : (
+                          <span />
+                        )}
+                        <select
+                          value={c.status}
+                          onChange={(e) => store.setStatus(c.id, e.target.value as ClientStatus)}
+                          className="bg-transparent border border-white/10 rounded-lg text-[10px] text-white/50 px-1.5 py-1"
+                        >
+                          {CLIENT_STATUSES.map((o) => (
+                            <option key={o.value} value={o.value} className="bg-[#0f2618]">
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Master–detail (list) view */}
+      {view === "list" && (
       <div className="grid gap-6 lg:grid-cols-[340px_1fr] items-start">
         {/* List */}
         <div className="space-y-2 lg:max-h-[calc(100vh-16rem)] lg:overflow-y-auto lg:pr-1">
@@ -189,6 +333,13 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
                       <StickyNote className="w-3 h-3" /> {c.notes.length}
                     </span>
                   )}
+                  {c.nextActionAt && (
+                    <span
+                      className={`inline-flex items-center gap-1 ${isOverdue(c) ? "text-red-300" : ""}`}
+                    >
+                      <Calendar className="w-3 h-3" /> {fmtDate(c.nextActionAt)}
+                    </span>
+                  )}
                 </div>
               </button>
             );
@@ -202,6 +353,7 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
             client={selected}
             store={store}
             author={author}
+            inAdmin={inAdmin}
             onEdit={() => setFormFor(selected)}
           />
         ) : (
@@ -211,6 +363,7 @@ export const ClientsCRM = ({ author }: { author?: string }) => {
           </div>
         )}
       </div>
+      )}
 
       {formFor && (
         <ClientForm
@@ -236,11 +389,13 @@ const ClientDetail = ({
   client,
   store,
   author,
+  inAdmin,
   onEdit,
 }: {
   client: CrmClient;
   store: ReturnType<typeof useCrmStore>;
   author?: string;
+  inAdmin?: boolean;
   onEdit: () => void;
 }) => {
   const m = statusMeta(client.status);
@@ -267,6 +422,15 @@ const ClientDetail = ({
               )}
               {client.sector && <span>🌱 {client.sector}</span>}
               {client.source && <span className="text-white/40">Source : {client.source}</span>}
+              {client.nextActionAt && (
+                <span
+                  className={`inline-flex items-center gap-1.5 ${
+                    isOverdue(client) ? "text-red-300" : ""
+                  }`}
+                >
+                  <Calendar className="w-3.5 h-3.5" /> Relance : {fmtDate(client.nextActionAt)}
+                </span>
+              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -344,7 +508,7 @@ const ClientDetail = ({
 
       <div className="grid lg:grid-cols-2 gap-6">
         <NotesPanel client={client} store={store} author={author} />
-        <DocumentsPanel client={client} store={store} />
+        <DocumentsPanel client={client} store={store} inAdmin={inAdmin} />
       </div>
 
       <HistoryPanel client={client} />
@@ -428,9 +592,11 @@ const NotesPanel = ({
 const DocumentsPanel = ({
   client,
   store,
+  inAdmin,
 }: {
   client: CrmClient;
   store: ReturnType<typeof useCrmStore>;
+  inAdmin?: boolean;
 }) => {
   const [adding, setAdding] = useState(false);
   const total = client.documents.reduce((s, d) => s + d.amountDA, 0);
@@ -440,9 +606,19 @@ const DocumentsPanel = ({
       title="Proformas & Factures"
       count={client.documents.length}
       action={
-        <button onClick={() => setAdding((v) => !v)} className="text-lime hover:text-lime-deep text-xs inline-flex items-center gap-1">
-          <Plus className="w-3.5 h-3.5" /> Ajouter
-        </button>
+        <div className="flex items-center gap-3">
+          {inAdmin && (
+            <Link
+              to="/admin/documents"
+              className="text-white/40 hover:text-white text-xs inline-flex items-center gap-1"
+            >
+              <FileText className="w-3.5 h-3.5" /> Outil factures
+            </Link>
+          )}
+          <button onClick={() => setAdding((v) => !v)} className="text-lime hover:text-lime-deep text-xs inline-flex items-center gap-1">
+            <Plus className="w-3.5 h-3.5" /> Ajouter
+          </button>
+        </div>
       }
     >
       {adding && <DocumentForm onAdd={(d) => { store.addDocument(client.id, d); setAdding(false); }} onCancel={() => setAdding(false)} />}
@@ -618,7 +794,15 @@ const ClientForm = ({
           <Field label="Source">
             <input value={f.source ?? ""} onChange={(e) => set("source", e.target.value)} className="crm-input" placeholder="Salon, site web…" />
           </Field>
-          <Field label="Statut" full>
+          <Field label="Prochaine relance">
+            <input
+              type="date"
+              value={(f.nextActionAt ?? "").slice(0, 10)}
+              onChange={(e) => set("nextActionAt", e.target.value)}
+              className="crm-input"
+            />
+          </Field>
+          <Field label="Statut">
             <select value={f.status ?? "prospect"} onChange={(e) => set("status", e.target.value)} className="crm-input">
               {CLIENT_STATUSES.map((s) => (
                 <option key={s.value} value={s.value} className="bg-[#0f2618]">{s.label}</option>

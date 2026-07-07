@@ -10,5 +10,5 @@ import { ClientsCRM } from "../../crm/ClientsCRM";
 export const Crm = () => {
   const { user } = useAdminAuth();
   const author = user?.email ? nameFromEmail(user.email) : undefined;
-  return <ClientsCRM author={author} />;
+  return <ClientsCRM author={author} inAdmin />;
 };

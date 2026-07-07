@@ -65,6 +65,8 @@ export interface CrmClient {
   source?: string; // lead source (salon, recommandation, site web…)
   status: ClientStatus;
   createdAt: string; // ISO
+  /** Next follow-up ("prochaine relance") date — ISO, optional. */
+  nextActionAt?: string;
   notes: CrmNote[];
   documents: CrmDocument[];
   history: CrmActivity[];

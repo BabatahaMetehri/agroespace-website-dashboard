@@ -82,6 +82,7 @@ export function useCrmStore() {
       source: data.source,
       status: data.status ?? "prospect",
       createdAt: new Date().toISOString(),
+      nextActionAt: data.nextActionAt,
       notes: [],
       documents: [],
       history: [activity("created", "Fiche client créée")],

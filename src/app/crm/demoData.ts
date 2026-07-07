@@ -43,6 +43,7 @@ export const DEMO_CLIENTS: CrmClient[] = [
     source: "Recommandation client",
     status: "negotiation",
     createdAt: iso("2026-01-22"),
+    nextActionAt: iso("2026-06-20"),
     notes: [
       { id: "n1", body: "Appel : hésite entre 1× 50 ha et 2× 25 ha. Lui expliquer l'avantage coût du 30 ha. Rappeler jeudi.", createdAt: iso("2026-02-18"), author: "karim.messaoudi", kind: "call" },
     ],
@@ -82,6 +83,7 @@ export const DEMO_CLIENTS: CrmClient[] = [
     source: "Salon Sud Agro Adrar",
     status: "contacted",
     createdAt: iso("2026-02-20"),
+    nextActionAt: iso("2026-07-15"),
     notes: [
       { id: "n1", body: "Premier contact au salon. Demande documentation technique CP-600 + tarifs indicatifs.", createdAt: iso("2026-02-20"), author: "karim.messaoudi", kind: "visit" },
     ],
