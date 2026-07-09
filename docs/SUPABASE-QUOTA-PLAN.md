@@ -22,9 +22,17 @@
 ## Checklist de sortie de crise (dans l'ordre)
 
 1. **Régler la facture / désactiver le Spend Cap** → le projet se réactive.
-2. **Déployer immédiatement la fonction** (rate-limits + cache headers +
-   endpoint batch deviennent effectifs) :
+2. **Déployer immédiatement la fonction** :
    `supabase functions deploy make-server-0c561120`
+   Elle contient maintenant un **interrupteur de sync** (`SYNC_DISABLED = true`
+   dans `index.ts`) : toutes les routes `/wp-json/…` répondent 503 sans toucher
+   au code de la sync. Pour réactiver la sync plus tard : passer à `false` et
+   redéployer. ⚠️ Les requêtes bloquées comptent quand même comme invocations —
+   pour un arrêt TOTAL du compteur sans accéder au PC de la sync : **régénérer
+   le secret JWT / la clé anon** (Dashboard → Settings → API) : la passerelle
+   rejettera la sync en 401 AVANT la fonction (0 invocation). Il faudra alors
+   mettre la nouvelle clé anon dans `utils/supabase/info` et redéployer le
+   site (2 lignes — me demander).
 3. **Reconfigurer la sync Logicom (le vrai levier, ÷100) :**
    - utiliser `POST /wp-json/wc/v3/products/batch` avec
      `{ "update": [ …jusqu'à 100 produits… ] }` → 1 invocation au lieu de 100 ;

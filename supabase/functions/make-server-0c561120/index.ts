@@ -74,6 +74,38 @@ app.use("*", async (c, next) => {
   await next();
 });
 
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║ TEMPORARY KILL SWITCH — Logicom sync (900k invocations in 2 days)         ║
+// ║                                                                            ║
+// ║ The sync app on the office PC is misbehaving and can't be reached right   ║
+// ║ now. Until it is fixed, every sync-facing route (/wp-json/…) answers 503  ║
+// ║ immediately, WITHOUT touching the sync code or the routes themselves.     ║
+// ║                                                                            ║
+// ║ ➜ TO RE-ENABLE THE SYNC: change `true` to `false` below and redeploy:     ║
+// ║     supabase functions deploy make-server-0c561120                        ║
+// ║                                                                            ║
+// ║ Note: blocked requests still count as invocations (Supabase bills any     ║
+// ║ request that reaches the function). This protects the database and may    ║
+// ║ make the sync back off (Retry-After), but the complete stop is rotating   ║
+// ║ the anon key / JWT secret so the gateway rejects the sync BEFORE the      ║
+// ║ function runs — see docs/SUPABASE-QUOTA-PLAN.md.                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+const SYNC_DISABLED = true;
+app.use("*", async (c, next) => {
+  if (SYNC_DISABLED && new URL(c.req.url).pathname.includes("/wp-json/")) {
+    c.header("Retry-After", "86400"); // hint well-behaved clients: retry in 24 h
+    return c.json(
+      {
+        code: "sync_temporarily_disabled",
+        message:
+          "Sync API temporarily disabled by the administrator. No data was lost; retry after re-enabling.",
+      },
+      503,
+    );
+  }
+  await next();
+});
+
 // ─── Rate limiter (sliding-window, hybrid in-memory + KV) ─────────────────
 // In-memory map gives sub-ms checks for the common case. For sensitive
 // endpoints (`persist: true`) we additionally write the bucket to KV so
