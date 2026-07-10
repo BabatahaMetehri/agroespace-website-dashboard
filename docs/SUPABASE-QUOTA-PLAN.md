@@ -27,12 +27,37 @@
    Elle contient maintenant un **interrupteur de sync** (`SYNC_DISABLED = true`
    dans `index.ts`) : toutes les routes `/wp-json/…` répondent 503 sans toucher
    au code de la sync. Pour réactiver la sync plus tard : passer à `false` et
-   redéployer. ⚠️ Les requêtes bloquées comptent quand même comme invocations —
-   pour un arrêt TOTAL du compteur sans accéder au PC de la sync : **régénérer
-   le secret JWT / la clé anon** (Dashboard → Settings → API) : la passerelle
-   rejettera la sync en 401 AVANT la fonction (0 invocation). Il faudra alors
-   mettre la nouvelle clé anon dans `utils/supabase/info` et redéployer le
-   site (2 lignes — me demander).
+   redéployer.
+
+### Comment couper la sync sans accéder au PC (3 niveaux)
+
+La sync s'authentifie via l'en-tête **`X-API-KEY`** (vérifié dans la fonction
+contre le secret d'Edge Function **`AGROESPACE_API_KEY`**) — c'est indépendant
+de la clé du site (le site utilise `VITE_SUPABASE_ANON_KEY`). Donc :
+
+- **Niveau 1 (le plus simple, zéro impact site) — changer `AGROESPACE_API_KEY`.**
+  Dashboard → Edge Functions → Secrets (ou `supabase secrets set
+  AGROESPACE_API_KEY=<nouvelle-valeur>`). Le `X-API-KEY` de la sync ne
+  correspond plus → 401, aucune écriture en base. Le site n'utilise pas ce
+  secret → **rien à changer côté site**. ⚠️ Les requêtes comptent quand même
+  comme invocations (la fonction s'exécute pour renvoyer 401), mais une sync
+  bien élevée ralentit sur des 401/503 répétés.
+- **Niveau 2 — l'interrupteur `SYNC_DISABLED` ci-dessus** (même effet, via 503).
+- **Niveau 3 (arrêt TOTAL du compteur d'invocations) — invalider la clé que la
+  sync présente à la *passerelle* (la clé anon).** La passerelle rejette alors
+  la sync en 401 AVANT la fonction → **0 invocation**. Mais cela invalide aussi
+  la clé du site : il faut mettre la nouvelle clé dans la variable Vercel
+  `VITE_SUPABASE_ANON_KEY` puis redéployer le site.
+
+### Nouveau système de clés Supabase (Publishable / Secret)
+
+Supabase a remplacé les clés JWT héritées : **Publishable** (`sb_publishable_…`,
+remplace `anon`, côté client) et **Secret** (`sb_secret_…`, remplace
+`service_role`, côté serveur, révocables individuellement) — dans
+**Settings → API Keys**. Les clés héritées `anon`/`service_role` restent
+valides tant qu'on ne les désactive pas. ⚠️ Migrer le site vers la clé
+publishable peut casser l'auth Edge Function si `verify_jwt = true` (la nouvelle
+clé n'est pas un JWT) : à tester séparément, pas pendant l'incident.
 3. **Reconfigurer la sync Logicom (le vrai levier, ÷100) :**
    - utiliser `POST /wp-json/wc/v3/products/batch` avec
      `{ "update": [ …jusqu'à 100 produits… ] }` → 1 invocation au lieu de 100 ;
