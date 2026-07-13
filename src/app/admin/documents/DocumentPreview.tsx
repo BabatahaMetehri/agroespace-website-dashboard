@@ -49,7 +49,7 @@ export function DocumentPreview({
               </div>
             )}
           </div>
-          <ClientBox client={draft.client} />
+          <ClientBox client={draft.client} type={draft.type} />
         </div>
 
         <ItemsTable items={draft.items} />

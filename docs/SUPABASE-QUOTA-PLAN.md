@@ -69,6 +69,53 @@ clé n'est pas un JWT) : à tester séparément, pas pendant l'incident.
    60 s → les bots ne consomment plus d'invocations.
 5. **Réactiver le Spend Cap** une fois stabilisé.
 
+## Runbook « ZÉRO invocation » (couper la sync à la passerelle)
+
+**Principe.** Le site et la sync présentent la **même** clé anon à la passerelle
+Supabase. On ne peut pas changer la clé de la sync (PC inaccessible), mais on
+peut changer celle du site (variable Vercel `VITE_SUPABASE_ANON_KEY`). On
+**fait donc tourner la clé** : le site prend la nouvelle, la sync reste avec
+l'ancienne → **rejetée à la passerelle (401) AVANT la fonction → 0 invocation**
+(les rejets passerelle ne sont PAS facturés et n'apparaissent pas dans les logs
+de la fonction). Le code de la sync et les routes `/wp-json` ne sont pas touchés
+→ 100 % réversible.
+
+**Prérequis :** la fonction doit être en `verify_jwt = true` (le défaut, et
+confirmé par le comportement actuel — la passerelle exige déjà la clé). Sinon la
+rotation ne bloquerait rien.
+
+**Ordre recommandé — pré-charger la coupure AVANT de réactiver le projet, pour
+que la sync ne passe pas une seule requête au redémarrage :**
+
+1. **Vercel → Settings → Environment Variables** : noter l'ancienne valeur de
+   `VITE_SUPABASE_ANON_KEY` (filet de sécurité).
+2. **Supabase → Settings → API → JWT Settings → « Generate a new secret »**
+   (rotation du secret JWT). → l'ancienne clé anon (celle de la sync) devient
+   invalide, une nouvelle est générée. Les env auto-injectées de la fonction
+   (`SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) sont mises à jour par
+   Supabase automatiquement.
+   *Variante « nouveau système » (zéro coupure du site) :* créer une
+   **Publishable key**, la mettre côté site et **tester**, PUIS désactiver la
+   clé anon héritée. À ne faire que si le test passe (la publishable n'est pas
+   un JWT → risque avec `verify_jwt`).
+3. Copier la **nouvelle clé anon** → Vercel `VITE_SUPABASE_ANON_KEY` (+ `.env`
+   local) → **Redeploy** le site.
+4. **Réactiver le projet** (facture / Spend Cap).
+5. **Vérifier :** le site charge (catalogue + un devis), l'admin se reconnecte
+   (sessions réinitialisées par la rotation). Graphe Edge Functions → la sync
+   `/wp-json` n'apparaît plus (rejet passerelle = non compté).
+6. Laisser `SYNC_DISABLED = true` (2ᵉ verrou, à l'intérieur de la fonction) et
+   déployer la fonction dès que possible :
+   `supabase functions deploy make-server-0c561120`.
+
+**Réversible :** quand le dev Logicom est prêt, lui fournir la nouvelle clé (ou
+mieux — une clé dédiée révocable indépendamment) **et** remettre
+`SYNC_DISABLED = false` + redéployer. Deux gestes volontaires pour tout
+rallumer.
+
+**Si les Settings sont bloqués pendant la pause :** faire les étapes 2-3 juste
+APRÈS la réactivation, onglets déjà ouverts, en quelques secondes.
+
 ## Base de données à soi (sans Supabase) — options
 
 - **A. Auto-héberger l'API sur le PC serveur existant** (celui de la sync,
